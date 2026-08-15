@@ -1,0 +1,15 @@
+packages:
+  - .
+
+# Dependency lifecycle scripts are deny-by-default in pnpm; only these need to run.
+allowBuilds:
+  electron: true # downloads the Electron binary
+  esbuild: true # fetches its platform binary
+  nice-napi: false # optional native speedup; node-gyp build fails on modern Python
+  '@angular/cli': false # only an interactive analytics prompt
+  core-js: false # only a postinstall banner
+  '@parcel/watcher': false
+  lefthook: false
+  lmdb: false
+  msgpackr-extract: false
+  electron-winstaller: false # new with electron-builder 26; builds Squirrel.Windows installers, but electron-builder.json targets nsis

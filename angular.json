@@ -1,97 +1,141 @@
 {
-  "$schema":        "./node_modules/@angular/cli/lib/config/schema.json",
-  "cli":            {
-  },
-  "version":        1,
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
   "newProjectRoot": "projects",
-  "projects":       {
+  "projects": {
     "np-document-filler": {
-      "root":        "",
-      "sourceRoot":  "src/renderer",
       "projectType": "application",
-      "schematics":  {
-        "@schematics/angular:application": {
-          "strict": true
-        },
-        "@schematics/angular:component":   {
-          "style": "scss"
-        }
-      },
-      "prefix":      "app",
-      "architect":   {
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
         "build": {
-          "builder":        "@angular-builders/custom-webpack:browser",
-          "options":        {
-            "outputPath":          "dist/renderer",
-            "index":               "src/renderer/index.html",
-            "main":                "src/renderer/main.ts",
-            "tsConfig":            "src/renderer/tsconfig.app.json",
-            "polyfills":           "src/renderer/polyfills.ts",
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": {
+              "base": "dist/renderer",
+              "browser": ""
+            },
+            "index": "src/index.html",
+            "browser": "src/main.ts",
+            "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
-            "assets":              [
-              "src/renderer/favicon.ico",
-              "src/renderer/assets"
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "src/assets",
+                "output": "assets"
+              },
+              {
+                "glob": "favicon.ico",
+                "input": "src",
+                "output": ""
+              }
             ],
-            "styles":              [
-              "src/renderer/styles.scss"
+            "styles": [
+              "node_modules/material-icons/iconfont/sharp.css",
+              "src/global.scss"
             ],
-            "scripts":             [],
-            "customWebpackConfig": {
-              "path":                    "./angular.webpack.js",
-              "replaceDuplicatePlugins": true
+            "scripts": [],
+            "stylePreprocessorOptions": {
+              "includePaths": ["src"]
             }
           },
           "configurations": {
-            "dev":        {
-              "optimization":     false,
-              "outputHashing":    "none",
-              "sourceMap":        true,
-              "namedChunks":      false,
-              "aot":              false,
-              "extractLicenses":  true,
-              "vendorChunk":      false,
-              "buildOptimizer":   false,
-              "fileReplacements": [
+            "production": {
+              "optimization": true,
+              "outputHashing": "all",
+              "sourceMap": false,
+              "extractLicenses": true,
+              "budgets": [
                 {
-                  "replace": "src/renderer/environments/environment.ts",
-                  "with":    "src/renderer/environments/environment.dev.ts"
+                  "type": "initial",
+                  "maximumWarning": "2mb",
+                  "maximumError": "3mb"
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "8kb",
+                  "maximumError": "16kb"
                 }
               ]
             },
-            "production": {
-              "optimization":     true,
-              "outputHashing":    "all",
-              "sourceMap":        false,
-              "namedChunks":      false,
-              "aot":              true,
-              "extractLicenses":  true,
-              "vendorChunk":      false,
-              "buildOptimizer":   true,
-              "fileReplacements": [
-                {
-                  "replace": "src/renderer/environments/environment.ts",
-                  "with":    "src/renderer/environments/environment.prod.ts"
-                }
-              ]
+            "development": {
+              "optimization": false,
+              "outputHashing": "none",
+              "sourceMap": true,
+              "namedChunks": true,
+              "extractLicenses": false
             }
-          }
+          },
+          "defaultConfiguration": "production"
         },
         "serve": {
-          "builder":        "@angular-builders/custom-webpack:dev-server",
-          "options":        {
-            "browserTarget": "np-document-filler:build"
-          },
+          "builder": "@angular/build:dev-server",
           "configurations": {
-            "dev":        {
-              "browserTarget": "np-document-filler:build:dev"
-            },
             "production": {
-              "browserTarget": "np-document-filler:build:production"
+              "buildTarget": "np-document-filler:build:production"
+            },
+            "development": {
+              "buildTarget": "np-document-filler:build:development"
             }
+          },
+          "defaultConfiguration": "development"
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "concurrency": "auto",
+            "cache": true,
+            "cacheLocation": ".eslintcache",
+            "lintFilePatterns": [
+              "src/**/*.ts",
+              "src/**/*.html",
+              "electron/**/*.ts",
+              "scripts/**/*.mjs",
+              "*.js",
+              "*.mjs"
+            ]
           }
         }
       }
     }
   },
-  "defaultProject": "np-document-filler"
+  "cli": {
+    "packageManager": "pnpm",
+    "analytics": false
+  },
+  "schematics": {
+    "@angular-eslint/schematics:application": {
+      "setParserOptionsProject": true
+    },
+    "@angular-eslint/schematics:library": {
+      "setParserOptionsProject": true
+    },
+    "@schematics/angular:component": {
+      "type": "component",
+      "style": "scss"
+    },
+    "@schematics/angular:directive": {
+      "type": "directive"
+    },
+    "@schematics/angular:service": {
+      "type": "service"
+    },
+    "@schematics/angular:guard": {
+      "typeSeparator": "."
+    },
+    "@schematics/angular:interceptor": {
+      "typeSeparator": "."
+    },
+    "@schematics/angular:module": {
+      "typeSeparator": "."
+    },
+    "@schematics/angular:pipe": {
+      "typeSeparator": "."
+    },
+    "@schematics/angular:resolver": {
+      "typeSeparator": "."
+    }
+  }
 }

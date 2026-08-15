@@ -1,0 +1,18 @@
+/* To learn more about this file see: https://angular.dev/reference/configs/tsconfig. */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/app",
+    // The renderer runs with `nodeIntegration: true` and reaches Electron through
+    // `window.require` (see `src/typings.d.ts`), so Node's types belong here.
+    "types": ["node"]
+  },
+  // One root, not a glob: only what `src/main.ts` actually pulls in is compiled.
+  // That is what keeps `src/_legacy/` — the Angular 13 app, kept for reference
+  // while it is ported — out of the build without a single exclusion rule, and
+  // it makes the port sequenceable: a legacy file starts being type-checked
+  // against the strict flags in `tsconfig.json` on the commit that imports it.
+  "files": ["src/main.ts"],
+  "include": ["src/**/*.d.ts"],
+  "exclude": ["src/_legacy/**"]
+}

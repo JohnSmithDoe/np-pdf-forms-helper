@@ -1,0 +1,35 @@
+// ─── why ────────────────────────────────────────────────────────
+// The toolbar takes its colour by re-declaring Material's own component tokens
+// rather than by `color="primary"`, so the toolbar follows --np-toolbar — which
+// is a surface under the dark theme and the brand indigo under the light one,
+// a split the `color` input cannot express.
+// ────────────────────────────────────────────────────────────────
+
+@use 'theme/layout';
+
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.app-toolbar {
+  --mat-toolbar-container-background-color: var(--np-toolbar);
+  --mat-toolbar-container-text-color: var(--np-on-toolbar);
+
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
+  min-height: layout.$toolbar-height;
+  border-block-end: 1px solid var(--np-line);
+}
+
+.app-toolbar__wordmark {
+  font-size: var(--fs-large);
+  font-weight: 500;
+}
+
+.app-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}

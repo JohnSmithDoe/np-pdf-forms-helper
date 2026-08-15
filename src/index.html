@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- ─── why ─────────────────────────────────────────────────────────
+     `data-theme` is the one mirror this document cannot enforce: it seeds the
+     theme that theme/_tokens.scss keys off, and the base value is the
+     UN-decorated light one, so leaving the attribute off is also correct.
+     `base href` stays relative because Electron loads the packaged build over
+     `file://`, where an absolute `/` resolves to the filesystem root.
+     ───────────────────────────────────────────────────────────────── -->
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>npAusfüllhilfe</title>
+
+    <base href="./" />
+
+    <meta name="color-scheme" content="light dark" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Kopiert und füllt PDF- und XLSX-Formulare mit denselben Eingabedaten."
+    />
+
+    <link rel="icon" type="image/png" href="assets/icons/favicon.png" />
+
+    <style>
+      #app-splash {
+        position: fixed;
+        inset: 0;
+        margin: auto;
+        max-width: 60vw;
+        max-height: 60vh;
+      }
+    </style>
+  </head>
+
+  <body>
+    <app-root>
+      <img
+        id="app-splash"
+        src="assets/splash.png"
+        alt="npAusfüllhilfe wird geladen"
+      />
+    </app-root>
+    <noscript>
+      Bitte aktiviere JavaScript, um diese Anwendung zu nutzen.
+    </noscript>
+  </body>
+</html>

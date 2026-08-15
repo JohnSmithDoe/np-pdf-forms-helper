@@ -1,7 +1,10 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 .angular
 pdftk
-data
+# Anchored: unanchored, `data` matches EVERY directory of that name, and the
+# architecture puts one in each domain (src/app/<domain>/data). This is the
+# app's runtime data folder at the repo root, nothing else.
+/data
 app/**/*.js
 # config / env file
 .npconfig

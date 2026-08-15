@@ -1,0 +1,93 @@
+// ─── why ────────────────────────────────────────────────────────
+// The RAW layer: what the APP owns, as --np-* custom properties on :root.
+//
+// Colour ROLES alias FROM --mat-sys-* (see _material.scss). The generated M3
+// palette is the single source, so there is nothing here to keep in sync with
+// it and the light/dark flip costs nothing — `light-dark()` reads
+// `color-scheme` and every role follows. Components still read --np-*, so a
+// component never names --mat-sys-* and a reskin is still one file.
+//
+// What genuinely lives here is what M3 has no role for: the two accents carried
+// over from the Angular 13 app, the type and space ladders, and the radii that
+// _material.scss then points Material at.
+//
+// #43a047 was `.btn-success` and #ffb74d the highlight. They are NOT tones of
+// the indigo palette — deriving them from it would change the colours — so they
+// are named tokens with their own dark values rather than M3 roles.
+//
+// `color-scheme` is what makes the flip work at all: mat.theme() emits every
+// colour through `light-dark()`, which reads nothing else. It also paints what
+// CSS cannot reach — scrollbars, native pickers, autofill.
+// ────────────────────────────────────────────────────────────────
+
+:root {
+  color-scheme: light;
+
+  // ─── app-owned accents (M3 has no role for these) ───────────
+  --np-green: #43a047;
+  --np-orange: #ffb74d;
+  --np-success: var(--np-green);
+  --np-on-success: #fff;
+  --np-warning: var(--np-orange);
+  --np-on-warning: #1b1b1f;
+
+  // ─── roles, aliased from the generated M3 surface ───────────
+  --np-primary: var(--mat-sys-primary);
+  --np-on-primary: var(--mat-sys-on-primary);
+  --np-primary-container: var(--mat-sys-primary-container);
+  --np-on-primary-container: var(--mat-sys-on-primary-container);
+  --np-accent: var(--mat-sys-tertiary);
+  --np-on-accent: var(--mat-sys-on-tertiary);
+  --np-danger: var(--mat-sys-error);
+  --np-on-danger: var(--mat-sys-on-error);
+
+  // ─── surfaces ───────────────────────────────────────────────
+  --np-bg: var(--mat-sys-background);
+  --np-surface: var(--mat-sys-surface);
+  --np-surface-low: var(--mat-sys-surface-container-low);
+  --np-surface-high: var(--mat-sys-surface-container-high);
+  --np-surface-highest: var(--mat-sys-surface-container-highest);
+  --np-toolbar: var(--mat-sys-primary);
+  --np-on-toolbar: var(--mat-sys-on-primary);
+  --np-line: var(--mat-sys-outline-variant);
+  --np-line-strong: var(--mat-sys-outline);
+  --np-text: var(--mat-sys-on-surface);
+  --np-text-dim: var(
+    --mat-sys-on-surface-variant
+  ); // muted label — never the accent at an alpha
+  --np-inverse-surface: var(--mat-sys-inverse-surface);
+  --np-on-inverse-surface: var(--mat-sys-inverse-on-surface);
+  --np-scrim: var(--mat-sys-scrim);
+
+  // ─── type ladder ────────────────────────────────────────────
+  --fs-xsmall: 0.6875rem; // 11px — badges, hints
+  --fs-small: 0.8125rem; // 13px — captions, table cells, secondary body
+  --fs-body: 1rem; // 16px — body copy; ALSO the page default
+  --fs-large: 1.125rem; // 18px — card titles
+  --fs-xlarge: 1.5rem; // 24px — page titles
+  --fs-xxlarge: 2rem; // 32px — display figures
+
+  // ─── space ladder ───────────────────────────────────────────
+  --space-1: 0.236rem; //  3.8px — φ⁻³, the hairline gap
+  --space-2: 0.382rem; //  6.1px — φ⁻²
+  --space-3: 0.618rem; //  9.9px — φ⁻¹
+  --space-4: 1rem; // 16.0px — the anchor
+  --space-5: 1.618rem; // 25.9px — φ¹
+  --space-6: 2.618rem; // 41.9px — φ²
+
+  // ─── shape ──────────────────────────────────────────────────
+  --np-radius: 4px;
+  --np-radius-lg: 12px;
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--np-line-strong) transparent;
+}
+
+// Every M3 role flips itself via light-dark(); only the two app-owned accents
+// need a tone here, because they are outside the palette.
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --np-success: #7ddb84;
+  --np-on-success: #00390d;
+}

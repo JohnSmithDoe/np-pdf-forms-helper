@@ -1,0 +1,14 @@
+@use 'theme/consts';
+
+:host {
+  @include consts.page-gutter;
+
+  display: block;
+}
+
+.filler-placeholder code {
+  font-family: var(--mat-sys-body-medium-font);
+  background: var(--np-surface-high);
+  border-radius: var(--np-radius);
+  padding-inline: var(--space-2);
+}

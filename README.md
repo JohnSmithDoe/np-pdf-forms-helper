@@ -67,13 +67,17 @@ You can override each used resource with the following env variables:
 
 # Included Commands
 
-| Command                       | Description                                                                          |
-|-------------------------------|--------------------------------------------------------------------------------------|
-| `npm run start`               | Starts the main and the renderer in electron / hot reload of the renderer enabled    |
-| `npm run ng:serve`            | Starts only the renderer in the web browser                                          |
-| `npm run electron:serve`      | Starts only the main in electron                                                     |
-| `npm run build:all:prod`      | Run the build process for main and renderer                                          |
-| `npm run electron:local`      | Run the build on you local machine                                                   |
-| `npm run electron:unpackaged` | Builds your application to an unpacked executable                                    |
-| `npm run electron:packaged`   | Builds your application and creates an app consumable based on your operating system |
+The package manager is **pnpm**. `pnpm install` also installs the runtime dependencies in
+`src/main` (the folder electron-builder packages) via the `postinstall` hook.
+
+| Command                        | Description                                                                          |
+|--------------------------------|--------------------------------------------------------------------------------------|
+| `pnpm start`                   | Starts the main and the renderer in electron / hot reload of the renderer enabled    |
+| `pnpm run ng:serve`            | Starts only the renderer in the web browser                                          |
+| `pnpm run electron:serve`      | Starts only the main in electron                                                     |
+| `pnpm run build:all:prod`      | Run the build process for main and renderer                                          |
+| `pnpm run electron:local`      | Run the build on you local machine                                                   |
+| `pnpm run electron:unpacked`   | Builds your application to an unpacked executable                                    |
+| `pnpm run electron:packaged`   | Builds your application and creates an app consumable based on your operating system |
+| `pnpm run install:app`         | Reinstalls only the packaged runtime dependencies in `src/main`                      |
 

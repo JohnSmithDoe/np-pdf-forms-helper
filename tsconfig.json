@@ -1,0 +1,54 @@
+/* To learn more about this file see: https://angular.dev/reference/configs/tsconfig. */
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "baseUrl": "./",
+    "outDir": "./dist/out-tsc",
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUncheckedIndexedAccess": true,
+    "sourceMap": true,
+    "declaration": false,
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+    "moduleResolution": "bundler",
+    "importHelpers": true,
+    "target": "es2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "es2020",
+    "useDefineForClassFields": false
+  },
+  "angularCompilerOptions": {
+    "enableI18nLegacyMessageIdFormat": false,
+    "strictInjectionParameters": true,
+    "strictInputAccessModifiers": true,
+    "strictTemplates": true
+  },
+  // `src/_legacy/**` is the Angular 13 app, kept readable while it is ported. It
+  // does not compile against Angular 21 at all (NgModules, `platformBrowserDynamic`,
+  // the removed `mat.get-color-from-palette`), so type-checking it would bury the
+  // real errors — and it is excluded from `ng lint` for the same reason.
+  "exclude": [
+    "dist",
+    "release",
+    "src/_legacy/**",
+    "**/node_modules/**",
+    "**/*.spec.ts"
+  ],
+  // Not for `tsc -b` — no child sets `composite`, and nothing invokes this
+  // project directly. The list exists for typescript-eslint's `projectService`,
+  // which falls back to the nearest `tsconfig.json` and then consults its
+  // references: without the entries below, `electron/main.ts` and `src/main.ts`
+  // would be linted under *this* project's loose auto-include instead of the
+  // one that actually builds them.
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.main.json" }
+  ]
+}

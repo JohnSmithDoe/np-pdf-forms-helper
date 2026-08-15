@@ -1,0 +1,54 @@
+# Git hooks — lefthook (https://lefthook.dev).
+#
+# Installed automatically by the package.json "prepare" script on `pnpm install`.
+# If the hooks ever go missing, re-wire them with:
+#   ./node_modules/.bin/lefthook install
+#
+# pre-commit runs three jobs, in order (lefthook runs jobs sequentially unless
+# `parallel: true`):
+#   1. prettier  — format the staged files and re-stage the result (stage_fixed),
+#      so every commit is prettier-clean.
+#   2. eslint    — lint the staged src *.ts / *.html (check only, no --fix); a
+#      lint error aborts the commit. Deliberately NARROWER than `pnpm lint`, both
+#      to keep the hook fast and to keep the type-aware projectService off
+#      root-level config files.
+#   3. stylelint — the style layer, which eslint cannot read at all (it has no
+#      SCSS parser). Unlike eslint this is NOT narrowed: it is the same glob CI
+#      runs, because neither reason for narrowing applies — stylelint needs no
+#      type information and the whole style layer lints in well under a second.
+# Order matters: prettier fixes formatting first, so eslint's prettier/prettier
+# rule sees already-formatted files. All three are invoked through `pnpm exec`
+# because lefthook runs commands via `sh -c` with the inherited PATH and does NOT
+# add node_modules/.bin — a bare `prettier`/`eslint` would not resolve.
+pre-commit:
+  jobs:
+    - name: prettier
+      glob: '*.{ts,html,scss,json,js,mjs,cjs}'
+      run: pnpm exec prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+    - name: eslint
+      glob: 'src/**/*.{ts,html}'
+      run: pnpm exec eslint {staged_files}
+    - name: stylelint
+      glob: 'src/**/*.{scss,css}'
+      run: pnpm exec stylelint {staged_files}
+
+# pre-push runs the full suite — the same work CI does. It belongs here rather
+# than in pre-commit because a minute per commit would be routed around with
+# --no-verify, and that flag is all-or-nothing: skip it once and prettier,
+# eslint and stylelint go with it. A push is rare enough to afford the wait, a
+# commit is not. It also makes CI a backstop rather than the place you find out.
+#
+# `lint` is the whole tree (eslint + stylelint), where pre-commit saw only
+# staged files. `verify` is Sheriff: the module-boundary check is a property of
+# the whole import graph, so it cannot be run per-file at commit time at all —
+# a legal-looking file can be what makes an illegal edge.
+#
+# Both read the WORKING TREE, on the assumption that nothing is uncommitted at
+# push time.
+pre-push:
+  jobs:
+    - name: lint
+      run: pnpm run lint
+    - name: verify
+      run: pnpm run verify

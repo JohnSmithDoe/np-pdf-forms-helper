@@ -1,0 +1,23 @@
+# This app only ever renders inside Electron's bundled Chromium — never the open
+# web — so one target is the whole file. It is written as the Electron version
+# rather than a Chrome number so it reads next to `package.json`'s `electron`
+# dependency; browserslist resolves it from its own Electron→Chromium table
+# (`electron 43.0` => `chrome 150`). Bump the two together.
+#
+# Why this line has a floor rather than being a free choice: `mat.theme()` emits
+# the whole --mat-sys-* palette through CSS `light-dark()`, which no build step
+# can polyfill — lightningcss passes every occurrence through untouched. That
+# needs Chromium 123, so on the old Electron 18 (Chromium 100) every Material
+# colour token was invalid and the UI rendered unthemed. Angular 21's own
+# supported floor is Chromium 111. Electron 30 (Chromium 124) is the minimum
+# that works; we ship 43 because it also retires four years of unpatched
+# Chromium CVEs, which is one of the three reasons this migration exists.
+#
+# Do NOT write `last N Chrome versions` here: that resolves to today's Chrome,
+# far ahead of the Chromium this app ships with, so the build would silently
+# stop downlevelling for the runtime it actually targets.
+#
+# NOTE on syntax: the valid form is `last N <Browser> versions`. The inverted
+# `<Browser> latest N versions` hard-fails esbuild's target parser with
+# "Unknown browser query".
+electron 43.0

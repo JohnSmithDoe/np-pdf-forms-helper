@@ -1,0 +1,52 @@
+// ─── why ────────────────────────────────────────────────────────
+// The composition root of the style layer: the two partials that EMIT, and what
+// is app-wide. What app.providers.ts is to the kernel.
+//
+// TWO themes off ONE token group, so a reskin retheme the custom properties and
+// never the components. Light is the UN-decorated base; every dark value is
+// ADDED under :root[data-theme='dark'] in _tokens.scss.
+//
+// Hence the @use graph: _tokens and _material emit, so they are @use'd HERE and
+// nowhere else — a component @using _material would re-emit the entire Material
+// system-token sheet into its own scope. The side-effect-free partials
+// (theme/consts, theme/layout) are the ones a component may @use, and they are
+// spelled `theme/<x>` off angular.json's stylePreprocessorOptions.includePaths,
+// since a relative path breaks silently on move.
+//
+// Order matters exactly once: _tokens before _material, because _material's
+// overrides resolve to var(--np-*) and reading a custom property declared later
+// in the SAME selector is fine in CSS but unreadable to a person.
+//
+// --app-content-max-width caps a page's own content, so a page changes width by
+// re-declaring the property on :host — that is the only mechanism.
+// ────────────────────────────────────────────────────────────────
+
+@use 'theme/tokens';
+@use 'theme/material';
+@use 'theme/layout';
+
+:root {
+  --app-content-max-width: #{layout.$content-default};
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--np-bg);
+  color: var(--np-text);
+  font-family: var(--mat-sys-body-medium-font);
+  font-size: var(--fs-body);
+}
+
+[hidden] {
+  display: none;
+}
+
+.trigger {
+  cursor: pointer;
+}

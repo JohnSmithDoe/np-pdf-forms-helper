@@ -1,0 +1,12 @@
+// ─── why ────────────────────────────────────────────────────────
+// The named widths, side-effect free so a component may @use them. global.scss
+// declares the default on --app-content-max-width and a page opts out by
+// re-declaring that property on :host — that is the only mechanism, not one of
+// several.
+// ────────────────────────────────────────────────────────────────
+
+$content-measure: 30rem; // ≈ 60 characters — prose, dialogs, focal surfaces
+$content-default: 960px; // ordinary pages; global.scss declares it
+$content-wide: 1440px; // the field-mapping tables, which are genuinely wide
+
+$toolbar-height: 3.5rem; // 56px — the shell's mat-toolbar

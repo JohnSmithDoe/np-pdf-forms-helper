@@ -1,75 +1,47 @@
 {
-  "asar":           false,
-  "directories":    {
+  "asar": false,
+  "directories": {
     "output": "release/",
-    "app":    "src/main"
+    "app": "electron"
   },
-  "files":          [
-    "**/*",
-    "!**/*.ts",
-    "!*.map",
-    "!package.json",
-    "!package-lock.json"
-  ],
+  "files": ["**/*", "!**/*.ts", "!*.map", "!package.json", "!pnpm-lock.yaml"],
   "extraResources": [
     {
-      "from":   "dist/main",
-      "to":     "app",
-      "filter": [
-        "**/*",
-        "!*.map"
-      ]
+      "from": "dist/main",
+      "to": "app",
+      "filter": ["**/*", "!*.map"]
     },
     {
-      "from":   "dist/bridge",
-      "to":     "bridge",
-      "filter": [
-        "**/*",
-        "!*.map"
-      ]
+      "from": "dist/renderer",
+      "to": "renderer",
+      "filter": ["**/*", "!*.map"]
     },
     {
-      "from":   "dist/renderer",
-      "to":     "renderer",
-      "filter": [
-        "**/*",
-        "!*.map"
-      ]
-    },
-    {
-      "from":   "pdftk",
-      "to":     "../pdftk",
-      "filter": [
-        "**/*"
-      ]
+      "from": "pdftk",
+      "to": "../pdftk",
+      "filter": ["**/*"]
     }
   ],
-  "win":            {
-    "icon":   "dist/renderer/assets/icons",
-    "target": [
-      "nsis"
-    ]
+  "win": {
+    "icon": "dist/renderer/assets/icons",
+    "target": ["nsis"]
   },
-  "nsis":           {
-    "oneClick":                           false,
-    "deleteAppDataOnUninstall":           true,
-    "allowElevation":                     true,
+  "nsis": {
+    "oneClick": false,
+    "deleteAppDataOnUninstall": true,
+    "allowElevation": true,
     "allowToChangeInstallationDirectory": true,
-    "license":                            "./eula.txt",
-    "perMachine":                         false,
-    "publish":                            null,
-    "createDesktopShortcut":              true
+    "license": "./eula.txt",
+    "perMachine": false,
+    "publish": null,
+    "createDesktopShortcut": true
   },
-  "mac":            {
-    "icon":   "dist/renderer/assets/icons",
-    "target": [
-      "dmg"
-    ]
+  "mac": {
+    "icon": "dist/renderer/assets/icons",
+    "target": ["dmg"]
   },
-  "linux":          {
-    "icon":   "dist/renderer/assets/icons",
-    "target": [
-      "AppImage"
-    ]
+  "linux": {
+    "icon": "dist/renderer/assets/icons",
+    "target": ["AppImage"]
   }
 }
