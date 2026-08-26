@@ -1,0 +1,531 @@
+// ─── why ────────────────────────────────────────────────────────
+// A fake of the RUST backend, installed as `window.__TAURI_INTERNALS__` before
+// the bundle boots.
+//
+// It deliberately stubs the TRANSPORT rather than adding a fake
+// `BackendService` to `src/`. Two reasons, and the second is the important one:
+//   • the app under test then runs the real `TauriBackendService`, so
+//     `describe()`'s positional→named mapping and its `{ messages: [] }` error
+//     unwrapping are covered instead of bypassed.
+//   • no fake ships in the production bundle. A fake backend behind a runtime
+//     check is one failed shell-detection away from silently running the real
+//     app on an in-memory store and losing the user's data.
+//
+// The command set mirrors `src-tauri/src/filler/commands.rs` and
+// `src-tauri/src/trains/commands.rs` — same names, same argument keys, same
+// presence rules (a list is ABSENT when the command cannot have changed it).
+// Keep them in step: a fake that has drifted validates a contract that no longer
+// exists.
+//
+// The trains half fakes the STAGED PREVIEW rather than re-implementing the
+// parsers. Reproducing `sanitise` in TypeScript would be a second
+// implementation of the one thing whose correctness is a property of bytes, and
+// it would agree with itself while disagreeing with Rust. So a seed supplies the
+// staged rows and the fake serves them.
+//
+// The native file picker cannot be driven by any browser, so `seed.picker` is
+// what the picker "returns" on the next `add_documents`; `null` means the user
+// cancelled.
+// ────────────────────────────────────────────────────────────────
+
+import type { Page } from '@playwright/test';
+
+export interface FakeSheet {
+  id: string;
+  name: string;
+}
+
+export interface FakeMappedField {
+  origId: string;
+  mappedName: string;
+}
+
+export type FakeDocument = {
+  id: string;
+  name: string;
+  filename: string;
+  mtime: number;
+  mapped?: FakeMappedField[];
+} & (
+  | { type: 'xlsx'; sheets: FakeSheet[] }
+  | { type: 'pdf'; fields: { id: string; path: string }[]; previewfile: string }
+  | { type: 'resource' }
+);
+
+export interface FakeProfile {
+  id: string;
+  name: string;
+  documentIds: string[];
+  fieldIds: string[];
+}
+
+export interface FakeStagedCell {
+  column: number;
+  field: string;
+  raw: string;
+  parsed: string;
+  ok: boolean;
+}
+
+/** The five resolutions are the five `trains::model::StagedRow` carries, and
+ *  Halter and Eigentümer are separate parties — one `owner` for both was drift
+ *  from the wire, and `row-preview` skips a key it does not find. */
+export interface FakeStagedRow {
+  row: number;
+  status: 'ready' | 'needsInput' | 'duplicate' | 'rejected';
+  cells: FakeStagedCell[];
+  wagen: Record<string, unknown>;
+  werkstatt: Record<string, unknown>;
+  halter: Record<string, unknown>;
+  eigentuemer: Record<string, unknown>;
+  radsatz: Record<string, unknown>;
+  issues: Record<string, unknown>[];
+}
+
+export interface FakeStaging {
+  id: string;
+  file: string;
+  sheet: string;
+  sheets: string[];
+  plan: {
+    reader: string;
+    layout: { headerRow?: number; firstDataRow: number; lastDataRow?: number };
+    columns: {
+      header: string;
+      index: number;
+      field: string;
+      decimal?: string;
+      dateOrder?: string;
+    }[];
+    templateId?: string;
+    date1904: boolean;
+  };
+  candidates: {
+    reader: string;
+    readerLabel: string;
+    score: number;
+    reason: string;
+    hint: { headerRow?: number; firstDataRow: number; lastDataRow?: number };
+  }[];
+  rows: FakeStagedRow[];
+  summary: {
+    total: number;
+    ready: number;
+    needsInput: number;
+    duplicates: number;
+    rejected: number;
+    neueWagen: number;
+    neuePartner: number;
+    neueRadsaetze: number;
+  };
+}
+
+export interface FakeWaggon {
+  id: string;
+  nummer: string;
+  halterId?: string;
+  eigentuemerId?: string;
+  bauart?: string;
+  createdAt: string;
+}
+
+/** `matchKey` and the sender-scoped `aliases` are what decide a Radsatznummer;
+ *  the fake carries them so the shape cannot drift from `trains/model.rs`. */
+export interface FakeRadsatz {
+  id: string;
+  nummer: string;
+  matchKey: string;
+  aliases: { matchKey: string; partnerId?: string }[];
+  wellennummer?: string;
+  bauart?: string;
+  createdAt: string;
+}
+
+export interface FakePartner {
+  id: string;
+  rollen: ('halter' | 'eigentuemer' | 'werkstatt')[];
+  name: string;
+  matchKey: string;
+  aliases: string[];
+  createdAt: string;
+}
+
+export interface FakeProvenance {
+  file: string;
+  sheet: string;
+  row: number;
+  importedAt: string;
+}
+
+/** An OPEN Einbau — no `ausgebautAm` — is what "currently fitted" means, and a
+ *  Radsatz has at most one. */
+export interface FakeEinbau {
+  id: string;
+  radsatzId: string;
+  wagenId: string;
+  position?: string;
+  eingebautAm?: string;
+  ausgebautAm?: string;
+  source: FakeProvenance;
+}
+
+/** `datum` is optional on purpose: the Wagennummer is the only anchor a row
+ *  needs. `radsatzId` set means the work was done TO a Radsatz — the same
+ *  invoice line, not a second type. */
+export interface FakeInstandhaltung {
+  id: string;
+  wagenId: string;
+  werkstattId?: string;
+  radsatzId?: string;
+  datum?: string;
+  leistung: string;
+  betragCent?: number;
+  bemerkung?: string;
+  dedupeKey: string;
+  source: FakeProvenance;
+}
+
+export interface FakeTemplate {
+  id: string;
+  name: string;
+  fingerprint: string;
+  plan: FakeStaging['plan'];
+  partnerId?: string;
+  createdAt: string;
+}
+
+export interface FakeSeed {
+  documents?: FakeDocument[];
+  profiles?: FakeProfile[];
+  wagen?: FakeWaggon[];
+  partners?: FakePartner[];
+  radsaetze?: FakeRadsatz[];
+  einbauten?: FakeEinbau[];
+  events?: FakeInstandhaltung[];
+  templates?: FakeTemplate[];
+  /** What `stage_import` hands back. `null` = the picker was cancelled. */
+  staging?: FakeStaging | null;
+  /** What the native picker hands back on the next add. `null` = cancelled. */
+  picker?: FakeDocument | null;
+  /** Command name → the German lines it should reject with. */
+  failures?: Record<string, string[]>;
+}
+
+export interface RecordedCall {
+  command: string;
+  args: Record<string, unknown>;
+}
+
+/** Must run before `page.goto` — the bundle reads the globals at bootstrap. */
+export async function installFakeBackend(
+  page: Page,
+  seed: FakeSeed = {}
+): Promise<void> {
+  await page.addInitScript(install, seed);
+}
+
+/** Every invoke the app made, in order — for asserting what was SENT. */
+export function recordedCalls(page: Page): Promise<RecordedCall[]> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __npFake: { calls: RecordedCall[] } }).__npFake
+        .calls
+  );
+}
+
+/**
+ * Installs the fake on the CURRENT page — what `installFakeBackend` sends into
+ * the browser, callable directly.
+ *
+ * `dev/main.mock.ts` calls it that way to serve the real app against this same
+ * fake (`pnpm run start:mock`), so the command set stays in one file.
+ *
+ * Serialised into the page by `addInitScript`, so it must be self-contained: no
+ * imports, no closure over anything in this module.
+ */
+export function install(seed: FakeSeed): void {
+  interface State {
+    documents: FakeDocument[];
+    profiles: FakeProfile[];
+    picker: FakeDocument | null;
+    wagen: FakeWaggon[];
+    partners: FakePartner[];
+    radsaetze: FakeRadsatz[];
+    einbauten: FakeEinbau[];
+    events: FakeInstandhaltung[];
+    templates: FakeTemplate[];
+    staging: FakeStaging | null;
+    committed: number[];
+    failures: Record<string, string[]>;
+    calls: RecordedCall[];
+  }
+
+  const state: State = {
+    documents: seed.documents ?? [],
+    profiles: seed.profiles ?? [],
+    picker: seed.picker ?? null,
+    wagen: seed.wagen ?? [],
+    partners: seed.partners ?? [],
+    radsaetze: seed.radsaetze ?? [],
+    einbauten: seed.einbauten ?? [],
+    events: seed.events ?? [],
+    templates: seed.templates ?? [],
+    staging: seed.staging ?? null,
+    committed: [],
+    failures: seed.failures ?? {},
+    calls: [],
+  };
+
+  const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+  const report = (
+    headline: string,
+    messages: string[] = [],
+    folder?: string
+  ) => ({
+    headline,
+    messages,
+    ...(folder ? { messageFolder: folder } : {}),
+  });
+
+  const lists = () => ({
+    documents: copy(state.documents),
+    profiles: copy(state.profiles),
+  });
+
+  const counts = () => ({
+    wagen: state.wagen.length,
+    partners: state.partners.length,
+    events: state.events.length,
+    radsaetze: state.radsaetze.length,
+  });
+
+  const trainsLists = () => ({
+    wagen: copy(state.wagen),
+    partners: copy(state.partners),
+    radsaetze: copy(state.radsaetze),
+    einbauten: copy(state.einbauten),
+    templates: copy(state.templates),
+    counts: counts(),
+  });
+
+  const commands: Record<string, (args: Record<string, never>) => unknown> = {
+    // No report: the welcome text was retired when the load moved into a route
+    // resolver, which runs before any page subscribes to `report$`.
+    get_client_data: () => lists(),
+
+    app_info: () => ({
+      name: 'npDokumentenhilfe',
+      version: '1.1.9',
+      dataPath: '/fake/data',
+      outputPath: '/fake/data/output',
+      cachePath: '/fake/data/cache',
+    }),
+
+    add_documents: () => {
+      if (!state.picker) return { documents: copy(state.documents) };
+      state.documents.push(copy(state.picker));
+      state.picker = null;
+      return {
+        documents: copy(state.documents),
+        message: report('Dokument wurde erfolgreich hinzugefügt'),
+      };
+    },
+
+    remap_document: () => lists(),
+
+    save_document: (args) => {
+      const document = args['document'] as unknown as FakeDocument;
+      const index = state.documents.findIndex(
+        (entry) => entry.id === document.id
+      );
+      if (index >= 0) state.documents[index] = copy(document);
+      return {
+        ...lists(),
+        message: report('Dokument wurde erfolgreich gespeichert'),
+      };
+    },
+
+    remove_document: (args) => {
+      const id = args['id'] as unknown as string;
+      state.documents = state.documents.filter((entry) => entry.id !== id);
+      return {
+        ...lists(),
+        message: report('Dokument wurde erfolgreich entfernt'),
+      };
+    },
+
+    reset_app: () => {
+      state.documents = [];
+      state.profiles = [];
+      return {
+        ...lists(),
+        message: report('System wurde erfolgreich zurückgesetzt'),
+      };
+    },
+
+    save_profiles: (args) => {
+      state.profiles = copy(args['profiles'] as unknown as FakeProfile[]);
+      return {
+        profiles: copy(state.profiles),
+        message: report('Profile wurden erfolgreich aktualisiert'),
+      };
+    },
+
+    // Answers with `documents` because the real command refreshes stored mtimes.
+    create_documents: (args) => ({
+      documents: copy(state.documents),
+      message: report(
+        'Dokumente wurden erfolgreich erstellt',
+        ['Alle Dokumente wurden erfolgreich erstellt.'],
+        `data/out/${String(args['exportFolder'])}`
+      ),
+    }),
+
+    open_file: () => ({}),
+    open_output_folder: () => ({}),
+
+    // ─── trains ───────────────────────────────────────────────
+
+    get_trains_data: () => trainsLists(),
+
+    query_events: (args) => ({
+      instandhaltungPage: {
+        rows: copy(state.events),
+        total: state.events.length,
+        offset: Number(args['offset'] ?? 0),
+      },
+    }),
+
+    stage_import: () => (state.staging ? { staging: copy(state.staging) } : {}),
+
+    // The plan comes back applied, so the app sees what it asked for — the real
+    // command re-parses the held grid and answers with the result.
+    restage_import: (args) => {
+      if (!state.staging) return {};
+      const plan = args['plan'] as unknown as FakeStaging['plan'];
+      state.staging = { ...state.staging, plan: copy(plan) };
+      return { staging: copy(state.staging) };
+    },
+
+    restage_sheet: (args) => {
+      if (!state.staging) return {};
+      state.staging = { ...state.staging, sheet: String(args['sheet']) };
+      return { staging: copy(state.staging) };
+    },
+
+    discard_import: () => {
+      state.staging = null;
+      return { counts: counts() };
+    },
+
+    commit_import: (args) => {
+      const decisions = args['decisions'] as unknown as {
+        rows: { row: number }[];
+        saveTemplateAs?: string;
+      };
+      state.committed = decisions.rows.map((row) => row.row);
+      if (decisions.saveTemplateAs && state.staging) {
+        state.templates.push({
+          id: `t${state.templates.length + 1}`,
+          name: decisions.saveTemplateAs,
+          fingerprint: 'fp',
+          plan: copy(state.staging.plan),
+          createdAt: '2026-08-16',
+        });
+      }
+      return {
+        ...trainsLists(),
+        message: report('Import wurde erfolgreich übernommen', [
+          `${decisions.rows.length} Wartung(en) übernommen.`,
+        ]),
+      };
+    },
+
+    save_waggon: () => ({ ...trainsLists() }),
+
+    remove_waggon: (args) => {
+      const id = String(args['id']);
+      state.wagen = state.wagen.filter((entry) => entry.id !== id);
+      return {
+        ...trainsLists(),
+        message: report('Wagen wurde entfernt'),
+      };
+    },
+
+    save_wheelset: () => ({ ...trainsLists() }),
+
+    remove_wheelset: (args) => {
+      const id = String(args['id']);
+      state.radsaetze = state.radsaetze.filter((entry) => entry.id !== id);
+      state.einbauten = state.einbauten.filter(
+        (entry) => entry.radsatzId !== id
+      );
+      return { ...trainsLists(), message: report('Radsatz wurde entfernt') };
+    },
+
+    save_partner: () => ({ ...trainsLists() }),
+
+    remove_partner: (args) => {
+      const id = String(args['id']);
+      state.partners = state.partners.filter((entry) => entry.id !== id);
+      return { ...trainsLists(), message: report('Partner wurde entfernt') };
+    },
+
+    remove_template: (args) => {
+      const id = String(args['id']);
+      state.templates = state.templates.filter((entry) => entry.id !== id);
+      return {
+        templates: copy(state.templates),
+        message: report('Vorlage wurde entfernt'),
+      };
+    },
+
+    reset_trains: () => {
+      state.wagen = [];
+      state.partners = [];
+      state.radsaetze = [];
+      state.einbauten = [];
+      state.events = [];
+      state.templates = [];
+      state.staging = null;
+      return {
+        ...trainsLists(),
+        message: report('Zugdaten wurden zurückgesetzt'),
+      };
+    },
+
+    create_trains_export: () => ({
+      message: report(
+        'Export wurde erfolgreich erstellt',
+        ['Datei wurde erstellt: erp-import.xlsx'],
+        'data/out/trains-2026-08-16'
+      ),
+    }),
+  };
+
+  (globalThis as unknown as { isTauri: boolean }).isTauri = true;
+  (window as unknown as { __npFake: State }).__npFake = state;
+  (
+    window as unknown as {
+      __TAURI_INTERNALS__: {
+        invoke: (
+          command: string,
+          args?: Record<string, unknown>
+        ) => Promise<unknown>;
+      };
+    }
+  ).__TAURI_INTERNALS__ = {
+    invoke: (command, args = {}) => {
+      state.calls.push({ command, args: copy(args) });
+      const failure = state.failures[command];
+      // Rejects with the SERIALISED `AppError`, a plain object — not an Error.
+      if (failure) return Promise.reject({ messages: failure });
+      const handler = commands[command];
+      if (!handler) {
+        return Promise.reject({ messages: [`Unbekannter Befehl: ${command}`] });
+      }
+      return Promise.resolve(handler(args as Record<string, never>));
+    },
+  };
+}

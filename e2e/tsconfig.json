@@ -1,0 +1,24 @@
+/* Owns the e2e specs, so the editor and typescript-eslint's projectService
+ * resolve them here rather than falling back to the root project — which is
+ * the Angular app's and knows nothing about Playwright's globals.
+ *
+ * Playwright compiles the specs itself, so this emits nothing; `pnpm run e2e`
+ * does not read it.
+ */
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["**/*.ts", "../playwright.config.ts"]
+}

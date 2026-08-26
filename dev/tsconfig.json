@@ -1,0 +1,17 @@
+/* Owns the mock entry point (`pnpm run start:mock`), the way `tsconfig.app.json`
+ * owns `src/main.ts`. Kept next to the file rather than at the root so the
+ * editor and typescript-eslint's projectService resolve `dev/*.ts` here instead
+ * of falling back to the root project — the same arrangement `e2e/` uses.
+ *
+ * One root file, so only what the mock entry actually reaches is compiled. It
+ * pulls in `e2e/fake-backend.ts`, which type-imports `@playwright/test`; that
+ * import is erased at build time and never reaches the bundle.
+ */
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../out-tsc/mock"
+  },
+  "files": ["main.mock.ts"],
+  "include": ["../src/**/*.d.ts"]
+}
