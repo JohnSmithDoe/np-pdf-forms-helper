@@ -4,64 +4,291 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-"npAusfüllhilfe" — an Electron + Angular desktop app that links original PDF/XLSX documents, maps
-their form fields / cells to user-chosen field names, and produces filled copies. Fields sharing a
-mapped name across documents receive the same value on export.
+"npDokumentenhilfe" (repo `np-office-document-helper`) — a desktop app that links original PDF/XLSX
+documents, maps their form fields / cells to user-chosen field names, and produces filled copies.
+Fields sharing a mapped name across documents receive the same value on export.
 
 **The UI, all user-facing strings, and `docs/` are German.** Keep new user-facing text German.
 
-Targets **Windows** (only roughly tested there) and depends on an external **pdftk** executable for
-all PDF work — the app **quits on startup** if `PDFTK_EXE` does not resolve, so it cannot run on a
-machine without pdftk.
+Targets **Windows** (only roughly tested there). **No external binaries** — the app used to shell out
+to pdftk and quit on startup without it; that went with Electron.
 
-**Mid-migration.** The frontend is Angular 21 (standalone, zoneless, Material 21) in the np-commlink
-layout. The Electron main process is scheduled for replacement by a Rust/Tauri 2 backend — see
-`docs/` and treat everything under `electron/` as transitional code with a delete date.
+**One frontend, one backend, no shells side by side:**
+
+1. **Frontend.** Angular 21 (standalone, zoneless, Ionic 8) in the np-commlink layout. The port out
+   of the Angular 13 app is complete — `src/_legacy/` is gone. Angular Material is gone too, replaced
+   by Ionic to match np-commlink; nothing in `src/` names Material any more.
+2. **Backend.** `src-tauri/` (Rust, Tauri 2). Electron is **deleted** — the folder, the builder, the
+   renderer's adapter and the channel map. Do not reintroduce a second backend abstraction "in case";
+   see [docs/decisions.md](docs/decisions.md).
+
+**No functional gaps left.** PDF, XLSX and resource documents all work end to end;
+`src-tauri/src/doc/pdf/` is written against `lopdf` and needs no external binary. What is still open
+is coverage, not features — **nothing has ever run on Windows and `tauri:build` has never run at all**.
+The Rust half now has unit tests (`pnpm run rust:test`); what they cannot reach is the Tauri surface
+itself and the real window. See [docs/state.md](docs/state.md).
+
+The migration plan lives outside the repo, in the session plan file referenced from Claude's project
+memory. Renamed from `np-pdf-forms-helper` / "npAusfüllhilfe" on 2026-08-15; the old product name
+still appears in `docs/installations-anleitung.md`, which documents the _shipped_ v115 zip and gets
+rewritten when the Tauri installer replaces it.
 
 ## Commands
 
-| Command | Purpose |
-|---|---|
-| `pnpm start` | Angular dev server only (`ng serve`), no Electron |
-| `pnpm run electron:start` | Dev: `ng serve` on :4200 + Electron with `--serve` |
-| `pnpm run electron:serve:debug` | Electron with devtools and `--npdebug` (dumps + writes resolved config) |
-| `pnpm run build` | Angular production build → `dist/renderer` |
-| `pnpm run build:all:prod` | `tsc -p tsconfig.main.json` + `ng build -c production` |
-| `pnpm run electron:local` | Prod build, then run Electron from `dist/` |
-| `pnpm run electron:packaged` | Prod build + electron-builder installer (NSIS on Windows) |
-| `pnpm run lint` | eslint + stylelint |
-| `pnpm run verify` | **Sheriff** — module boundaries (`sheriff verify src/main.ts`) |
-| `pnpm run format` / `format:check` | prettier over `src/**` and `electron/**` |
-| `pnpm run install:app` | Reinstall only `electron/`'s runtime deps (also run by `postinstall`) |
+| Command                                          | Purpose                                                              |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| `pnpm start`                                     | Angular dev server only (`ng serve`), no desktop shell               |
+| `pnpm run start:mock`                            | Same server, but booted on the e2e fake with demo data — for CSS/UX  |
+| `pnpm run build`                                 | Angular production build → `dist/renderer`                           |
+| `pnpm run lint`                                  | eslint + stylelint                                                   |
+| `pnpm run verify`                                | **Sheriff** — module boundaries (`sheriff verify src/main.ts`)       |
+| `pnpm run format` / `format:check`               | prettier over `src/**` and `e2e/**`                                  |
+| `pnpm run tauri:dev`                             | Dev: `ng serve` + the Rust window (`tauri dev`)                      |
+| `pnpm run tauri:build`                           | Angular prod build + Tauri bundle (NSIS on Windows, `.dmg` on macOS) |
+| `pnpm run rust:check` / `rust:fmt` / `rust:lint` | `cargo check` / `fmt` / `clippy` on `src-tauri/`                     |
+| `pnpm run rust:test`                             | **`cargo test`** over `src-tauri/` — the Rust unit tests             |
+| `pnpm run e2e` / `e2e:ui`                        | **Playwright** over `e2e/`, against a faked Tauri transport          |
 
-There are **no tests** and that is deliberate — do not add a test runner. Verification is manual
-spot-checking. `lefthook` runs prettier/eslint/stylelint pre-commit and lint+sheriff pre-push.
+### The two test layers
+
+They are split at the **transport**, and each covers what the other cannot reach.
+
+**`cargo test` — everything below the transport.** Rust's runner is built into the toolchain; there
+is no framework to choose. Tests live in a `#[cfg(test)] mod tests` at the foot of the module they
+cover, so they compile out of every real build and can reach that module's **private** items — which
+is why nothing had to be made `pub` to be tested. `src/testing.rs` (itself `#[cfg(test)]`) holds the
+shared support: a hand-written `TempDir` that cleans up in `Drop`, and the model builders. **No
+`tempfile` crate** — it is a `PathBuf`, a unique name and a `Drop`, and writing it is the point.
+
+Two things shape what the tests may do, both load-bearing:
+
+- **`cargo test` runs tests in parallel threads of ONE process.** Nothing may set an env var or
+  `current_dir` — that is exactly why `AppConfig::resolve_all` takes its base folder and an env
+  lookup as arguments. `TempDir` names itself from the process id plus an atomic counter for the
+  same reason.
+- **A `State<'_, AppState>` and a `WebviewWindow` cannot be built outside a running app.** So a
+  decision worth testing does not stay inside a `#[tauri::command]`: it is split into a free
+  function the command then calls (`folder_to_open`, `Run::report`). `AppState` is already free of
+  Tauri, which is what lets `import`/`export`/`db` be driven directly.
+
+`docs/formular_beispiel.pdf` is the one real fixture. The AcroForm tests otherwise assemble `lopdf`
+object graphs by hand, because byte-level rules need byte-level inputs; the fixture test exists so
+the hand-built graphs cannot all be wrong in the same way.
+
+**`e2e/` — the renderer, at the transport.** Playwright drives the Angular app in Chrome against a
+fake `window.__TAURI_INTERNALS__` (`e2e/fake-backend.ts`). There are still no unit tests and no test
+runner inside `src/`.
+
+Two constraints fixed that shape:
+
+- **Playwright cannot drive the real app.** Tauri speaks WebDriver, and driving it directly is
+  Windows/Linux only because macOS ships no WKWebView driver. The dev machine is macOS.
+- **The fake stubs the transport, not `BackendService`.** So the app under test runs the real
+  service — its command construction and its `{ messages: [] }` error unwrapping are covered rather
+  than bypassed — and, more importantly, **no fake ships in the production bundle**. Do not
+  "simplify" this into a `FakeBackendService` under `src/`.
+
+`e2e/fake-backend.ts` mirrors `src-tauri/src/filler/commands.rs` and `src-tauri/src/trains/commands.rs`:
+same command names, same argument keys, same presence rules. **Change a command, change the fake.**
+Native file pickers cannot be driven by any browser, so `seed.picker` and `seed.staging` stand in for
+what the picker returns.
+
+**Keep the e2e shallow.** It proves the app reaches the right screens and renders what the backend
+sent. It does not drive `ion-select` popovers, alert inputs, or anything inside an Ionic shadow root —
+those assert Ionic's internals, break on its upgrades, and say nothing about this app. Anything whose
+correctness is a property of bytes — parsing, resolution, the commit gates — is proved by `cargo test`
+instead, and the fake never re-implements it: a TypeScript copy of `sanitise` would agree with itself
+and drift from Rust.
+
+The `test.fail()` block at the bottom of `filler.spec.ts` pins known-open defects: the suite stays
+green while they are open, and Playwright reports "expected to fail but passed" the moment one is
+fixed — that is the signal to delete the marker, not a broken test.
+
+`wizard.spec.ts` is deliberately two tests, not a mirror of `filler.spec.ts`: the steps compose
+components that suite already covers, so what is worth proving is only what the wizard adds — the
+guards let a legitimately-reached step through, a cold deep link bounces to step one, and the run's
+report renders as the PAGE with `ion-modal` at zero. Two traps it ran into, both worth knowing:
+**Ionic keeps the outgoing page in the DOM during a route transition**, so every locator is scoped to
+its own `app-page-…` element or `Weiter` matches twice; and `filler.spec.ts` now navigates to
+`/#/documents/expert` directly, because `/` redirects by view mode and the default is the wizard.
+
+`lefthook` runs prettier/eslint/stylelint pre-commit and lint+sheriff+typecheck+`cargo test`
+pre-push; `e2e` is not in either hook, because it needs a dev server. `cargo test` builds the crate
+with `cfg(test)` on and so type-checks `src-tauri/` on the way through — `rust:check` in the same
+hook would be redundant.
+
+**`pnpm run start:mock` is the same fake, driven by hand.** `pnpm start` alone reaches no backend, so
+every command answers with the "läuft nicht in der Desktop-Umgebung" error and the UI stays in its
+empty state — useless for styling. The mock server is a second **entry point**, `dev/main.mock.ts`,
+selected by the `mock` build configuration in `angular.json`: it installs `install()` from
+`e2e/fake-backend.ts`, seeds `dev/demo-seed.ts` and only then dynamically imports `src/main.ts` — a
+static import would be hoisted and bootstrap before the transport exists.
+
+**The seed covers both domains.** Filler: PDF, XLSX and resource documents, mapped fields shared
+across two documents, two profiles. Trains: Wagen with computed UIC check digits, a partner in two
+roles, a sender-scoped Radsatz alias, a closed Einbau beside the open ones, an Instandhaltung with no
+date and one against a Radsatz — the cases every screen needs one of and no clean file produces.
+
+Three commands are answered in `dev/main.mock.ts` rather than by the fake, always for the same
+reason — the real answer comes from something a browser does not have:
+
+- **`add_documents`** — the native picker. `file` invents its next document; the batch sources are
+  answered by hand, because one line per document is the report shape that earns a dialog.
+- **`stage_import`** — the picker again, plus one thing more: an import DISCARDS its staging when it
+  is committed or cancelled, so one seeded staging would serve the first file of a session and
+  nothing after it. Every pick re-arms `demoStaging()`, which covers all four row states with a
+  Fehler and a Warnung.
+- **`commit_import`** — the gates live in `trains/commit.rs` and are proved by `cargo test`, so the
+  fake must not grow a second implementation. But a commit that changes nothing visible reads as a
+  broken button, so the dev shell invents one Instandhaltung per taken row and lets the fake answer
+  with the updated lists and counts.
+
+That it is an entry point and not an `isDevMode()` branch is the point: nothing but the `mock`
+configuration compiles that file, so **no fake can reach a production bundle**. Swapping
+`backend.service.ts` in via `fileReplacements` was the alternative and is deliberately not taken —
+it would replace the seam (busy counter, `report$`, `{ messages: [] }` unwrapping) with a second
+implementation to maintain, which is the `FakeBackendService` the e2e boundary exists to avoid.
 
 ## Architecture
 
 Two source roots, two builds:
 
-| Folder | Process | Built by |
-|---|---|---|
-| `src/` | Angular 21 renderer | `@angular/build:application` → `dist/renderer` |
-| `electron/` | Electron main (Node), incl. `electron/bridge/` | `tsc -p tsconfig.main.json` → `dist/main` |
-| `src/_legacy/` | Quarantined Angular 13 code, ported out incrementally | nothing — excluded everywhere |
-
-`src/_legacy/` is excluded from `tsconfig`, eslint (`globalIgnores`), stylelint, prettier, and is
-tagged `type:legacy` in Sheriff. Porting means moving one component out of it at a time. When it is
-empty, delete the `type:legacy` entries in `sheriff.config.ts` and `eslint.config.js`.
+| Folder       | Process             | Built by                                       |
+| ------------ | ------------------- | ---------------------------------------------- |
+| `src/`       | Angular 21 renderer | `@angular/build:application` → `dist/renderer` |
+| `src-tauri/` | Rust backend        | `cargo` / `tauri build`                        |
 
 ### The Angular app
 
-**One domain (`filler`) plus `@shared`**, on the np-commlink layer axis. One domain is deliberate:
-documents, field mapping, profiles and export are a single workflow over a single data model, so a
-second sealed domain would earn nothing. `sheriff.config.ts` names no domain — adding one costs a
-folder, not a config change.
+**Three domains — `filler`, `trains`, `info` — plus `@shared`**, on the np-commlink layer axis. They
+are sealed from each other and none may import another; anything two need moves to `@shared`.
+`sheriff.config.ts` still names no domain: `src/app/<domain>/<type>` and `domain:*` are generic, so a
+domain costs a folder and not a config change.
 
 ```
-src/app/@shared/{model,ui,util,data}
+src/app/@shared/{model,ui,util,data,smart-ui,feature}
 src/app/filler/{routes,feature,smart-ui,ui,data,util,model}
+src/app/info/{routes,feature,data,model}
+src/app/trains/{routes,feature,smart-ui,data,util,model}
 ```
+
+`trains` reads spreadsheets somebody else authored, maps their columns onto Wagen, Partner, Radsätze
+and Instandhaltungen, and writes sanitised data back out. The mapping is trivial; the mapping **UX**
+is the feature, which is why `smart-ui/column-mapper` shows sample values verbatim beside what the
+backend made of them — and why they come from the COLUMN rather than the field, so an unmapped column
+still shows what is in it.
+
+**The menu carries ONE entry per domain** — Dokumente, **Schattensystem**, Info. `/trains` is a
+DASHBOARD (`feature/dashboard`) and not a redirect to the import: it is the domain's only way in, so
+what it lands on has to reach everything else. Its tiles carry counts, which is what makes it more
+than a second menu — `counts` from the backend for Wagen, Radsätze and Instandhaltungen (the events
+list is paged, so its loaded length would lie), and the three partner roles derived from the loaded
+list, because nothing counts them server-side. The spokes therefore take `backHref="/trains"` on the
+list shell, which replaces the burger with a back button: a screen reached from a hub needs the way
+up, not the menu that no longer links to it.
+
+**Only `Wagennummer` is required.** A date is not: plenty of the arriving documents are about
+something other than a dated repair, and the Wagennummer is the only anchor that ties a row to
+anything. Required-ness is checked at COMMIT, never at staging — the mapping screen re-stages on
+every pick, so refusing a half-mapped plan there makes the first pick fail and nothing mappable at
+all.
+
+**A Radsatz is an asset that moves, not a field on a Wagen.** Its history is a list of `Einbau`s
+(radsatz, wagen, eingebautAm, ausgebautAm, position); an OPEN one — no `ausgebautAm` — is what
+"currently fitted" means, and a Radsatz has at most one, so fitting it elsewhere closes the previous
+one. Work done to it is an `Instandhaltung` with `radsatzId` set rather than a second type: it is the
+same invoice line. A row that merely NAMES a Radsatz records no fitting — only an install or removal
+date is a movement.
+
+**A Radsatznummer is not a key, so it never decides alone.** No check digit, no European format, and
+assigned by the Halter or the Werkstatt, so two workshops legitimately use one string for two
+different Radsätze. `Radsatz.aliases` is therefore **scoped by sender** — an alias means "this sender
+calls it this". An alias hit for the current sender is `Known`; the same number from a different or
+unknown sender is `Ambiguous`, never a silent merge, which is why `by_radsatznummer` maps one key to
+**several** ids. The sender is an input to the run (the template's partner, else the row's *confirmed*
+Werkstatt), deliberately **not** `Provenance`. There is no fuzzy tier here unlike `partner`: a
+differing digit is a different Radsatz, and only leading zeros — a formatting difference Excel makes
+by itself — are offered, as `Likely`.
+
+**The domain is written down in German in [docs/fachdomaene.md](docs/fachdomaene.md)** — the users
+are Halter of freight wagons, and that file is the key between a Fachbegriff and a code identifier.
+**Every firm named anywhere in this repo is invented**: the target user is `Wagenmut AG`, its
+workshops are `Schienenbein Waggonwerk GmbH`, `Dreh & Gestell Technik` and `Rundlauf
+Radsatztechnik`. No real company name belongs in the code, the docs, the fixtures or the mock seed.
+
+**Read it before naming anything in `trains`.** Two things in it govern the whole module. First,
+**only two fields in an incoming file are trustworthy**: the Wagennummer, because twelve digits carry
+a check digit, and the Radsatznummer *only after the user has confirmed it*. Everything else — partner names, dates, amounts, positions — is evidence, which is
+why `sanitise` reports rather than asserts and why unknown means a question rather than an insert.
+Second, **Halter and Eigentümer are different parties** (the Halter is the NVR-registered keeper,
+which is what the target user *is*; the Eigentümer is usually a leasing SPV), and **Instandhaltung is
+the umbrella** of which Wartung is only one of four sub-activities under DIN 31051.
+
+`info` is `/about`: the version and the resolved data folders, plus the four things a corporate IT
+approval asks about unknown software (no network, no external binaries, no admin rights, local data).
+It is a domain of its own because `@shared` is never routed to; it is two files and no state.
+
+#### The two modes under `/documents`
+
+`filler` is mounted at `documents` and carries the expert page **and** both wizards — one store, two
+presentations. Paths are English, titles German.
+
+```
+/documents            → redirects by the stored view mode
+  start                 the wizard fork: einrichten │ ausfüllen
+  expert                the all-in-one FillerPage
+  setup/…               source → fields │ documents → documents/:id → result
+  wizard/…              selection → values → generate → result
+```
+
+**Each wizard does ONE of the two jobs, and the split is what they are for.** Linking a file or a
+folder, automatic field mapping, remapping, renaming, removing and "Alles zurücksetzen" are setup,
+so they exist on the expert page and in the setup wizard and **nowhere in the export wizard** — its
+step 1 renders `smart-ui/selection-list`, the ticking-only sibling of `document-list`, and not that
+component behind a flag. A `[selectionOnly]` input would be one component with both modes inside it,
+which is the state the two modes replace. With nothing linked, that step cannot be completed at all,
+so its empty state sends the user to the setup wizard rather than opening a picker. The two rows'
+secondary lines come from `util/document-labels`, so the same document cannot read differently in the
+two modes.
+
+Four things make the routing work, all argued in the files named:
+
+- **`clientDataResolver` on the pathless parent** does the one load — three pages can now be the
+  first one reached. It swallows a failure into a toast rather than rejecting, because a rejected
+  resolver cancels the navigation and leaves an empty window.
+- **Guards never load.** `wizard.guards.ts` holds pure predicates over the store (`loaded` plus their
+  own condition) that redirect to their wizard's first step. They run in `checkGuards`, one whole
+  phase *before* `resolveData` — the parent's resolver cannot be got in front of a child's guard, and
+  a cold deep link into a later step has no valid selection anyway. **The first step of each wizard
+  is unguarded**, or a redirect would bounce forever.
+- **The mode redirect is synchronous.** A `RedirectFunction` runs in an injection context and reads
+  `SettingsService` out of localStorage during `checkGuards`. Nothing fetched could answer in that
+  phase — see _Settings_ below.
+- **A report the page IS must not also be a toast.** The import and the run are sent `silent`, so
+  their report is parked in `setupReport` / `runReport` instead of going out on `report$`. Two
+  slices, not one with a tag: a finished setup must not satisfy the export wizard's result guard.
+  Both result steps and `ReportDialog` render one `@shared/ui/report-view`.
+
+### Settings
+
+**UI preferences live in localStorage (`SettingsService`); the user's data lives in the backend.**
+There is no `settings.db` and no `ionic-storage`. The reason is the mode redirect above: it resolves
+before any resolver or initializer could have answered, so the read has to be **synchronous**, and
+losing a view-mode preference costs one re-toggle. `sortDirection` and the `autoMapFields` default
+belong here too when they are made to persist.
+
+**The list pattern is cloned from np-commlink**, presentation half only — `@shared/feature/item-lists`
+plus `@shared/ui/base-item`, hanging on the `LIST_FACADE` token. Its state layer did not come across:
+np-commlink is NgRx over in-memory data and here the truth lives in Rust, and depending on an
+interface rather than a store is exactly what made that substitution free. Five routes share one
+shell. The one thing the clone does **not** cover is paging — every np-commlink list is a local
+array, so the events list adds `ion-infinite-scroll` on top.
+
+**A page that is `.ion-page` must never be given `display: block`.** `.ion-page` is a flex column, and
+overriding it stops `ion-content` flexing: the content takes the full page height and anything below
+it — a footer, most visibly — is pushed off the bottom of the viewport where it cannot be clicked.
+That is also why the list shell carries `class="ion-page"` on `<app-list-page>` rather than on the
+routed component: the class belongs on the element that actually holds the header/content pair.
 
 Sheriff enforces the ladder: `ui` may never reach `data` (so anything injecting a service is
 `smart-ui`, not `ui`), `smart-ui` is a strict leaf (never composes another smart component), `util`
@@ -76,103 +303,215 @@ deliberately lets acronyms through (`IPCChannel`).
 
 ### The wire contract, deliberately written twice
 
-`src/app/@shared/model/` and `electron/bridge/shared.model.ts` describe the **same JSON shape** under
-different TypeScript names — `MappedDocument` on the Angular side, `IMappedDocument` on the Electron
-side. That is not drift to be fixed: it is the hand-written mirror the Rust backend will need, and
-the `I`-prefix ban is switched off for `electron/**` for exactly this reason. **Change one, change
-the other**, and keep the JSON shape identical.
+`src/app/@shared/model/` and `src-tauri/src/model.rs` describe the **same JSON shape** in two
+languages. That is not drift to be fixed: nothing generates them and the JSON shape _is_ the
+contract. **Change one, change the other.**
 
-`AppChannel` is a frozen const object + union rather than an `enum` (an enum is not erasable syntax);
-all 13 channel strings are byte-identical to the Electron side.
+`ClientData.documents` / `.profiles` are **optional**, and the optionality carries meaning: absent
+means "this command cannot have changed the list", present — even empty — means "this is the whole
+list now". `FillerStore` therefore acts on **presence**, and a present list replaces what is held.
 
-### IPC: one request → one broadcast
+Documents are a **discriminated union** on `type` (`AnyDocument` = pdf | xlsx | resource), matching
+serde's tagged `DocumentKind`. Narrow on `document.type`; do not cast.
 
-`ApiController` (`electron/api.ts`) registers an `ipcMain.handle` for every channel via a typed map.
-Every handler returns an `IClientData`; the controller then **pushes** it back on `CLIENT_UPDATE` (or
-the error message, split on `||`, on `CLIENT_ERROR`) — the `invoke` promise itself resolves to
-nothing useful. This is being redesigned to plain request/response when the renderer is ported.
+### The backend seam
 
-`nodeIntegration: true` / `contextIsolation: false`; there is no preload script.
+`BackendService` (`src/app/@shared/data/backend/backend.service.ts`) is the whole boundary — one
+concrete class, `providedIn: 'root'`, and the only file in `src/` that imports `@tauri-apps/api`.
+There is no abstract base, no subclass and no provider factory: one shell means nothing to abstract
+over.
 
-### Main process
+A request is a `BackendCommand` — a discriminated union of `{ command, payload }` whose command
+strings and payload keys **are** the `#[tauri::command]` names and parameters, so nothing translates
+on the way out. Tauri maps camelCase payload keys onto snake_case Rust arguments itself.
 
-`NpAssistant` (`electron/np-assistant.ts`) is the orchestrator: it owns the API controller, the
-database, and the three document services, and contains the top-level use cases.
+Errors arrive as the serialised `AppError`, a plain `{ messages: string[] }` object rather than an
+`Error`, and become a `BackendError` carrying those German lines. Nothing in `data/` opens a dialog —
+smart components emit and the page presents. Success **reports** ride back on `report$`, the one
+broadcast left, because any command may attach one and only the page shows them.
 
-`NPService` (`electron/services/np-services.ts`) is the abstract base; implementations are picked by
-file extension (`getFileInfo` in `file.utils.ts`):
+### Reports: a toast unless the user is needed
 
-- **pdf** — `PdfService`. Shells out to pdftk (`generate_fdf` / `fill_form`) and parses the FDF text
-  itself in `pdf.utils.ts`, through `iconv-lite` with `config.ENCODING` (win1252 on Windows, utf8
-  elsewhere). On add it writes a *preview* PDF with every field filled with its own field path.
-  **`updateFDFValuePaths` (`pdf.utils.ts:111-119`) joins ancestor `/T` values with NO separator**, so
-  stored `fields[].path` is not a valid PDF fully-qualified name. Every existing `data.db` depends on
-  that exact string.
-- **xlsx** — `XlsService` (ExcelJS). `mappedName` doubles as the address, format `$Sheetname.A1`
-  (built at `field-dialog.component.ts:55`, parsed by slicing on the first `.`). Because the address
-  *is* the mapped name, two xlsx cells can never share a name — the headline "same name, same value"
-  feature is PDF-only. `remapDocument` throws "Not implemented yet".
-- **resource** — `ResourceService`, the fallback for any other extension: plain copy, no fields.
+`ToastService` (`src/app/@shared/data/toast/toast.service.ts`) is the app's transient-message layer —
+`ToastController`, `ToastRequest` from `@shared/model/toast.types.ts`, and **one toast at a time** by
+construction: a new one dismisses the incumbent, because commands come in bursts and Ionic stacks
+toasts rather than replacing them.
 
-All services work on a **temp copy** and compare `mtime` on export, warning if the original changed.
+`needsDialog` in `filler.page.ts` is the whole routing rule, and it reads the report rather than its
+sender: **a `messageFolder` or more than one message line means a dialog; anything else is a toast.**
+A folder is an action to press and several lines are a list to read — an export run and a folder
+import both produce one line per document. The welcome/version report and every "erfolgreich
+gespeichert" are acknowledgements, and an acknowledgement that has to be clicked away is a modal the
+app interrupts itself with after every save. Errors take the same rule in `color="danger"`, with a
+longer duration.
+
+`ReportDialog` therefore survives for the cases that earn it. Do not give a toast the only path to an
+action: `ion-toast` is `role="status"` + `aria-live="polite"`, so its text is announced and a button
+inside it is not.
+
+### The Rust backend (`src-tauri/`)
+
+Every module is one concern, and no file is over ~290 lines. The split is by **what a reader has to
+know**, not by size: a module that names a German string, a wire type or a config path is app-level;
+`doc/pdf/acroform.rs` is the one that is not. Under `doc/` there is **one folder per format**, so the
+format being worked on is the folder being worked in.
+
+**The top level splits shared from per-workflow, mirroring the Angular side.** `config`, `error`,
+`state`, `model` and the whole of `doc/` are shared; `filler/` and `trains/` are one folder per
+workflow, sealed from each other and reaching only into the shared half. `main.rs` is the
+composition root and the only file that names both — and its `generate_handler!` is **the** index of
+what commands exist, which is what lets each workflow keep its own `commands` module.
+
+`doc/` is deliberately shared rather than filler's: it speaks `model`'s document vocabulary, and
+`trains` reaches it for the path and mtime helpers in `doc/shared.rs`. That is also the constraint on
+moving anything else — `MappedDocument`, `DocumentKind`, `PdfField` and `Sheet` must stay in the
+shared `model.rs`, or `doc/` would point back into `filler/`. `Profile` sits there too, which is the
+one thing in `model.rs` that is filler's alone; splitting it out costs a file and buys little while
+`ClientData` still has to name both.
+
+**There is no temp copy, and no `TMP_PATH`.** Every service reads the original. The copy existed
+because pdftk was a _subprocess taking paths on both ends_ — the source copy, the extracted `.fdf`
+and the output all had to be real files. `lopdf` and `umya` parse into memory and write to the
+target, and `resource::create` only reads its source, so no service can write the file it was given:
+the guarantee the copy used to buy now holds by construction. Do not reintroduce it — see
+[docs/decisions.md](docs/decisions.md).
+
+| Module                | Notes                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config.rs`           | `.npconfig` → `APP_*` → `./data`, resolved against the **working** directory. `DB_FILE`/`PROFILE_FILE` no longer share `APP_CONFIG` (that was the documented bug); `PDFTK_EXE`/`ENCODING` are gone. Unknown `.npconfig` keys are ignored, so old configs still load                                                                                           |
+| `model.rs`            | see _The wire contract_. Anything not modelled here is **dropped** on the next write — which is how the UI-only `export`/`disabled` keys stay out for free                                                                                                                                                                                                    |
+| `about.rs`            | `app_info` — the version and the RESOLVED data/output/cache paths, for `/about`. Belongs to no workflow, so it sits at the top level. It replaced the welcome report, which rode `get_client_data` onto `report$` and would now be emitted before any page is subscribed. `info` is a free fn over `AppConfig`, so it is testable without a running app        |
+| `filler/db.rs`        | `IndexMap`, not a `BTreeMap` — insertion order _is_ the UI's document order and a sorted map would silently reshuffle every existing install. Writes are atomic (temp + rename) and a failed write is now an error the user sees                                                                                                                              |
+| `error.rs`            | `thiserror` enum, serialised as `{ messages: [...] }`. Messages are user-facing **German** and shown verbatim. `AppError::detail` is the "German sentence + the cause underneath" shape every file I/O failure uses                                                                                                                                           |
+| `state.rs`            | `AppState`, the composition root's shared handle. Outside any workflow so `filler/import` and `filler/export` reach the database without depending on the API surface — which is also why it is the one shared module allowed to name a workflow's store                                                                                                     |
+| `filler/commands.rs`  | the API surface and nothing else: `#[tauri::command]` per operation, the native pickers, `open`. The two picker commands are `#[tauri::command(async)]` on a **sync** fn — a plain command runs on the main thread, where a blocking native dialog deadlocks the loop it needs, and a real `async fn` cannot hold the `Mutex<Database>` guard across an await. `add_documents` takes a `DocumentSource` (`file`/`files`/`folder`), declared here rather than in `model.rs` because it is a command argument and nothing stores it |
+| `filler/import.rs`    | linking one file, a hand-picked batch or a whole folder, **no Tauri** — a per-file failure becomes a report line, and only "nothing linked at all" is an error. `folder` is `many` over a sorted listing, so multi-select and folder cannot disagree about which failures are fatal                                                                            |
+| `filler/export.rs`    | one run of documents, **no Tauri** — `Run { messages, failed, refreshed }`; one document failing is a report line, only an unusable output folder stops the run                                                                                                                                                                                               |
+| `doc/mod.rs`          | the extension dispatch only. No trait: the shared steps run here, before the `match`, so the per-format half cannot skip them — and a subclass could forget `super`                                                                                                                                                                                           |
+| `doc/shared.rs`       | what the services share — `value_for`, `file_name`, `mtime_ms`, `free_path`, `warn_if_changed`                                                                                                                                                                                                                                                                |
+| `doc/pdf/mod.rs`      | the PDF _service_: `add`/`create`/`remap` over `acroform`, the preview, and the German warnings. `read_fields` is the shared read half — `add` passes no previous fields and so mints every id                                                                                                                                                                |
+| `doc/pdf/acroform.rs` | the AcroForm layer, **`lopdf` and nothing from this app** — the field walk, the fully-qualified name, `/V`, `NeedAppearances`, XFA detection. The half whose correctness is a property of bytes                                                                                                                                                               |
+| `doc/xlsx/mod.rs`     | `umya-spreadsheet`. `remap` refuses — the sheet ids `mapped[].origId` points at cannot be rebuilt from a new file                                                                                                                                                                                                                                             |
+| `doc/xlsx/address.rs` | the `$Tabelle1.A1` format, parsed in one place. Validates the cell half rather than handing it on: `umya` unwraps a half-parsed address and **panics**, and a panic is not an `AppError`, so the German dialog is lost                                                                                                                                        |
+| `doc/resource.rs`     | plain copy. One `fs::copy`, so it stays a file rather than a folder                                                                                                                                                                                                                                                                                           |
+| `trains/model.rs`     | the trains wire contract. `DecimalStyle`/`DateOrder` are properties of the SENDER'S FILE — nothing in `trains` may consult a system locale, or one file parses differently on two desks                                                                                                                                                                       |
+| `trains/sanitise/`    | raw cell text → a typed value or a German line. `Err` is a Fehler, `Ok` with a `warning` is a Warnung, so severity is the result's SHAPE and not a field to keep in step. The one part of trains with unit tests, because being wrong here is invisible: `1.234` read as `1.234` instead of `1234` looks equally plausible in a preview                       |
+| `trains/sanitise/column.rs` | the decimal style and date order, inferred over the WHOLE column. A per-cell guess flips independently per row and silently mixes both readings; the column has evidence the cell does not. Where nothing is conclusive the default is flagged, which is what lets the preview offer one control that re-reads the column                               |
+| `trains/db.rs`        | six JSON stores under `data/trains/` (`wagen`, `partner`, `instandhaltungen`, `radsaetze`, `einbauten`, `templates`), split so saving a partner does not rewrite the Instandhaltungen. `transaction` is the API, not a convention: an import is a handful of writes, not one per row, and a failed flush rolls memory back. Four indexes — Wagennummer, match key incl. aliases, dedupe key, Radsatznummer |
+| `trains/commit.rs`    | the only module that writes. Re-checks EVERY gate server-side: the frontend's ticks are an input, never the authority. Confirming a partner learns the raw spelling as an alias, which is what makes the second file from a sender free                                                                                        |
+| `trains/sheet/grid.rs` | the only trains file that knows umya on the read side. Coordinates are `(col, row)` numbers, never strings, so `address.rs`'s panic cannot recur. Bounds come from cells that hold something — `highest_column_and_row()` counts styled blanks                                                                                                              |
+
+The whole backend is ported. `cargo check`, `cargo clippy --all-targets` and `cargo fmt --check` are
+**warning-free**, and every module above carries its own `#[cfg(test)] mod tests`.
+
+Three rules in `doc/pdf/acroform.rs` that a reader will otherwise re-derive:
+
+- **A node is a terminal field when none of its `/Kids` carries its own `/T`.** Kids without one are
+  widget annotations — the field's appearance on the page, not fields. Recursing into them invents
+  fields that do not exist.
+- **A PDF text string is UTF-16BE behind a BOM or PDFDocEncoded**, and values go back out the same
+  way. Without that a German field name or a typed `ä` round-trips as mojibake; pdftk needed
+  `iconv-lite` and an `ENCODING` config key for the same reason, and both are gone.
+- **Dynamic XFA is detected, not supported.** `acroform::is_dynamic_xfa` keys on the catalog's
+  `/NeedsRendering`, **not** on the presence of `/XFA` — static XFA forms carry `/XFA` too and fill
+  perfectly well, so the looser check would warn on every form that works. It decides what is _true_;
+  `pdf::warn_if_dynamic_xfa` owns what the user is _told_.
+
+`docs/formular_beispiel.pdf` is the fixture: a generated AcroForm covering a nested field tree, a
+UTF-16BE name, a field whose kids are unnamed widgets, and a plain top-level field.
+
+`capabilities/default.json` is a deny-by-default allowlist: the window may only reach the _plugin_
+commands named there. App commands (`commands.rs`) are not gated by it.
+
+`tauri dev` runs the binary with `src-tauri/` as its working directory, so the app's `./data` folder
+lands at `src-tauri/data` in development and beside the executable in production.
 
 ### Persistence
 
-`NpDatabase` — two JSON files (`data.db`, `profiles.db`) written synchronously on every mutation.
-`version` is 1 and `migrateDatabase()` is a stub — bump both together if the shape changes.
+Two JSON files (`data.db`, `profiles.db`), rewritten in full on every mutation, atomically (temp +
+rename). `version` is 1 and there is no migration yet — write one and bump together if the shape
+changes. Profiles reference documents and mapped fields **by id**, so every document mutation
+cascades through `prune_profile_fields`; this has been the source of several past bugfix releases, so
+touch document add/remove/remap and re-check profiles.
 
-Profiles reference documents and mapped fields by id, so document changes must cascade:
-`updateProfilesOnDocumentChange` / `…OnDocumentRemove` prune dangling `fieldIds`. This has been the
-source of several past bugfixes — touch document add/remove/remap and you must re-check profiles.
+The **view mode** is not in either file — it is a UI preference in localStorage. See _Settings_.
 
-### Configuration
-
-Resolution order per key, in `np-assistant.ts` (top-level, at import time): `.npconfig` JSON →
-`APP_*` env var → default under `./data`. Folders are created on startup.
-
-Gotcha: `DB_FILE` and `PROFILE_FILE` both fall back to the *same* env var `APP_CONFIG`
-(`np-assistant.ts:40-41`), so setting it points both databases at one file.
+**Cite functions, not line numbers.** A reformat invalidates every `file:line` reference written
+before it. Names survive one.
 
 ### Styling
 
-Two tiers. `src/theme/_theme-colors.scss` is **generated** — `ng generate @angular/material:m3-theme`
-from `#3f51b5` / `#ff4081`, the indigo-pink prebuilt theme this app shipped on Angular 13 — and is
-excluded from stylelint and prettier because regenerating it would revert any edits.
+**There is no theme.** `src/theme/` is gone and so is the `--np-*` token group: no palette, no type
+scale, no spacing tokens. Colour and typography are **stock Ionic**, and `src/global.scss` is the
+entire style layer — Ionic's own sheets and nothing else. Dark mode is
+`palettes/dark.system.css`, so it follows `prefers-color-scheme` rather than an attribute.
 
-`_material.scss` is the only file naming Material: it feeds those palettes to `mat.theme()`, which
-owns colour outright and emits it through `light-dark()`. `_tokens.scss` aliases `--np-*` **from**
-`--mat-sys-*`, never the reverse — components read `--np-*` and never name Material. Only shape is
-overridden. Dark is `:root[data-theme='dark']`, which sets `color-scheme: dark` and nothing else,
-because every M3 role flips itself.
+The rule that keeps it that way: **a component never names a colour or a font size.** An accent is
+asked for on the element, the Ionic way — `color="danger"` on a destructive button, `color="success"`
+on the add buttons, `color="medium"` on a row's secondary icons, `color="warning"` on an empty state's
+icon, `<ion-note>` for muted text. Component stylesheets are layout only (flex, gap, width) in plain
+units. If a stylesheet under `src/app/` grows a `color:` or a `font-size:`, that is the regression.
 
-Two traps, both cost real time: `mat.theme`'s typography keys are `plain-family`/`brand-family`, and
-the short spelling compiles clean while emitting every `--mat-sys-*-font` **empty**;
-`mat.theme-overrides()` **silently drops** an unknown token rather than erroring.
+That rule is why **structure is chosen as components, not written as CSS**: the expert page's two panes
+are `ion-card`s with `ion-card-title` headings, `ion-item` rows and `ion-list-header` section labels,
+because each of those brings its own surface, border and text colour. Which is also the trap —
+see _Two traps worth keeping_ below and `docs/footguns.md`.
 
-Icons: the app ships **only** `material-icons/iconfont/sharp.css` (one woff2), registered as the
-default font set in `AppComponent`, so no `<mat-icon>` needs a `fontSet`.
+This replaced a hand-written two-tier setup that mirrored the Angular 13 indigo-pink. Do not
+reintroduce it: the `#3f51b5` / `#ff4081` heritage is deliberately abandoned.
+
+Three traps worth keeping:
+
+- **A wrong `ion-icon` name renders nothing and raises no error.** Every icon is registered by
+  importing the symbol from `ionicons/icons` and passing it to `addIcons` in the component that
+  renders it, so a typo is a TypeScript error rather than an invisible button.
+- **`--color` on `ion-card` does not reach `ion-card-title` / `-subtitle`** — which is one more
+  reason a notice's accent is `color="warning"` on its icon rather than a hand-set background: Ionic's
+  own colour role carries the contrast with it.
+- **`ion-card` MUTES everything it contains** (`--ion-color-step-550`), a typed input value included,
+  and an `fill="outline"` input inside an `ion-item` has its label clipped. Both are why the panes are
+  built out of Ionic's own row and heading components with block padding around each input, and neither
+  can be found by reading this repo — they are in `docs/footguns.md`.
+
+Two Ionic behaviours that are load-bearing in components, both written down where they bite:
+
+- **`ion-accordion` does not defer its `slot="content"`.** Material's `<ng-template
+matExpansionPanelContent>` did. `document-list` keeps an `expanded` signal and gates the rows on it,
+  or every field row of every document is built up front.
+- **`ionChange` bubbles.** Every checkbox and input inside an accordion raises one that reaches the
+  `ion-accordion-group` listener, so `onExpandedChange` checks `event.target === event.currentTarget`
+  first. Unguarded, ticking a document closed the panel.
+
+Icons are **ionicons**, tree-shaken through `addIcons`; there is no icon font.
 
 ## Conventions
 
-**Node dependencies must be listed twice.** `electron/package.json` is the packaged app manifest
-(electron-builder's `directories.app`), so anything the main process needs (`uuid`, `iconv-lite`,
-`exceljs`) belongs in both it and the root `package.json`.
+**Comments live in the file header, and nowhere else.** One `─── why ───` block at the top of the
+file carrying what a reader cannot get from the code — the trap, the constraint, the decision and
+what it rules out. Below that block a source file has **no comments at all**: no section banners, no
+JSDoc on exported symbols, no `///` in Rust, no explanation on the line above. If a piece of
+rationale is load-bearing it moves up into the header; if it only restates the code it goes.
 
-**Two independent pnpm installs.** `electron/` has its own `pnpm-lock.yaml` and is installed
-standalone by `install:app` (`--ignore-workspace --node-linker=hoisted`) — it must be a *flat*
-`node_modules` because electron-builder copies that folder into the package and would otherwise drag
-in dangling symlinks into the pnpm store. The root install uses pnpm's default symlinked layout.
-`pnpm-workspace.yaml` exists only to hold `allowBuilds`, pnpm's deny-by-default allowlist for
-dependency lifecycle scripts — pnpm **errors** rather than warns on an unlisted one, so a new
-dependency with a postinstall breaks every `pnpm run` until it is added.
+**Tests are the only exception**, and deliberately so: `e2e/*.spec.ts` and Rust `#[cfg(test)] mod`
+bodies may comment inline, because a test's reason for existing is not visible in its assertions.
+`e2e/fake-backend.ts` counts as test code.
 
-**`.browserslistrc` and `electron` move together.** Material's `mat.theme()` emits `light-dark()`,
-which no build step can polyfill and which needs Chromium 123 — so the Electron floor is 30, and the
-browserslist line is written as an Electron version to keep the two adjacent.
+This is a rule about WHERE, not about how much: a long header is fine, a two-word comment on line 40
+is not. What the header cannot hold belongs in this file or in `docs/decisions.md`.
 
-**Version bumps** touch three places: root `package.json`, `APP_VERSION` in
-`electron/bridge/shared.model.ts` (shown in the welcome dialog), and `CHANGELOG.md`.
-`electron/package.json` has drifted behind. Release commits follow `release(vX.Y.Z): …`.
+**One dependency list.** The root `package.json` is the whole Node story; a Rust dependency goes in
+`src-tauri/Cargo.toml`. There is no second manifest and no second lockfile — that was Electron's
+packaging contract and it went with it. `pnpm-workspace.yaml` exists only to hold `allowBuilds`,
+pnpm's deny-by-default allowlist for dependency lifecycle scripts — pnpm **errors** rather than warns
+on an unlisted one, so a new dependency with a postinstall breaks every `pnpm run` until it is added.
 
-**Errors are user-facing German strings.** `throw new Error('…')` in the main process is surfaced
-verbatim in a dialog; join multiple lines with `||`.
+**`.browserslistrc` targets two engines, not one.** Tauri does not bundle a browser, it borrows the
+OS one: WebView2 (Chromium) on the Windows target, **WKWebView (Safari) on the macOS dev machine**.
+Safari is the binding constraint, and the reason the file cannot name a single Chrome version.
+
+**Version bumps** touch two places: root `package.json` and `CHANGELOG.md`. The running app reports
+`CARGO_PKG_VERSION` in its welcome report, so there is no constant to keep in step. Release commits
+follow `release(vX.Y.Z): …`.
+
+**Errors are user-facing German strings.** An `AppError` is surfaced verbatim in a dialog; multiple
+lines are separate entries in its `messages` vector.

@@ -1,4 +1,4 @@
-## np-document-filler
+## npDokumentenhilfe
 Ausfüllhilfe für Pdf- und Xls-Formulare
 
 Dieses Programm hilft beim Ausfüllen mehrerer Formulare.

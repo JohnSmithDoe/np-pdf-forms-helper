@@ -1,83 +1,118 @@
-# Introduction
+# npDokumentenhilfe
 
-This app manages a small amount of documents that need to be filled and bundled.
-It helps to fill documents like pdf forms and xlsx files with data.
-- You can setup document links to original files 
-- You can map fields or cells to custom field names
-- Fields with the same name get the same value
-- You can create a copy of all documents with the filled in values
+A desktop app for filling a small set of forms that always want the same data. Link the original PDF and
+XLSX documents once, map their form fields and cells to your own field names, and export a filled copy of
+every document from a single set of inputs.
 
-Depends on pdftk to be available on your system.
-It is only roughly tested on Windows and has a german UI.
+- link documents to their original files
+- map PDF form fields and spreadsheet cells to custom field names
+- fields sharing a name across documents receive the same value
+- export filled copies of all documents at once, optionally through a saved profile
 
-Thankfully based on (electron v17 / angular v13 template): [maximegris/angular-electron](https://github.com/maximegris/angular-electron)
+**The UI and the end-user documentation are German**, and the app targets **Windows** (only roughly tested
+there). For users: [Handbuch](docs/handbuch.md) · [Installationsanleitung](docs/installations-anleitung.md).
 
-# ISSUES
+## Requirements
 
-### ISSUE #1: How to get the encoding of a file instead of assuming utf8 || win1252
-- To get the encoding of a file we need to "guess" from the header and encoded chars e.g. [jschardet](https://github.com/aadsm/jschardet)
-- This is too much for now so we go with win1252 and utf8 only
+- Node `>=22.18` (pinned in `.nvmrc`, enforced by `scripts/check-node.mjs` on install) and **pnpm**, via
+  corepack.
+- A **Rust** toolchain, for the Tauri backend.
 
-### ISSUE #2: To add npm packages to the main app we have to add them to both package.jsons
-- Maybe its not a good idea to keep the main in the src folder
-- Do peerDependencies get installed ... probably not
-  - If not just copy the peerDependencies to the normal dependencies
+No external binaries. The app used to shell out to **pdftk** for all PDF work and quit on startup when it
+was missing; that dependency is gone with the Electron process.
 
-# IMPROVEMENT IDEAS
-* typing could be better
+## The migration, and what is left of it
 
-# Config file
+The frontend is Angular 21 (standalone, zoneless) in the np-commlink layout, and the backend is Rust
+behind Tauri 2. Both shells no longer exist side by side — Electron has been removed outright.
 
-You can use a config file ".npconfig" in the "exe's" path that contains an IAppConfig json
+**The port is functionally complete.** PDF, XLSX and resource documents all work end to end; PDF form
+filling is hand-written against `lopdf` in `src-tauri/src/doc/pdf/`. What is still open is coverage:
+**nothing has ever run on Windows and `pnpm run tauri:build` has never run at all** — see
+[docs/state.md](docs/state.md).
 
-```
+Four documents carry what the code cannot say. Read the one that matches your question:
+
+| Document                               | Holds                                                        |
+| -------------------------------------- | ------------------------------------------------------------ |
+| [CLAUDE.md](CLAUDE.md)                 | how the app is built and what not to break — start here      |
+| [docs/decisions.md](docs/decisions.md) | settled questions, so they are not re-flagged as work        |
+| [docs/footguns.md](docs/footguns.md)   | failures that do not reproduce from a read of the source     |
+| [docs/state.md](docs/state.md)         | unverified work and known limitations — check before proposing any |
+
+Everything else lives next to the code it governs: module boundaries in `sheriff.config.ts`, each lint
+rule's reason in its own comment, the browser floor in `.browserslistrc`, CI's shape in
+`.github/workflows/ci.yml`.
+
+## Layout
+
+| Path         | What                                                                        |
+| ------------ | --------------------------------------------------------------------------- |
+| `src/`       | Angular 21 renderer → `dist/renderer`; one domain (`filler`) plus `@shared` |
+| `src-tauri/` | Rust backend and the Tauri shell                                            |
+| `e2e/`       | Playwright specs, driven against a faked Tauri transport                    |
+| `docs/`      | German end-user docs, the three engineering documents above, and the PDF/XLSX fixtures |
+
+## Commands
+
+The package manager is **pnpm**.
+
+| Command                      | Description                                                |
+| ---------------------------- | ---------------------------------------------------------- |
+| `pnpm start`                 | Angular dev server only (`ng serve`), no desktop shell     |
+| `pnpm run tauri:dev`         | The real app: Rust backend plus the dev server             |
+| `pnpm run tauri:build`       | Packaged application                                       |
+| `pnpm run build`             | Angular production build → `dist/renderer`                 |
+| `pnpm run lint`              | eslint, then stylelint                                     |
+| `pnpm run typecheck`         | `ngc` over all of `src/**`, including files not yet routed |
+| `pnpm run verify`            | Sheriff — module boundaries                                |
+| `pnpm run format` / `:check` | prettier                                                   |
+| `pnpm run rust:check`        | `cargo check`                                              |
+| `pnpm run rust:lint`         | `cargo clippy`                                             |
+| `pnpm run e2e`               | Playwright, against the faked transport                    |
+
+`lefthook` runs prettier, eslint and stylelint pre-commit, and lint, Sheriff and the type-check pre-push.
+The Playwright suite is not part of CI — see the comment in `.github/workflows/ci.yml`.
+
+## Config file
+
+A `.npconfig` JSON file is read at startup from the process working directory. Every key is optional and
+takes precedence over the matching environment variable.
+
+```json
 {
-  PDFTK_EXE?: string;
-  ENCODING?: string;
-  DATA_PATH?: string;
-  TMP_PATH?: string;
-  CACHE_PATH?: string;
-  OUTPUT_PATH?: string;
-  DB_FILE?: string;
-  PROFILE_FILE?: string;
+  "DATA_PATH": "./data",
+  "CACHE_PATH": "./data/cache",
+  "OUTPUT_PATH": "./data/out",
+  "DB_FILE": "./data/data.db",
+  "PROFILE_FILE": "./data/profiles.db"
 }
 ```
 
-# Environment variables
+## Environment variables
 
-You can override each used resource with the following env variables:
+Resolution order per key is `.npconfig` → environment variable → default. Missing folders are created on
+startup.
 
-| Variable      | Description                             | Default               |
-|---------------|-----------------------------------------|-----------------------|
-| APP_PDFTK_EXE | Absolute path to the pdftk executable   | ./pdftk/bin/pdftk.exe |
-| APP_DATA      | Absolute path to the data folder        | ./data                |
-| APP_TEMP      | Absolute path to the temp folder        | ./data/tmp            |
-| APP_CACHE     | Absolute path to the cache folder       | ./data/cache          |
-| APP_OUTPUT    | Absolute path to the output folder      | ./data/out            |
-| APP_CONFIG    | Absolute filename of the config file    | ./data/config.json    |
-| APP_ENCODING  | Override the file encoding used for r/w | ./data/config.json    |
+| Variable            | `.npconfig` key | Description                          | Default              |
+| ------------------- | --------------- | ------------------------------------ | -------------------- |
+| `APP_DATA`          | `DATA_PATH`     | Data folder                          | `./data`             |
+| `APP_CACHE`         | `CACHE_PATH`    | Cache folder                         | `<data>/cache`       |
+| `APP_OUTPUT`        | `OUTPUT_PATH`   | Output folder for exported documents | `<data>/out`         |
+| `APP_DB_FILE`       | `DB_FILE`       | Document database file               | `<data>/data.db`     |
+| `APP_PROFILE_FILE`  | `PROFILE_FILE`  | Profile database file                | `<data>/profiles.db` |
 
-# Project structure
+The base directory is the process **working** directory, not the executable's, so existing installs that
+keep `.npconfig` and `data/` beside the binary and launch it from there keep working.
 
-| Folder       | Description                                      |
-|--------------|--------------------------------------------------|
-| src/main     | Electron main process folder (NodeJS)            |
-| src/bridge   | Electron and angular shared files (TypeScript)   |
-| src/renderer | Electron renderer process folder (Web / Angular) |
+`PDFTK_EXE`, `ENCODING` and `TMP_PATH` no longer exist, and `DB_FILE`/`PROFILE_FILE` no longer share one
+variable — both databases used to fall back to `APP_CONFIG`, which pointed them at the same file. Unknown
+`.npconfig` keys are ignored, so a config from an older install still loads; the `data/tmp` folder it
+names is simply no longer created or used.
 
-# Included Commands
+## Licence and credit
 
-The package manager is **pnpm**. `pnpm install` also installs the runtime dependencies in
-`src/main` (the folder electron-builder packages) via the `postinstall` hook.
-
-| Command                        | Description                                                                          |
-|--------------------------------|--------------------------------------------------------------------------------------|
-| `pnpm start`                   | Starts the main and the renderer in electron / hot reload of the renderer enabled    |
-| `pnpm run ng:serve`            | Starts only the renderer in the web browser                                          |
-| `pnpm run electron:serve`      | Starts only the main in electron                                                     |
-| `pnpm run build:all:prod`      | Run the build process for main and renderer                                          |
-| `pnpm run electron:local`      | Run the build on you local machine                                                   |
-| `pnpm run electron:unpacked`   | Builds your application to an unpacked executable                                    |
-| `pnpm run electron:packaged`   | Builds your application and creates an app consumable based on your operating system |
-| `pnpm run install:app`         | Reinstalls only the packaged runtime dependencies in `src/main`                      |
-
+GPL v2 — see [LICENSE.txt](LICENSE.txt). Originally scaffolded from
+[maximegris/angular-electron](https://github.com/maximegris/angular-electron) (the Electron 17 / Angular 13
+template); nothing of that template survives — neither its structure, after the Angular 21 migration, nor
+Electron itself.
