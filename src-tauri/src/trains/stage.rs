@@ -1,0 +1,923 @@
+// ─── why ────────────────────────────────────────────────────────
+// Where the three halves meet: a `Grid` says what is in the file, a `Layout`
+// says which cells are the data, the sanitisers say what those cells mean, and
+// `resolve` says which entities they point at. Out comes a preview.
+//
+// STAGING NEVER TOUCHES THE DATABASE. That is what makes "the import went wrong
+// halfway" a state this code cannot reach, and it is why a bad cell is a line in
+// a report rather than an aborted run — there is nothing to abort to. The row
+// loop returns `Vec<StagedRow>` and not `AppResult<Vec<StagedRow>>` precisely so
+// a `?` cannot creep into it; if one appears in review, that is the regression.
+//
+// The interpretations are inferred ONCE PER COLUMN, before any row is read, and
+// a binding's stored answer beats the inference. That ordering is the whole
+// reason the preview can offer one control that re-reads a column: a per-cell
+// guess has nothing to flip.
+//
+// Each inference runs only for the field that CONSULTS it — the decimal style
+// for a Betrag, the date order for a date — because both walk every cell of the
+// column and normalise it, and `uncertainty` reports neither for any other
+// field. An unconsulted slot carries a `certain` default so it can never raise a
+// warning nobody asked for.
+//
+// `infer_date_order` answering `None` is CONTRADICTORY evidence, not absent
+// evidence: the column holds both readings. It becomes `assumed`, never
+// `certain`, because that is precisely the column the warning exists for.
+//
+// `interpret` returns one slot PER COLUMN, `None` where the column is ignored,
+// so `stage_row` indexes it by position. Searching it by `binding.index` was a
+// linear scan per cell per row.
+//
+// A cell Excel stored as a NUMBER never goes through the string parsers —
+// `value_number()` already answered, and its stringification uses a `.` decimal
+// whatever the file's own style is. For dates that means a serial, and whether a
+// number IS a serial is decided by the column's aggregated date format, falling
+// back to a plausibility window: a bare 45000 in a column of costs is a cost.
+//
+// A duplicate outranks needing input, and the order matters. A row that repeats
+// one already staged must not be offered as "create these entities" — the user
+// would be invited to mint a wagen for a row that should not be committed at
+// all. The FIRST occurrence still asks; the repeat is only ever a repeat.
+//
+// The dedupe key is built from the file's OWN WORDS — the canonical wagen
+// number and the werkstatt's normalised name — and never from a resolved entity
+// id. An id only exists once the partner does, so a key using one would hash the
+// same row differently before and after its first import, and re-sending a file
+// would double every event in it. The key has to mean "this row", not "this row
+// as currently resolved".
+//
+// AN INCOMPLETE PLAN IS NOT AN ERROR. Staging a half-mapped file is the normal
+// state of the mapping screen — every field the user picks re-stages, so
+// refusing until the required ones are mapped makes the FIRST pick fail and
+// nothing can ever be mapped. Required-ness gates the review step and the
+// commit, both of which check it themselves.
+//
+// EVERY column produces a cell, including an ignored one, tagged with the column
+// it came from. Two reasons: the mapping screen shows sample values, and the
+// columns most needing them are exactly the unmapped ones; and matching cells by
+// FIELD rather than by column silently merges two columns mapped to the same
+// field.
+//
+// `AppError` is reserved for what stops the whole gesture — the layout does not
+// fit the sheet, or no required field is mapped. Everything else is a `CellIssue`
+// on a row that still arrives.
+// ────────────────────────────────────────────────────────────────
+
+use std::collections::HashSet;
+
+use super::db::TrainsDb;
+use super::hash;
+use super::model::{
+    CellIssue, ColumnBinding, DateOrder, DecimalStyle, FieldKind, ImportPlan, Resolution,
+    RowStatus, Severity, StagedCell, StagedImport, StagedRow, StagedSummary,
+};
+use super::resolve;
+use super::sanitise::column::Inference;
+use super::sanitise::{column, date, format, number, text, Parsed, Value};
+use super::sheet::grid::Grid;
+use super::sheet::layout::{Candidate, Layout};
+use crate::error::AppResult;
+use crate::trains::model::PartnerRolle;
+
+struct Interpretation {
+    binding: ColumnBinding,
+    decimal: Inference<DecimalStyle>,
+    date_order: Inference<DateOrder>,
+    dates: bool,
+}
+
+pub struct RowValues {
+    pub row: u32,
+    pub values: Vec<(FieldKind, Value)>,
+    pub dedupe_key: String,
+}
+
+impl RowValues {
+    pub fn value(&self, field: FieldKind) -> Option<&Value> {
+        value_of(&self.values, field)
+    }
+}
+
+fn value_of(values: &[(FieldKind, Value)], field: FieldKind) -> Option<&Value> {
+    values
+        .iter()
+        .find(|(kind, _)| *kind == field)
+        .map(|(_, value)| value)
+}
+
+pub struct Staged {
+    pub wire: StagedImport,
+    pub values: Vec<RowValues>,
+}
+
+pub struct HeldImport {
+    pub grid: Grid,
+    pub wire: StagedImport,
+    pub values: Vec<RowValues>,
+}
+
+pub struct StageInput<'a> {
+    pub id: String,
+    pub file: String,
+    pub sheets: Vec<String>,
+    pub candidates: Vec<Candidate>,
+    pub grid: &'a Grid,
+    pub plan: &'a ImportPlan,
+    pub db: &'a TrainsDb,
+}
+
+pub fn stage(input: StageInput<'_>) -> AppResult<Staged> {
+    let layout = input.plan.reader.apply(input.grid, input.plan.layout)?;
+    let interpretations = interpret(input.grid, input.plan, &layout);
+
+    let mut rows = Vec::new();
+    let mut values = Vec::new();
+    let mut seen_keys: HashSet<String> = HashSet::new();
+    let mut partners = resolve::PartnerMemo::default();
+    for row in layout.first_data_row..=layout.last_data_row {
+        if let Some((staged, staged_values)) =
+            stage_row(&input, &interpretations, row, &mut seen_keys, &mut partners)
+        {
+            rows.push(staged);
+            values.push(staged_values);
+        }
+    }
+
+    let summary = summarise(&rows);
+    Ok(Staged {
+        wire: StagedImport {
+            id: input.id,
+            file: input.file,
+            sheet: input.grid.sheet.clone(),
+            sheets: input.sheets,
+            plan: input.plan.clone(),
+            candidates: input.candidates,
+            rows,
+            summary,
+        },
+        values,
+    })
+}
+
+fn interpret(grid: &Grid, plan: &ImportPlan, layout: &Layout) -> Vec<Option<Interpretation>> {
+    plan.columns
+        .iter()
+        .map(|binding| {
+            if binding.field == FieldKind::Ignorieren {
+                return None;
+            }
+            let cells = grid.column(binding.index, layout.first_data_row, layout.last_data_row);
+
+            let decimal = match binding.decimal {
+                Some(chosen) => Inference::certain(chosen),
+                None if binding.field == FieldKind::Betrag => {
+                    let values: Vec<&str> = cells.iter().map(|cell| cell.text.as_str()).collect();
+                    column::infer_decimal(&values)
+                }
+                None => Inference::certain(DecimalStyle::German),
+            };
+            let date_order = match binding.date_order {
+                Some(chosen) => Inference::certain(chosen),
+                None if reads_a_date(binding.field) => {
+                    let values: Vec<&str> = cells.iter().map(|cell| cell.text.as_str()).collect();
+                    column::infer_date_order(&values)
+                        .unwrap_or_else(|| Inference::assumed(DateOrder::DayFirst))
+                }
+                None => Inference::certain(DateOrder::DayFirst),
+            };
+
+            let hints: Vec<bool> = cells.iter().map(|cell| cell.date_format).collect();
+            Some(Interpretation {
+                decimal,
+                date_order,
+                dates: column::looks_like_dates(&hints),
+                binding: binding.clone(),
+            })
+        })
+        .collect()
+}
+
+fn reads_a_date(field: FieldKind) -> bool {
+    matches!(
+        field,
+        FieldKind::Datum | FieldKind::EingebautAm | FieldKind::AusgebautAm
+    )
+}
+
+fn stage_row(
+    input: &StageInput<'_>,
+    interpretations: &[Option<Interpretation>],
+    row: u32,
+    seen_keys: &mut HashSet<String>,
+    partners: &mut resolve::PartnerMemo,
+) -> Option<(StagedRow, RowValues)> {
+    let mut cells = Vec::new();
+    let mut issues = Vec::new();
+    let mut values: Vec<(FieldKind, Value)> = Vec::new();
+    let mut rejected = false;
+
+    for (position, binding) in input.plan.columns.iter().enumerate() {
+        let cell = input.grid.cell(binding.index, row);
+        let raw = cell.map(|cell| cell.text.clone()).unwrap_or_default();
+
+        let Some(interpretation) = interpretations.get(position).and_then(Option::as_ref) else {
+            cells.push(StagedCell {
+                column: binding.index,
+                field: binding.field,
+                raw,
+                parsed: String::new(),
+                ok: true,
+            });
+            continue;
+        };
+
+        match parse_cell(interpretation, input.plan, cell) {
+            Ok(Parsed { value, warning }) => {
+                if let Some(message) = warning {
+                    issues.push(issue(row, binding, &raw, message, Severity::Warnung));
+                }
+                if let Some(message) = uncertainty(interpretation) {
+                    issues.push(issue(row, binding, &raw, message, Severity::Warnung));
+                }
+                cells.push(StagedCell {
+                    column: binding.index,
+                    field: binding.field,
+                    raw,
+                    parsed: format::value(&value),
+                    ok: true,
+                });
+                values.push((binding.field, value));
+            }
+            Err(message) => {
+                if binding.field.required() {
+                    rejected = true;
+                }
+                issues.push(issue(row, binding, &raw, message, Severity::Fehler));
+                cells.push(StagedCell {
+                    column: binding.index,
+                    field: binding.field,
+                    raw,
+                    parsed: String::new(),
+                    ok: false,
+                });
+            }
+        }
+    }
+
+    // A row where every mapped cell is blank is spacing, not data.
+    if cells.iter().all(|cell| cell.raw.trim().is_empty()) {
+        return None;
+    }
+
+    let uic = match value_of(&values, FieldKind::Wagennummer) {
+        Some(Value::Uic(uic)) => Some(uic.as_str().to_string()),
+        _ => None,
+    };
+    let wagen = resolve::wagen(input.db, uic.as_deref());
+    let werkstatt = partners.find(
+        input.db,
+        PartnerRolle::Werkstatt,
+        raw_of(&cells, FieldKind::Werkstatt),
+    );
+    let halter = partners.find(
+        input.db,
+        PartnerRolle::Halter,
+        raw_of(&cells, FieldKind::Halter),
+    );
+    let eigentuemer = partners.find(
+        input.db,
+        PartnerRolle::Eigentuemer,
+        raw_of(&cells, FieldKind::Eigentuemer),
+    );
+    let sender = sender_of(input, &werkstatt);
+    let radsatz = resolve::find_radsatz(
+        input.db,
+        raw_of(&cells, FieldKind::Radsatznummer),
+        sender.as_deref(),
+    );
+
+    let key = dedupe_key(&uic, &values, raw_of(&cells, FieldKind::Werkstatt));
+    let duplicate = input.db.event_exists(&key) || !seen_keys.insert(key.clone());
+
+    let status = if rejected {
+        RowStatus::Rejected
+    } else if duplicate {
+        RowStatus::Duplicate
+    } else if wagen.needs_input()
+        || werkstatt.needs_input()
+        || halter.needs_input()
+        || eigentuemer.needs_input()
+        || radsatz.needs_input()
+    {
+        RowStatus::NeedsInput
+    } else {
+        RowStatus::Ready
+    };
+
+    Some((
+        StagedRow {
+            row,
+            status,
+            cells,
+            wagen,
+            werkstatt,
+            halter,
+            eigentuemer,
+            radsatz,
+            issues,
+        },
+        RowValues {
+            row,
+            values,
+            dedupe_key: key,
+        },
+    ))
+}
+
+fn parse_cell(
+    interpretation: &Interpretation,
+    plan: &ImportPlan,
+    cell: Option<&super::sheet::grid::RawCell>,
+) -> super::sanitise::Parse {
+    let raw = cell.map(|cell| cell.text.as_str()).unwrap_or("");
+    let stored_number = cell.and_then(|cell| cell.number);
+
+    match interpretation.binding.field {
+        FieldKind::Wagennummer => super::sanitise::wagen::parse(raw),
+        FieldKind::Datum => match stored_number {
+            Some(serial) if is_serial(interpretation, serial) => {
+                date::from_serial(serial, plan.date1904)
+                    .map(|value| Parsed::plain(Value::Date(value)))
+            }
+            _ => date::parse_text(raw, interpretation.date_order.value),
+        },
+        FieldKind::Betrag => match stored_number {
+            Some(amount) => Ok(Parsed::plain(Value::Money((amount * 100.0).round() as i64))),
+            None => number::parse_money(raw, interpretation.decimal.value),
+        },
+        FieldKind::EingebautAm | FieldKind::AusgebautAm => match stored_number {
+            Some(serial) if is_serial(interpretation, serial) => {
+                date::from_serial(serial, plan.date1904)
+                    .map(|value| Parsed::plain(Value::Date(value)))
+            }
+            _ => date::parse_text(raw, interpretation.date_order.value),
+        },
+        FieldKind::Ignorieren => text::parse(""),
+        _ => text::parse(raw),
+    }
+}
+
+fn is_serial(interpretation: &Interpretation, serial: f64) -> bool {
+    interpretation.dates || date::PLAUSIBLE_SERIALS.contains(&(serial.floor() as i64))
+}
+
+fn uncertainty(interpretation: &Interpretation) -> Option<String> {
+    match interpretation.binding.field {
+        FieldKind::Betrag if !interpretation.decimal.certain => Some(
+            "Tausender- oder Dezimaltrennzeichen nicht eindeutig; als deutsch gelesen (1.234 = 1234). Bitte Spalte prüfen."
+                .into(),
+        ),
+        FieldKind::Datum | FieldKind::EingebautAm | FieldKind::AusgebautAm
+            if !interpretation.date_order.certain =>
+        {
+            Some(
+            "Reihenfolge von Tag und Monat nicht eindeutig; als Tag zuerst gelesen. Bitte Spalte prüfen."
+                .into(),
+            )
+        }
+        _ => None,
+    }
+}
+
+fn issue(
+    row: u32,
+    binding: &ColumnBinding,
+    raw: &str,
+    message: String,
+    severity: Severity,
+) -> CellIssue {
+    CellIssue {
+        row,
+        column: binding.header.clone(),
+        raw: raw.to_string(),
+        message,
+        severity,
+    }
+}
+
+fn raw_of(cells: &[StagedCell], field: FieldKind) -> Option<&str> {
+    cells
+        .iter()
+        .find(|cell| cell.field == field)
+        .map(|cell| cell.raw.as_str())
+}
+
+/// WHO SENT THE FILE, which is what scopes a Radsatznummer — see
+/// `resolve::radsatz`. The template's partner is the reliable answer because the
+/// user bound it once; a row's Werkstatt is the fallback and only when CONFIRMED,
+/// since a `Likely` is a suggestion and would scope an alias to a guess.
+fn sender_of(input: &StageInput<'_>, werkstatt: &Resolution) -> Option<String> {
+    let from_template = input
+        .plan
+        .template_id
+        .as_deref()
+        .and_then(|id| input.db.template(id))
+        .and_then(|template| template.partner_id.clone());
+    if from_template.is_some() {
+        return from_template;
+    }
+    match werkstatt {
+        Resolution::Known { id, .. } => Some(id.clone()),
+        _ => None,
+    }
+}
+
+fn dedupe_key(
+    nummer: &Option<String>,
+    values: &[(FieldKind, Value)],
+    werkstatt: Option<&str>,
+) -> String {
+    let find = |wanted: FieldKind| {
+        values
+            .iter()
+            .find(|(field, _)| *field == wanted)
+            .map(|(_, value)| format::value(value))
+            .unwrap_or_default()
+    };
+    hash::join(&[
+        nummer.as_deref().unwrap_or(""),
+        &find(FieldKind::Datum),
+        &resolve::partner::match_key(werkstatt.unwrap_or("")),
+        &find(FieldKind::Leistung),
+        &find(FieldKind::Betrag),
+    ])
+}
+
+fn summarise(rows: &[StagedRow]) -> StagedSummary {
+    let mut summary = StagedSummary {
+        total: rows.len() as u32,
+        ..StagedSummary::default()
+    };
+    for row in rows {
+        match row.status {
+            RowStatus::Ready => summary.ready += 1,
+            RowStatus::NeedsInput => summary.needs_input += 1,
+            RowStatus::Duplicate => summary.duplicates += 1,
+            RowStatus::Rejected => summary.rejected += 1,
+        }
+        if matches!(row.wagen, Resolution::New { .. }) {
+            summary.neue_wagen += 1;
+        }
+        if matches!(row.radsatz, Resolution::New { .. }) {
+            summary.neue_radsaetze += 1;
+        }
+        for resolution in [&row.werkstatt, &row.halter, &row.eigentuemer] {
+            if matches!(resolution, Resolution::New { .. }) {
+                summary.neue_partner += 1;
+            }
+        }
+    }
+    summary
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::TempDir;
+    use crate::trains::model::{Partner, Wagen};
+    use crate::trains::sheet::layout::LayoutHint;
+    use crate::trains::sheet::readers::ReaderKind;
+
+    fn grid() -> Grid {
+        Grid::from_text(
+            "Tabelle1",
+            &[
+                &["Wagennummer", "Datum", "Werkstatt", "Leistung", "Kosten"],
+                &[
+                    "31 80 4740 123-4",
+                    "31.12.2025",
+                    "Fa. Müller GmbH",
+                    "Bremsprobe",
+                    "1.234,56",
+                ],
+                &[
+                    "21 81 2471 217-3",
+                    "01.01.2026",
+                    "Bahnwerk Nord",
+                    "Radsatz",
+                    "987,00",
+                ],
+            ],
+        )
+    }
+
+    fn plan(fields: &[(u32, &str, FieldKind)]) -> ImportPlan {
+        ImportPlan {
+            reader: ReaderKind::HeaderRow,
+            layout: LayoutHint {
+                header_row: Some(1),
+                first_data_row: 2,
+                last_data_row: None,
+            },
+            columns: fields
+                .iter()
+                .map(|(index, header, field)| ColumnBinding {
+                    header: (*header).into(),
+                    index: *index,
+                    field: *field,
+                    decimal: None,
+                    date_order: None,
+                })
+                .collect(),
+            template_id: None,
+            date1904: false,
+        }
+    }
+
+    fn full_plan() -> ImportPlan {
+        plan(&[
+            (1, "Wagennummer", FieldKind::Wagennummer),
+            (2, "Datum", FieldKind::Datum),
+            (3, "Werkstatt", FieldKind::Werkstatt),
+            (4, "Leistung", FieldKind::Leistung),
+            (5, "Kosten", FieldKind::Betrag),
+        ])
+    }
+
+    fn run(grid: &Grid, plan: &ImportPlan, db: &TrainsDb) -> AppResult<StagedImport> {
+        run_full(grid, plan, db).map(|staged| staged.wire)
+    }
+
+    fn run_full(grid: &Grid, plan: &ImportPlan, db: &TrainsDb) -> AppResult<Staged> {
+        stage(StageInput {
+            id: "s1".into(),
+            file: "monat.xlsx".into(),
+            sheets: vec!["Tabelle1".into()],
+            candidates: Vec::new(),
+            grid,
+            plan,
+            db,
+        })
+    }
+
+    fn empty_db(label: &str) -> (TempDir, TrainsDb) {
+        let folder = TempDir::new(label);
+        let db = TrainsDb::load(&folder.config()).unwrap();
+        (folder, db)
+    }
+
+    /// The mapping screen re-stages on every pick, so a half-mapped plan is the
+    /// NORMAL state. Refusing it here made the first pick fail and nothing
+    /// mappable at all; `commit` is where required-ness is checked.
+    #[test]
+    fn a_half_mapped_plan_stages_instead_of_failing() {
+        let (_f, db) = empty_db("stage-partial");
+        let staged = run(
+            &grid(),
+            &plan(&[(1, "Wagennummer", FieldKind::Wagennummer)]),
+            &db,
+        )
+        .unwrap();
+        assert_eq!(staged.summary.total, 2);
+    }
+
+    /// The columns that most need sample values are the UNMAPPED ones — that is
+    /// how the user works out what they are.
+    #[test]
+    fn an_ignored_column_still_carries_its_raw_text() {
+        let (_f, db) = empty_db("stage-ignored-raw");
+        let staged = run(
+            &grid(),
+            &plan(&[
+                (1, "Wagennummer", FieldKind::Wagennummer),
+                (3, "Werkstatt", FieldKind::Ignorieren),
+            ]),
+            &db,
+        )
+        .unwrap();
+        let cell = staged.rows[0]
+            .cells
+            .iter()
+            .find(|cell| cell.column == 3)
+            .expect("the ignored column is still there");
+        assert_eq!(cell.raw, "Fa. Müller GmbH");
+        assert_eq!(cell.parsed, "");
+    }
+
+    /// Cells are matched by COLUMN, so two columns mapped to one field stay
+    /// distinguishable rather than merging.
+    #[test]
+    fn every_cell_names_the_column_it_came_from() {
+        let (_f, db) = empty_db("stage-columns");
+        let staged = run(&grid(), &full_plan(), &db).unwrap();
+        let columns: Vec<u32> = staged.rows[0]
+            .cells
+            .iter()
+            .map(|cell| cell.column)
+            .collect();
+        assert_eq!(columns, [1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn every_data_row_is_staged_with_what_it_parsed_to() {
+        let (_f, db) = empty_db("stage-rows");
+        let staged = run(&grid(), &full_plan(), &db).unwrap();
+        assert_eq!(staged.summary.total, 2);
+        assert_eq!(staged.rows[0].row, 2);
+
+        let cells = &staged.rows[0].cells;
+        let parsed = |field: FieldKind| {
+            cells
+                .iter()
+                .find(|c| c.field == field)
+                .unwrap()
+                .parsed
+                .as_str()
+        };
+        assert_eq!(parsed(FieldKind::Wagennummer), "31 80 4740 123-4");
+        assert_eq!(parsed(FieldKind::Datum), "31.12.2025");
+        assert_eq!(parsed(FieldKind::Betrag), "1234,56");
+    }
+
+    /// Both halves side by side is what the preview is for.
+    #[test]
+    fn a_cell_keeps_the_raw_text_beside_what_it_became() {
+        let (_f, db) = empty_db("stage-raw");
+        let staged = run(&grid(), &full_plan(), &db).unwrap();
+        let cell = staged.rows[0]
+            .cells
+            .iter()
+            .find(|c| c.field == FieldKind::Wagennummer)
+            .unwrap();
+        assert_eq!(cell.raw, "31 80 4740 123-4");
+        assert_eq!(cell.parsed, "31 80 4740 123-4");
+        assert!(cell.ok);
+    }
+
+    /// The number in the original request has a wrong check digit. It is still
+    /// staged — with a warning, and needing confirmation because it is unknown.
+    #[test]
+    fn a_wrong_check_digit_warns_but_does_not_reject_the_row() {
+        let (_f, db) = empty_db("stage-checkdigit");
+        let staged = run(&grid(), &full_plan(), &db).unwrap();
+        let row = &staged.rows[0];
+        assert_ne!(row.status, RowStatus::Rejected);
+        assert!(row
+            .issues
+            .iter()
+            .any(|issue| issue.message.contains("Prüfziffer")));
+    }
+
+    #[test]
+    fn a_row_whose_required_cell_cannot_be_read_is_rejected_and_the_rest_survive() {
+        let broken = Grid::from_text(
+            "Tabelle1",
+            &[
+                &["Wagennummer", "Datum"],
+                &["kein Wagen", "31.12.2025"],
+                &["21 81 2471 217-3", "01.01.2026"],
+            ],
+        );
+        let (_f, db) = empty_db("stage-rejected");
+        let staged = run(
+            &broken,
+            &plan(&[
+                (1, "Wagennummer", FieldKind::Wagennummer),
+                (2, "Datum", FieldKind::Datum),
+            ]),
+            &db,
+        )
+        .unwrap();
+        assert_eq!(staged.summary.total, 2);
+        assert_eq!(staged.summary.rejected, 1);
+        assert_eq!(staged.rows[0].status, RowStatus::Rejected);
+        assert!(staged.rows[0]
+            .issues
+            .iter()
+            .any(|i| i.severity == Severity::Fehler));
+        assert_ne!(staged.rows[1].status, RowStatus::Rejected);
+    }
+
+    #[test]
+    fn an_unknown_wagen_and_workshop_make_the_row_need_input() {
+        let (_f, db) = empty_db("stage-needs");
+        let staged = run(&grid(), &full_plan(), &db).unwrap();
+        assert_eq!(staged.summary.needs_input, 2);
+        assert_eq!(staged.summary.neue_wagen, 2);
+        assert_eq!(staged.summary.neue_partner, 2);
+        assert_eq!(staged.rows[0].status, RowStatus::NeedsInput);
+    }
+
+    #[test]
+    fn known_entities_make_a_row_ready() {
+        let folder = TempDir::new("stage-ready");
+        let mut db = TrainsDb::load(&folder.config()).unwrap();
+        db.transaction(|tx| {
+            for (id, uic) in [("w1", "318047401234"), ("w2", "218124712173")] {
+                tx.put_wagen(Wagen {
+                    id: id.into(),
+                    nummer: uic.into(),
+                    halter_id: None,
+                    eigentuemer_id: None,
+                    bauart: None,
+                    bemerkung: None,
+                    created_at: "2026-08-16".into(),
+                    source: None,
+                });
+            }
+            for (id, name) in [("p1", "Müller GmbH"), ("p2", "Bahnwerk Nord")] {
+                tx.put_partner(Partner {
+                    id: id.into(),
+                    rollen: vec![PartnerRolle::Werkstatt],
+                    name: name.into(),
+                    match_key: crate::trains::resolve::partner::match_key(name),
+                    aliases: Vec::new(),
+                    bemerkung: None,
+                    created_at: "2026-08-16".into(),
+                });
+            }
+            Ok(())
+        })
+        .unwrap();
+
+        let staged = run(&grid(), &full_plan(), &db).unwrap();
+        assert_eq!(staged.summary.ready, 2, "{:?}", staged.rows[0]);
+        assert_eq!(staged.summary.neue_wagen, 0);
+    }
+
+    /// Two identical rows in ONE file collide with each other, not just with the
+    /// store — so re-sending a file cannot double an event either way.
+    #[test]
+    fn an_identical_row_twice_in_one_file_is_flagged_as_duplicate() {
+        let repeated = Grid::from_text(
+            "Tabelle1",
+            &[
+                &["Wagennummer", "Datum"],
+                &["21 81 2471 217-3", "01.01.2026"],
+                &["21 81 2471 217-3", "01.01.2026"],
+            ],
+        );
+        let (_f, db) = empty_db("stage-dupe");
+        let staged = run(
+            &repeated,
+            &plan(&[
+                (1, "Wagennummer", FieldKind::Wagennummer),
+                (2, "Datum", FieldKind::Datum),
+            ]),
+            &db,
+        )
+        .unwrap();
+        assert_eq!(staged.summary.duplicates, 1);
+        assert_eq!(staged.rows[0].status, RowStatus::NeedsInput);
+        assert_eq!(staged.rows[1].status, RowStatus::Duplicate);
+    }
+
+    #[test]
+    fn a_blank_row_is_spacing_and_is_not_staged() {
+        let spaced = Grid::from_text(
+            "Tabelle1",
+            &[
+                &["Wagennummer", "Datum"],
+                &["21 81 2471 217-3", "01.01.2026"],
+                &["", ""],
+                &["31 80 4740 123-4", "02.01.2026"],
+            ],
+        );
+        let (_f, db) = empty_db("stage-blank");
+        let staged = run(
+            &spaced,
+            &plan(&[
+                (1, "Wagennummer", FieldKind::Wagennummer),
+                (2, "Datum", FieldKind::Datum),
+            ]),
+            &db,
+        )
+        .unwrap();
+        assert_eq!(staged.summary.total, 2);
+    }
+
+    /// The ambiguous-decimal case: every cell is `d.ddd`, so nothing in the
+    /// column settles it and every row says so.
+    #[test]
+    fn an_undecidable_amount_column_warns_on_every_row() {
+        let ambiguous = Grid::from_text(
+            "Tabelle1",
+            &[
+                &["Wagennummer", "Datum", "Kosten"],
+                &["21 81 2471 217-3", "01.01.2026", "1.234"],
+                &["31 80 4740 123-4", "02.01.2026", "5.678"],
+            ],
+        );
+        let (_f, db) = empty_db("stage-ambiguous");
+        let staged = run(
+            &ambiguous,
+            &plan(&[
+                (1, "Wagennummer", FieldKind::Wagennummer),
+                (2, "Datum", FieldKind::Datum),
+                (3, "Kosten", FieldKind::Betrag),
+            ]),
+            &db,
+        )
+        .unwrap();
+        for row in &staged.rows {
+            assert!(
+                row.issues
+                    .iter()
+                    .any(|i| i.message.contains("Dezimaltrennzeichen")),
+                "{:?}",
+                row.issues
+            );
+        }
+        let amount = |row: &StagedRow| {
+            row.cells
+                .iter()
+                .find(|c| c.field == FieldKind::Betrag)
+                .unwrap()
+                .parsed
+                .clone()
+        };
+        assert_eq!(amount(&staged.rows[0]), "1234,00");
+    }
+
+    /// One conclusive cell rescues the column, and then nothing warns.
+    #[test]
+    fn one_conclusive_amount_settles_the_column_and_silences_the_warning() {
+        let settled = Grid::from_text(
+            "Tabelle1",
+            &[
+                &["Wagennummer", "Datum", "Kosten"],
+                &["21 81 2471 217-3", "01.01.2026", "1.234"],
+                &["31 80 4740 123-4", "02.01.2026", "5.678,90"],
+            ],
+        );
+        let (_f, db) = empty_db("stage-settled");
+        let staged = run(
+            &settled,
+            &plan(&[
+                (1, "Wagennummer", FieldKind::Wagennummer),
+                (2, "Datum", FieldKind::Datum),
+                (3, "Kosten", FieldKind::Betrag),
+            ]),
+            &db,
+        )
+        .unwrap();
+        for row in &staged.rows {
+            assert!(!row
+                .issues
+                .iter()
+                .any(|i| i.message.contains("Dezimaltrennzeichen")));
+        }
+    }
+
+    /// A column holding BOTH readings — `13.01.` can only be day-first, `01.13.`
+    /// only month-first — is the case the warning exists for. `infer_date_order`
+    /// answers `None` there, which must stay uncertain rather than fall back to
+    /// a confident default and say nothing.
+    #[test]
+    fn a_column_contradicting_itself_on_day_and_month_still_warns() {
+        let contradictory = Grid::from_text(
+            "Tabelle1",
+            &[
+                &["Wagennummer", "Datum"],
+                &["21 81 2471 217-3", "13.01.2026"],
+                &["31 80 4740 123-4", "01.13.2026"],
+            ],
+        );
+        let (_f, db) = empty_db("stage-contradiction");
+        let staged = run(
+            &contradictory,
+            &plan(&[
+                (1, "Wagennummer", FieldKind::Wagennummer),
+                (2, "Datum", FieldKind::Datum),
+            ]),
+            &db,
+        )
+        .unwrap();
+
+        assert!(
+            staged
+                .rows
+                .iter()
+                .flat_map(|row| &row.issues)
+                .any(|issue| issue.message.contains("Reihenfolge von Tag und Monat")),
+            "{:?}",
+            staged.rows
+        );
+    }
+
+    #[test]
+    fn an_ignored_column_contributes_nothing() {
+        let (_f, db) = empty_db("stage-ignore");
+        let mut plan = full_plan();
+        plan.columns[3].field = FieldKind::Ignorieren;
+        let staged = run(&grid(), &plan, &db).unwrap();
+        assert!(staged.rows[0]
+            .cells
+            .iter()
+            .all(|cell| cell.field != FieldKind::Leistung));
+        assert!(staged.rows[0]
+            .cells
+            .iter()
+            .any(|cell| cell.column == 4 && cell.field == FieldKind::Ignorieren));
+    }
+}
