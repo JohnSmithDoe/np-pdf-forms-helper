@@ -3,16 +3,13 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./out-tsc/app",
-    // The renderer runs with `nodeIntegration: true` and reaches Electron through
-    // `window.require` (see `src/typings.d.ts`), so Node's types belong here.
-    "types": ["node"]
+    // No `types` entry: the renderer is a browser bundle with no Node in it. It
+    // used to need Node's types for `window.require`, which is gone.
+    "types": []
   },
-  // One root, not a glob: only what `src/main.ts` actually pulls in is compiled.
-  // That is what keeps `src/_legacy/` — the Angular 13 app, kept for reference
-  // while it is ported — out of the build without a single exclusion rule, and
-  // it makes the port sequenceable: a legacy file starts being type-checked
-  // against the strict flags in `tsconfig.json` on the commit that imports it.
+  // One root, not a glob: only what `src/main.ts` actually pulls in is compiled,
+  // so dead code cannot gate the build. `pnpm run typecheck` (tsconfig.check.json)
+  // is the counterpart that DOES glob src/**, so nothing escapes review.
   "files": ["src/main.ts"],
-  "include": ["src/**/*.d.ts"],
-  "exclude": ["src/_legacy/**"]
+  "include": ["src/**/*.d.ts"]
 }

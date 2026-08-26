@@ -1,0 +1,31 @@
+[package]
+name = "np-office-document-helper"
+version = "1.1.9"
+description = "Copy and fill xlsx and pdf documents with the same input data"
+authors = ["leto the c0dem0nkey"]
+edition = "2021"
+rust-version = "1.82"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# The document store is an insertion-ordered JSON object, and that order IS the
+# order the UI lists documents in. A BTreeMap would silently re-sort every
+# existing install by UUID on first write; a HashMap would scramble it.
+indexmap = { version = "2", features = ["serde"] }
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+umya-spreadsheet = "3.0.1"
+lopdf = { version = "0.36.0", default-features = false }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

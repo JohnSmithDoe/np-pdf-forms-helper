@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Deny-by-default: the window may only reach the plugin commands listed here. Everything else the frontend could ask a Tauri plugin for stays unreachable, whatever a compromised renderer tries.",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default", "opener:default"]
+}

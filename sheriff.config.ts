@@ -1,4 +1,4 @@
-import { anyTag, sameTag, SheriffConfig } from '@softarc/sheriff-core';
+import { sameTag, SheriffConfig } from '@softarc/sheriff-core';
 
 // Lets a domain's feature layer reuse a base page from `@shared/feature`
 // (`type:feature` is otherwise not reachable from `type:feature`).
@@ -27,18 +27,20 @@ const featureMayUseSharedFeature = (ctx: {
  *
  * Domain axis: every domain sealed.
  *
- * There is exactly ONE domain today (`filler`) plus `@shared`, because the app
- * is a single workflow over a single data model — a second sealed domain would
- * buy nothing. Nothing below names it: the `src/app/<domain>/<type>` matcher and
- * the `domain:*` rule are generic, so a second domain costs a folder and no
- * config change.
+ * Three domains today — `filler`, `trains`, `info` — plus `@shared`. Nothing
+ * below names any of them: the `src/app/<domain>/<type>` matcher and the
+ * `domain:*` rule are generic, so a domain costs a folder and no config change.
+ *
+ * What does NOT get its own domain is a second view over the same data. The
+ * setup and export wizards live inside `filler` with the expert page, because
+ * sealing them apart would cut them off from `FillerStore` and the only way back
+ * would be pushing that store into `@shared` — the shared bus in front of two
+ * halves of one workflow.
  */
 export const config: SheriffConfig = {
   entryFile: './src/main.ts',
   enableBarrelLess: true,
   modules: {
-    // Quarantine. See the `type:legacy` dep rule below.
-    'src/_legacy': ['type:legacy'],
     'src/app': ['type:shell'],
     'src/app/<domain>/<type>': ['domain:<domain>', 'type:<type>'],
   },
@@ -53,9 +55,6 @@ export const config: SheriffConfig = {
       'type:data',
       'type:model',
       'type:util',
-      // Temporary migration seam: the shell may still route into an un-ported
-      // Angular 13 page. Delete this entry when `src/_legacy` is empty.
-      'type:legacy',
     ],
     'type:routes': ['type:feature', 'type:data', 'type:util'],
     'type:feature': [
@@ -71,18 +70,6 @@ export const config: SheriffConfig = {
     'type:data': [sameTag, 'type:util', 'type:model'],
     'type:util': [sameTag, 'type:model'],
     'type:model': [sameTag],
-
-    // Sheriff has NO path-ignore option (verified against
-    // `@softarc/sheriff-core`'s `UserSheriffConfig` / `Configuration` types —
-    // the only exclusion keys are `excludeRoot`, which concerns the implicit
-    // root project, and `ignoreFileExtensions`). So `src/_legacy` is quarantined
-    // rather than skipped: it is its own module with `anyTag`, meaning the
-    // architecture is not enforced *inside* it and it may still reach into
-    // ported code while the port is in flight. The seal that matters is the
-    // other direction — no `type:*` above lists `type:legacy` except the shell.
-    // The eslint side genuinely does skip it: `src/_legacy/**` is in
-    // `globalIgnores` in eslint.config.js.
-    'type:legacy': [anyTag],
 
     // ─── Domain axis ───────────────────────────────────────────
     'domain:*': [sameTag, 'domain:@shared'],

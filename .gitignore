@@ -1,6 +1,5 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 .angular
-pdftk
 # Anchored: unanchored, `data` matches EVERY directory of that name, and the
 # architecture puts one in each domain (src/app/<domain>/data). This is the
 # app's runtime data folder at the repo root, nothing else.
@@ -11,8 +10,14 @@ app/**/*.js
 
 # compiled output
 /dist
-/dist/main
 /dist/renderer
+# Cargo's build cache, and the permission schemas tauri-build regenerates from
+# the installed plugins on every build — both are derived, both are large.
+/src-tauri/target
+/src-tauri/gen/schemas
+# `tauri dev` runs the binary with src-tauri/ as its working directory, so the
+# app's `./data` folder lands there instead of at the repo root.
+/src-tauri/data
 /tmp
 /out-tsc
 /app-builds
@@ -50,13 +55,15 @@ npm-debug.log
 testem.log
 /typings
 
-# e2e
-/e2e/*.js
-!/e2e/protractor.conf.js
-/e2e/*.map
-/e2e/tracing
-/e2e/screenshots
+# e2e — Playwright's run artifacts. The specs themselves are tracked.
+/test-results
+/playwright-report
+/blob-report
 
 # System Files
 .DS_Store
 Thumbs.db
+
+# eslint writes this on every run; it was tracked, so every lint dirtied the tree.
+.eslintcache
+/out-tsc

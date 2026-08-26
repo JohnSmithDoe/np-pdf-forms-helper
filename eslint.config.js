@@ -11,18 +11,7 @@ const prettierConfig = require('eslint-config-prettier');
 const tseslint = require('typescript-eslint');
 
 module.exports = defineConfig(
-  globalIgnores([
-    '.angular/**',
-    'dist/**',
-    'node_modules/**',
-    'electron/node_modules/**',
-    'release/**',
-    // Quarantined Angular 13 code, ported into src/app incrementally. Linting
-    // it would produce hundreds of errors nobody is going to fix in place — the
-    // fix is the port. Sheriff cannot ignore a path (it has no such option), so
-    // it seals `_legacy` with a dep rule instead; see sheriff.config.ts.
-    'src/_legacy/**',
-  ]),
+  globalIgnores(['.angular/**', 'dist/**', 'node_modules/**', 'release/**']),
   sheriff.configs.all,
   {
     files: ['**/*.ts'],
@@ -32,16 +21,16 @@ module.exports = defineConfig(
     languageOptions: {
       parserOptions: {
         // Use the TypeScript project service so each file resolves via the
-        // tsconfig that owns it (renderer vs. electron main) instead of one
-        // hardcoded `project`.
+        // tsconfig that owns it instead of one hardcoded `project`.
         project: null,
         projectService: true,
         tsconfigRootDir: __dirname,
       },
     },
     rules: {
-      // `Page` for routed components, `Dialog` for Material dialog bodies —
-      // both are real kinds here and neither reads well as `…Component`.
+      // `Page` for routed components, `Dialog` for the bodies handed to Ionic's
+      // ModalController — both are real kinds here and neither reads well as
+      // `…Component`.
       '@angular-eslint/component-class-suffix': [
         'error',
         { suffixes: ['Page', 'Dialog', 'Component'] },
@@ -56,9 +45,9 @@ module.exports = defineConfig(
       ],
       // The type-aware rules. The expensive half — `projectService` above — is
       // already being paid for; nothing was reading the types it produces.
-      // These four are the ones with something to catch in an Electron app
-      // whose whole IPC surface is promise-returning: an un-awaited promise is
-      // how a main-process rejection becomes an unhandled-rejection instead of
+      // These four are the ones with something to catch in an app whose whole
+      // IPC surface is promise-returning: an un-awaited promise is how a
+      // backend rejection becomes an unhandled-rejection instead of
       // an error the UI shows, and a promise-returning handler passed where
       // void is expected is how a failure vanishes entirely. Enabled by id
       // rather than via `recommendedTypeChecked` so the set is a decision, not
@@ -88,7 +77,7 @@ module.exports = defineConfig(
           custom: { regex: '^(I|T)[A-Z][a-z]', match: false },
         },
       ],
-      // A published subpath is fine — `@angular/material/dialog` and
+      // A published subpath is fine — `@ionic/angular/standalone` and
       // `rxjs/operators` are the supported way in. A path into a package's
       // BUILD OUTPUT is not, and neither resolution nor tsc will say so:
       // packages without an `exports` map resolve any deep path silently, and
@@ -137,30 +126,6 @@ module.exports = defineConfig(
             'util/ holds no injectable service — a service that holds state or reaches a platform API belongs in data/. See CLAUDE.md.',
         },
       ],
-    },
-  },
-  {
-    // ── Transitional. DELETE THIS WHOLE BLOCK WHEN `electron/` GOES. ──
-    // `electron/` is the Angular-13-era Electron main process, kept only so the
-    // app stays runnable during the Angular port. It is replaced wholesale by
-    // `src-tauri/` (Rust), so holding never-formatted 2023 Node code to the same
-    // bar as new Angular code buys nothing but churn in files with a delete date.
-    //
-    // naming-convention: `electron/bridge/shared.model.ts` keeps its I-prefixed
-    // names ON PURPOSE. It is the wire mirror of `src/app/@shared/model/`, which
-    // carries the same JSON shape under the new names. Two spellings of one
-    // contract is the point — renaming here would mean editing the process we
-    // are deleting, and the mirror is exactly what the Rust backend will need.
-    //
-    // require-await / no-floating-promises: pre-existing, non-load-bearing —
-    // `async` methods that never await, and unawaited fire-and-forget IPC sends.
-    // Real smells, but in code with a delete date; the Rust port makes them
-    // unrepresentable via `Result` rather than fixing them here.
-    files: ['electron/**/*.ts'],
-    rules: {
-      '@typescript-eslint/naming-convention': 'off',
-      '@typescript-eslint/require-await': 'off',
-      '@typescript-eslint/no-floating-promises': 'off',
     },
   },
   {

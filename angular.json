@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "np-document-filler": {
+    "np-office-document-helper": {
       "projectType": "application",
       "root": "",
       "sourceRoot": "src",
@@ -32,14 +32,8 @@
                 "output": ""
               }
             ],
-            "styles": [
-              "node_modules/material-icons/iconfont/sharp.css",
-              "src/global.scss"
-            ],
-            "scripts": [],
-            "stylePreprocessorOptions": {
-              "includePaths": ["src"]
-            }
+            "styles": ["src/global.scss"],
+            "scripts": []
           },
           "configurations": {
             "production": {
@@ -66,6 +60,19 @@
               "sourceMap": true,
               "namedChunks": true,
               "extractLicenses": false
+            },
+            // Browser-only: the real app on the e2e fake, for CSS and UX work
+            // without a desktop shell (`pnpm run start:mock`). It swaps the
+            // ENTRY POINT, which is what keeps the fake out of every other
+            // build — nothing else names `dev/main.mock.ts`.
+            "mock": {
+              "browser": "dev/main.mock.ts",
+              "tsConfig": "dev/tsconfig.json",
+              "optimization": false,
+              "outputHashing": "none",
+              "sourceMap": true,
+              "namedChunks": true,
+              "extractLicenses": false
             }
           },
           "defaultConfiguration": "production"
@@ -74,10 +81,13 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "np-document-filler:build:production"
+              "buildTarget": "np-office-document-helper:build:production"
             },
             "development": {
-              "buildTarget": "np-document-filler:build:development"
+              "buildTarget": "np-office-document-helper:build:development"
+            },
+            "mock": {
+              "buildTarget": "np-office-document-helper:build:mock"
             }
           },
           "defaultConfiguration": "development"
@@ -91,7 +101,6 @@
             "lintFilePatterns": [
               "src/**/*.ts",
               "src/**/*.html",
-              "electron/**/*.ts",
               "scripts/**/*.mjs",
               "*.js",
               "*.mjs"

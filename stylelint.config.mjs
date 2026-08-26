@@ -1,4 +1,4 @@
-// np-pdf-forms-helper — the style layer's gate. `.mjs` rather than
+// np-office-document-helper — the style layer's gate. `.mjs` rather than
 // `.stylelintrc.json` because every switched-off rule below is a decision, and
 // JSON cannot hold the reason next to it (stylelint rejects unknown keys, so a
 // "_comment" comes back as "Unknown rule").
@@ -11,13 +11,6 @@
 
 export default {
   extends: ['stylelint-config-standard-scss'],
-  // Quarantined Angular 13 styles, ported into src/app incrementally — same
-  // reasoning as the eslint `globalIgnores` entry. Stylelint's own key for it.
-  // `_theme-colors.scss` is emitted by `ng generate @angular/material:m3-theme`
-  // and says so in its own header. Hand-formatting it would be reverted the next
-  // time the palette is regenerated from a new seed colour, so the file is not
-  // ours to style — only to re-generate.
-  ignoreFiles: ['src/_legacy/**', 'src/theme/_theme-colors.scss'],
   rules: {
     // Prettier owns formatting, and already runs on SCSS in the pre-commit hook
     // and in CI. Leaving these on means two tools with opinions about blank

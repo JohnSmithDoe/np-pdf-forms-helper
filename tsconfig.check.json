@@ -1,0 +1,18 @@
+/* Type-checks the WHOLE app, not just what `src/main.ts` reaches.
+ *
+ * `tsconfig.app.json` compiles from one root on purpose (see its comment), and
+ * that is right for the build — dead code should not gate it. But it means a
+ * component nothing imports yet is checked by nothing at all. This config
+ * exists so `pnpm run typecheck` still sees it.
+ *
+ * `ngc`, not `tsc`: templates are where strictTemplates actually bites, and a
+ * plain tsc pass would report a component clean while its template is broken.
+ */
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}

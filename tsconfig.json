@@ -30,25 +30,11 @@
     "strictInputAccessModifiers": true,
     "strictTemplates": true
   },
-  // `src/_legacy/**` is the Angular 13 app, kept readable while it is ported. It
-  // does not compile against Angular 21 at all (NgModules, `platformBrowserDynamic`,
-  // the removed `mat.get-color-from-palette`), so type-checking it would bury the
-  // real errors — and it is excluded from `ng lint` for the same reason.
-  "exclude": [
-    "dist",
-    "release",
-    "src/_legacy/**",
-    "**/node_modules/**",
-    "**/*.spec.ts"
-  ],
+  "exclude": ["dist", "release", "**/node_modules/**", "**/*.spec.ts"],
   // Not for `tsc -b` — no child sets `composite`, and nothing invokes this
   // project directly. The list exists for typescript-eslint's `projectService`,
   // which falls back to the nearest `tsconfig.json` and then consults its
-  // references: without the entries below, `electron/main.ts` and `src/main.ts`
-  // would be linted under *this* project's loose auto-include instead of the
-  // one that actually builds them.
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.main.json" }
-  ]
+  // references: without the entry below, `src/main.ts` would be linted under
+  // *this* project's loose auto-include instead of the one that builds it.
+  "references": [{ "path": "./tsconfig.app.json" }]
 }

@@ -1,0 +1,121 @@
+# One job, because CI is a backstop: lefthook's pre-push hook already runs
+# `lint` + `verify`, so nothing here is on anyone's critical path. Fanning the
+# gates out across jobs would cost a full reinstall each to buy wall-clock
+# nobody waits on.
+#
+# Four things this file cannot say in YAML:
+#   - The default branch is `master`, not `main` (`git branch -a`:
+#     origin/HEAD -> origin/master). The remote also carries `release`, but it has
+#     diverged and trails master by a version, so it is a distribution branch and
+#     not somewhere work lands — anything aimed at it arrives here as a pull
+#     request anyway.
+#   - ubuntu-latest verifies a product that ships on WINDOWS and macOS. Every gate
+#     below is platform-independent — eslint, prettier, sheriff and tsc read source,
+#     and the Angular build emits the same bundle everywhere — so the cheapest
+#     runner is the honest one. That stops being true for PACKAGING: see the
+#     release seam at the bottom of this file.
+#   - `v*` rather than a semver glob, so a pre-release tag is verified too. Nothing
+#     here publishes, so no shape assertion is needed yet.
+#   - setup-node's `cache: pnpm` is unusable: it runs before corepack has made pnpm
+#     exist. Hence the explicit cache step.
+name: CI
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+
+# GitHub defaults this off — an omitted block means superseded pushes run to
+# completion. Tags are exempt so a future release job can never be cancelled
+# half-way through publishing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+# Naming any scope sets every unnamed one to none.
+permissions:
+  contents: read
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # .nvmrc pins 22; package.json's `preinstall` (scripts/check-node.mjs) fails
+      # the install outright below engines.node (>=22.18), so a stale .nvmrc shows
+      # up here as a loud install failure rather than a confusing lint error.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # Corepack reads the pinned pnpm version out of package.json's packageManager.
+      - name: Activate pnpm
+        run: corepack enable pnpm
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.pnpm-store
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-
+
+      # No --ignore-scripts, deliberately: pnpm-workspace.yaml's `allowBuilds` is
+      # a deny-by-default allowlist that pnpm ERRORS on rather than warns, so an
+      # unlisted new postinstall must fail here — that is the check, and
+      # --ignore-scripts would hide it.
+      - run: pnpm install --frozen-lockfile
+
+      # Through the scripts, never a glob restated here, so linting by hand cannot
+      # cover less than CI does. `lint` chains stylelint after eslint, which cannot
+      # read SCSS at all.
+      - name: Lint (eslint + stylelint)
+        run: pnpm run lint
+
+      # Enforced by the pre-commit hook too, which `--no-verify` skips wholesale.
+      - name: Format (prettier)
+        run: pnpm run format:check
+
+      # Sheriff's ladder (ui may not reach data, smart-ui is a leaf, util is pure)
+      # is a property of the whole import graph, so unlike eslint it cannot be run
+      # per-file at commit time — a legal-looking file can be what makes an illegal
+      # edge.
+      - name: Module boundaries (sheriff)
+        run: pnpm run verify
+
+      # The build below compiles only what `src/main.ts` reaches (tsconfig.app.json
+      # is roots-not-globs, on purpose), so a component nothing imports yet is
+      # seen by the build not at all. This gate globs src/** so that is not a
+      # blind spot. ngc rather than tsc: strictTemplates is where these actually
+      # break, and tsc would call a component clean with a broken template.
+      - name: Type-check (whole app, incl. unwired components)
+        run: pnpm run typecheck
+
+      # Last, because it is the slowest and everything above localises a failure
+      # better. `production` is already angular.json's defaultConfiguration — named
+      # anyway so the gate cannot weaken silently if that default ever changes. Not
+      # `pnpm run build`: its `--base-href ./` is a packaging concern for the
+      # webview, irrelevant to whether the app compiles.
+      - name: Production build (angular)
+        run: pnpm exec ng build --configuration production
+
+      # The Playwright suite in e2e/ is NOT wired in here yet: it needs a browser
+      # download on the runner, and it has never been run anywhere but a
+      # developer machine. Adding it is a deliberate step, not a drive-by.
+
+# --- RELEASE SEAM -----------------------------------------------------------
+# There is deliberately NO packaging, signing or artifact-upload job yet.
+#
+# What used to block it is gone: the app no longer shells out to an external
+# pdftk that made an installer unstartable on a runner. Packaging is now a matter
+# of doing it — the reason it is still absent is that nobody has, not that it
+# cannot be verified. Two constraints already known:
+#   - It must be a MATRIX over NATIVE runners — windows-latest for the NSIS
+#     installer, macos-latest for the .dmg. Cross-compiling is explicitly not the
+#     plan: both targets need the host toolchain (Windows: MSVC + WiX/NSIS; macOS:
+#     Xcode, and codesign/notarytool, which do not exist off a Mac).
+#   - It hangs off the tag trigger already wired above (`v*`), gated on `needs:
+#     verify`, and adds `contents: write` in ITS OWN job — this one stays read-only.
