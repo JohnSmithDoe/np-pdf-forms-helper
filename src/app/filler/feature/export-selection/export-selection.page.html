@@ -1,0 +1,25 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Dokumente auswählen"
+  [step]="1"
+  [stepCount]="4"
+  backLabel="Übersicht"
+  [nextDisabled]="!facade.hasExportFields()"
+  (back)="onBack()"
+  (next)="onNext()"
+>
+  <p>
+    Wähle ein gespeichertes Profil oder markiere die Dokumente und Felder, die
+    gefüllt werden sollen.
+  </p>
+
+  <app-profile-bar
+    (addProfileRequested)="onAddProfile()"
+    (removeProfileRequested)="onRemoveProfile($event)"
+    (saveFailed)="presentError($event)"
+  />
+
+  <app-selection-list (setupRequested)="onSetup()" />
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

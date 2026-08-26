@@ -1,0 +1,23 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only. The list carries no bullets because a report's lines are
+// statements, not an enumeration — this is the shape `ReportDialog` shipped
+// with, and the result steps have to match it or one report renders two ways.
+// ────────────────────────────────────────────────────────────────
+
+.report-view__lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-view__lines li + li {
+  margin-block-start: 0.25rem;
+}
+
+.report-view__folder {
+  margin-block-start: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}

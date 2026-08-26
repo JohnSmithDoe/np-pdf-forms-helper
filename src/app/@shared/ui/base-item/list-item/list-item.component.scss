@@ -1,0 +1,13 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only. The note and the projected `[itemDetails]` are two INLINE runs
+// inside one `ion-label`, so without this gap a row reads
+// „06.05.2026Wartung Kupplung“ — the date glued to the text after it.
+// ────────────────────────────────────────────────────────────────
+
+:host {
+  display: block;
+}
+
+.list-item__note {
+  margin-inline-end: 0.5rem;
+}

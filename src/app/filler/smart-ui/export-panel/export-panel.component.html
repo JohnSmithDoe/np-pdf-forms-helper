@@ -1,0 +1,107 @@
+<ion-card class="export-panel__card">
+  <ion-card-header class="export-panel__head">
+    <div class="export-panel__heading">
+      <ion-card-title>Unterlagen erstellen</ion-card-title>
+      <ion-note>{{ summary() }}</ion-note>
+    </div>
+
+    <div class="export-panel__head-actions">
+      <ion-button
+        size="small"
+        fill="clear"
+        color="medium"
+        [disabled]="busy()"
+        title="Ausgabe Ordner öffnen"
+        aria-label="Ausgabe Ordner öffnen"
+        (click)="openOutputFolder()"
+      >
+        <ion-icon slot="start" name="folder-open-outline" aria-hidden="true" />
+        Ausgabeordner
+      </ion-button>
+
+      <ion-button
+        strong="true"
+        [disabled]="!hasSelection() || busy()"
+        (click)="createDocuments()"
+      >
+        <ion-icon slot="start" name="documents-outline" aria-hidden="true" />
+        Dokumente erstellen
+      </ion-button>
+    </div>
+  </ion-card-header>
+
+  @if (hasSelection()) {
+    <ion-list-header>
+      <ion-label>Diese Vorlagen werden gefüllt</ion-label>
+    </ion-list-header>
+
+    <div class="export-panel__documents">
+      @for (document of exportDocuments(); track document.id) {
+        <ion-chip [outline]="true">
+          <ion-label>{{ document.name }}</ion-label>
+        </ion-chip>
+      }
+    </div>
+
+    <ion-item lines="none">
+      <div class="export-panel__field export-panel__suffix">
+        <ion-input
+          fill="outline"
+          label="Ordner-Suffix"
+          labelPlacement="stacked"
+          placeholder="z. B. Müller"
+          helperText="Optional. Jeder Export legt einen neuen Ordner nach Datum und Uhrzeit an (2026-08-22_13-37-48); das Suffix wird angehängt."
+          [value]="exportSuffix()"
+          (ionInput)="setExportSuffix($event)"
+        />
+      </div>
+    </ion-item>
+
+    <ion-list-header>
+      <ion-label>Werte für die Felder</ion-label>
+    </ion-list-header>
+
+    @if (exportFields().length) {
+      <div class="export-panel__fields">
+        @for (field of exportFields(); track field.mappedName) {
+          <ion-item lines="none">
+            <div class="export-panel__field">
+              <ion-input
+                fill="outline"
+                labelPlacement="stacked"
+                [label]="field.mappedName"
+                [value]="field.value"
+                (ionInput)="setFieldValue(field.mappedName, $event)"
+              />
+              <ion-note>Verwendet in: {{ field.info }}</ion-note>
+            </div>
+          </ion-item>
+        }
+      </div>
+    } @else {
+      <ion-note class="export-panel__idle">
+        Bei den ausgewählten Vorlagen ist kein Feld angehakt — sie werden
+        unverändert kopiert.
+      </ion-note>
+    }
+  } @else if (hasDocuments()) {
+    <div class="export-panel__notice">
+      <ion-icon
+        name="checkbox-outline"
+        color="warning"
+        size="large"
+        aria-hidden="true"
+      />
+      <ion-card-title>Noch keine Dokumente ausgewählt</ion-card-title>
+      <p>
+        Hake links die Vorlagen an, die gefüllt werden sollen. Danach erscheinen
+        hier die Felder zum Ausfüllen.
+      </p>
+    </div>
+  } @else {
+    <ion-note class="export-panel__idle">
+      Sobald links eine Vorlage verknüpft ist, werden hier die Werte für den
+      Export eingetragen.
+    </ion-note>
+  }
+</ion-card>

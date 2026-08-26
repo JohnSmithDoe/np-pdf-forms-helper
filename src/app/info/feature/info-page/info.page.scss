@@ -1,0 +1,20 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only. Paths get `overflow-wrap: anywhere` because a Windows path has no
+// spaces to break at and would otherwise force the whole page to scroll
+// sideways.
+// ────────────────────────────────────────────────────────────────
+
+.info-page__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 48rem;
+}
+
+.info-page__body ion-list {
+  margin-inline: 0;
+}
+
+.info-page__body ion-note {
+  overflow-wrap: anywhere;
+}

@@ -1,0 +1,63 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Dokumente einrichten"
+  [step]="1"
+  [stepCount]="3"
+  backLabel="Übersicht"
+  [showNext]="false"
+  (back)="onBack()"
+>
+  <p>
+    Verknüpfe die Original-Dokumente, die später ausgefüllt werden sollen. Die
+    Dateien bleiben, wo sie sind — gespeichert wird nur der Verweis darauf.
+  </p>
+
+  <div class="setup-source__choices">
+    <ion-button
+      color="success"
+      size="large"
+      [disabled]="facade.busy()"
+      (click)="onImport('file')"
+    >
+      <ion-icon
+        slot="start"
+        name="document-attach-outline"
+        aria-hidden="true"
+      />
+      Eine Datei
+    </ion-button>
+    <ion-button
+      color="success"
+      size="large"
+      [disabled]="facade.busy()"
+      (click)="onImport('files')"
+    >
+      <ion-icon slot="start" name="documents-outline" aria-hidden="true" />
+      Mehrere Dateien
+    </ion-button>
+    <ion-button
+      color="success"
+      size="large"
+      [disabled]="facade.busy()"
+      (click)="onImport('folder')"
+    >
+      <ion-icon slot="start" name="folder-open-outline" aria-hidden="true" />
+      Ganzer Ordner
+    </ion-button>
+  </div>
+
+  <ion-checkbox
+    labelPlacement="end"
+    [checked]="autoMapFields()"
+    (ionChange)="autoMapFields.set($event.detail.checked)"
+  >
+    Felder automatisch zuordnen
+  </ion-checkbox>
+
+  <ion-note class="setup-source__hint">
+    Liegen die Dateien auf einem Server, wird bei jedem Export ein Zugriff
+    darauf benötigt.
+  </ion-note>
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

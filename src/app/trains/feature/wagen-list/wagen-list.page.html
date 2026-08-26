@@ -1,0 +1,21 @@
+<app-list-page
+  class="ion-page"
+  backHref="/trains"
+  heading="Wagen"
+  emptyText="Wagen entstehen beim Import — dort wird die Nummer gelesen und geprüft."
+  [itemTemplate]="wagenRow"
+/>
+
+<ng-template #wagenRow let-row let-ionList="ionList">
+  <app-list-item
+    [ionList]="ionList"
+    [title]="row.nummer"
+    [note]="row.owner"
+    leadingIcon="train-outline"
+    (deleteItem)="onRemove(row)"
+  >
+    @if (row.kind) {
+      <span itemDetails>{{ row.kind }}</span>
+    }
+  </app-list-item>
+</ng-template>

@@ -1,0 +1,21 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Ergebnis"
+  [step]="4"
+  [stepCount]="4"
+  nextLabel="Erneut erzeugen"
+  nextColor="success"
+  [showBack]="false"
+  (next)="onAgain()"
+>
+  @if (report(); as report) {
+    <h2>{{ report.headline }}</h2>
+    <app-report-view [report]="report" (openFolder)="onOpenFolder($event)" />
+  }
+
+  <ion-button wizardFooter fill="clear" (click)="onFresh()">
+    Neu beginnen
+  </ion-button>
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

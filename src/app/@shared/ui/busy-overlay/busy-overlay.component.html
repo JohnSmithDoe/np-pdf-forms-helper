@@ -1,0 +1,8 @@
+@if (busy()) {
+  <div class="busy-overlay" aria-busy="true" aria-live="polite">
+    <div class="busy-overlay__panel">
+      <ion-spinner name="crescent" class="busy-overlay__spinner" />
+      <p class="busy-overlay__label">{{ label() }}</p>
+    </div>
+  </div>
+}

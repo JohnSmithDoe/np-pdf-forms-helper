@@ -1,14 +1,31 @@
-@use 'theme/consts';
+// `ion-page` on the host is what lets `ion-router-outlet` lay this out: it is
+// the flex column Ionic sizes, and without it the header and the content both
+// collapse. It is set as a host CLASS in the component rather than here,
+// because Ionic's own rule targets `.ion-page` and a `:host` block cannot
+// declare the class it needs to match.
 
-:host {
-  @include consts.page-gutter;
-
+.filler-page__profiles {
   display: block;
+  margin-block-end: 1rem;
 }
 
-.filler-placeholder code {
-  font-family: var(--mat-sys-body-medium-font);
-  background: var(--np-surface-high);
-  border-radius: var(--np-radius);
-  padding-inline: var(--space-2);
+.filler-page__panes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+// The document pane carries the longer rows — a name plus five icon buttons —
+// so it takes the larger share where there is one. Neither pane may collapse
+// below the point its form fields stop being usable, which is what forces the
+// wrap on a narrow window rather than a horizontal scrollbar.
+app-document-list {
+  flex: 1.3 1 30rem;
+  min-width: 0;
+}
+
+app-export-panel {
+  flex: 1 1 26rem;
+  min-width: 0;
 }

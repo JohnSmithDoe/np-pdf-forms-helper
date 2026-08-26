@@ -1,0 +1,35 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only. The xlsx row is a wrapping flex line, not a fixed box, so on a
+// small window its three inputs become one column instead of overflowing.
+//
+// The suggestion list is capped and scrolls. It is fed by every mapped name in
+// the app, which on a real install is dozens — uncapped it would push the
+// submit button out of the modal, which is the one control the list exists to
+// help the user reach.
+// ────────────────────────────────────────────────────────────────
+
+.field-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-dialog__field {
+  width: 100%;
+}
+
+.field-dialog__cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.field-dialog__cell > .field-dialog__field {
+  flex: 1 1 12rem;
+  width: auto;
+}
+
+.field-dialog__suggestions {
+  max-height: 12rem;
+  overflow-y: auto;
+}

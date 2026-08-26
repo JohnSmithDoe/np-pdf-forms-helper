@@ -1,11 +1,16 @@
 // ─── why ────────────────────────────────────────────────────────
-// A hand-written mirror of `electron/bridge/shared.model.ts`. The Electron main
-// process keeps its own copy and the two are never imported across the process
-// boundary, so the JSON SHAPE is the contract and must stay identical on both
-// sides — only the TypeScript names differ here (no `I`/`T` prefix).
+// A hand-written mirror of `src-tauri/src/model.rs`. Nothing generates either
+// side and neither is imported across the process boundary, so the JSON SHAPE
+// is the contract and must stay identical on both — only the spelling differs
+// (camelCase here, `#[serde(rename_all)]` there). Change one, change the other.
+//
+// `ClientData.documents` / `.profiles` are ABSENT when the command that answered
+// cannot have changed them, and present — possibly empty — when it can. Rust
+// says this natively with an `Option`, so `FillerStore` acts on presence: a list
+// that is there is the complete current one and replaces what is held.
 // ────────────────────────────────────────────────────────────────
 
-import { MappedDocument } from './document.types';
+import { AnyDocument } from './document.types';
 import { Profile } from './profile.types';
 
 export interface ClientReport {
@@ -15,7 +20,7 @@ export interface ClientReport {
 }
 
 export interface ClientData {
-  documents: MappedDocument[];
-  profiles: Profile[];
-  message: ClientReport;
+  documents?: AnyDocument[];
+  profiles?: Profile[];
+  message?: ClientReport;
 }

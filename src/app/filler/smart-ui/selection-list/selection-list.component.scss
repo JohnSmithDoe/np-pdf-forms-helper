@@ -1,0 +1,53 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only, like every stylesheet under `src/app/`: no colour and no type
+// step. The card, the rows and the notes carry Ionic's own, which is why the
+// list is built out of `ion-card` / `ion-item` rather than divs this file would
+// then have to paint.
+//
+// The card keeps its margin here — unlike `document-list`, whose host is a pane
+// in the expert page's grid, this one sits in the wizard shell's content flow
+// under the profile bar and owns the gap to it.
+//
+// Everything not inside an `ion-item` is indented to `1rem`, the padding an
+// `ion-item` gives itself, so the hints line up with the rows above them.
+// ────────────────────────────────────────────────────────────────
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.selection-list__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.selection-list__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selection-list__content {
+  padding-block: 0.5rem 1rem;
+}
+
+.selection-list__hint {
+  display: block;
+  padding-inline: 1rem;
+}
+
+.selection-list__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 2rem;
+  text-align: center;
+
+  > p {
+    margin: 0;
+    max-width: 34rem;
+  }
+}

@@ -1,1 +1,1 @@
-export const APP_WORDMARK = 'npAusfüllhilfe';
+export const APP_WORDMARK = 'npDokumentenhilfe';

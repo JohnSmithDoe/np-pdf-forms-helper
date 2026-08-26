@@ -1,0 +1,12 @@
+<div class="value-form__fields">
+  @for (field of exportFields(); track field.mappedName) {
+    <ion-input
+      fill="outline"
+      labelPlacement="stacked"
+      [label]="field.mappedName"
+      [value]="field.value"
+      [helperText]="'Verwendet in: ' + field.info"
+      (ionInput)="setFieldValue(field.mappedName, $event)"
+    />
+  }
+</div>

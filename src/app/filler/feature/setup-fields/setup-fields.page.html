@@ -1,0 +1,26 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Felder zuordnen"
+  [step]="2"
+  [stepCount]="3"
+  [nextLabel]="documentId() ? 'Zur Übersicht' : 'Weiter'"
+  (back)="onBack()"
+  (next)="onNext()"
+>
+  @if (document(); as document) {
+    <p>
+      Prüfe die gefundenen Felder. Der Name, den Du hier vergibst, ist der Name,
+      unter dem später der Wert eingegeben wird — gleiche Namen in mehreren
+      Dokumenten werden gemeinsam gefüllt.
+    </p>
+
+    <app-field-editor
+      [document]="document"
+      (addFieldRequested)="onAddField($event)"
+      (removeFieldRequested)="onRemoveField($event)"
+      (failed)="presentError($event)"
+    />
+  }
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

@@ -1,0 +1,26 @@
+@if (isKnownEmpty()) {
+  <ion-card color="warning" data-testid="list-empty">
+    <ion-card-header>
+      <ion-card-title>
+        @if (isSearching()) {
+          Nichts gefunden
+        } @else {
+          Noch nichts vorhanden
+        }
+      </ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      @if (isSearching()) {
+        <p>Für „{{ searchTerm() }}“ gibt es keinen Eintrag.</p>
+      } @else {
+        <p>{{ emptyText() }}</p>
+        @let label = createLabel();
+        @if (label) {
+          <ion-button fill="outline" (click)="createRequested.emit()">
+            {{ label }}
+          </ion-button>
+        }
+      }
+    </ion-card-content>
+  </ion-card>
+}

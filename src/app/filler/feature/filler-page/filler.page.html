@@ -1,12 +1,38 @@
-<mat-card class="filler-placeholder" appearance="outlined">
-  <mat-card-header>
-    <mat-card-title>Portierung steht noch aus</mat-card-title>
-  </mat-card-header>
-  <mat-card-content>
-    <p>
-      Das Grundgerüst der Angular-21-Anwendung steht. Die Oberfläche zum
-      Zuordnen und Ausfüllen der Dokumente wird Schritt für Schritt aus
-      <code>src/_legacy/</code> übernommen.
-    </p>
-  </mat-card-content>
-</mat-card>
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button aria-label="Menü öffnen" />
+    </ion-buttons>
+    <ion-icon slot="start" name="document-text-outline" aria-hidden="true" />
+    <ion-title>{{ wordmark }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="onWizardMode()">
+        <ion-icon slot="start" name="sparkles-outline" aria-hidden="true" />
+        Assistent
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <app-profile-bar
+    class="filler-page__profiles"
+    (addProfileRequested)="onAddProfile()"
+    (removeProfileRequested)="onRemoveProfile($event)"
+    (saveFailed)="presentError($event)"
+  />
+
+  <div class="filler-page__panes">
+    <app-document-list
+      (addFieldRequested)="onAddField($event)"
+      (removeDocumentRequested)="onRemoveDocument($event)"
+      (removeFieldRequested)="onRemoveField($event)"
+      (resetRequested)="onReset()"
+      (failed)="presentError($event)"
+    />
+
+    <app-export-panel (failed)="presentError($event)" />
+  </div>
+</ion-content>
+
+<app-busy-overlay [busy]="facade.busy()" />

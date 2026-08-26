@@ -1,0 +1,20 @@
+<ul class="report-view__lines">
+  @for (line of report().messages; track $index) {
+    <li>{{ line }}</li>
+  }
+</ul>
+
+@if (report().messageFolder; as folder) {
+  <div class="report-view__folder">
+    <ion-note>{{ folder }}</ion-note>
+    <ion-button
+      color="secondary"
+      fill="outline"
+      size="small"
+      (click)="openFolder.emit(folder)"
+    >
+      <ion-icon slot="start" name="folder-open-outline" aria-hidden="true" />
+      Ordner öffnen
+    </ion-button>
+  </div>
+}

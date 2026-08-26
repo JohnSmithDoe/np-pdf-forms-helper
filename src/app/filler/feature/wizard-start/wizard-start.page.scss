@@ -1,0 +1,21 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only. The two cards get equal width and a floor rather than a fixed
+// size, so the longer German subtitle cannot make one card the smaller choice.
+// ────────────────────────────────────────────────────────────────
+
+.wizard-start__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.wizard-start__choices > ion-card {
+  flex: 1 1 18rem;
+  margin: 0;
+}
+
+.wizard-start__hint {
+  display: block;
+  margin-block-start: 1.5rem;
+}

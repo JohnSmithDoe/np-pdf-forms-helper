@@ -1,0 +1,31 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="cancel()">Abbrechen</ion-button>
+    </ion-buttons>
+    <ion-title>Neues Export Profil anlegen</ion-title>
+    <ion-buttons slot="end">
+      <ion-button
+        strong="true"
+        color="success"
+        [disabled]="!name().trim()"
+        (click)="confirm()"
+      >
+        Okay
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <ion-input
+    fill="outline"
+    class="profile-dialog__name"
+    label="Profilname"
+    labelPlacement="stacked"
+    placeholder="Profilname"
+    helperText="Unter diesem Namen wird das Profil gespeichert"
+    [value]="name()"
+    (ionInput)="setName($event)"
+  />
+</ion-content>

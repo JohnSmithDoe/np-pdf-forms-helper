@@ -1,0 +1,21 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Einrichtung abgeschlossen"
+  [step]="3"
+  [stepCount]="3"
+  nextLabel="Dokumente ausfüllen"
+  nextColor="success"
+  [showBack]="false"
+  (next)="onFill()"
+>
+  @if (facade.setupReport(); as report) {
+    <h2>{{ report.headline }}</h2>
+    <app-report-view [report]="report" (openFolder)="onOpenFolder($event)" />
+  }
+
+  <ion-button wizardFooter fill="clear" (click)="onMore()">
+    Weitere Dokumente
+  </ion-button>
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

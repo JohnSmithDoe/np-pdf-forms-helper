@@ -1,0 +1,14 @@
+:host {
+  display: block;
+}
+
+.source-picker__hint {
+  display: block;
+  margin-top: 0.5rem;
+}
+
+.source-picker__candidates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}

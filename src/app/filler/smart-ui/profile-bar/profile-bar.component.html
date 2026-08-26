@@ -1,0 +1,60 @@
+<div class="profile-bar">
+  <ion-select
+    fill="outline"
+    class="profile-bar__select"
+    label="Export-Profil"
+    labelPlacement="stacked"
+    interface="popover"
+    [value]="selectedProfileId()"
+    [disabled]="busy() || !profiles().length"
+    (ionChange)="selectProfile($event.detail.value)"
+  >
+    <ion-select-option value="">Kein Profil</ion-select-option>
+    @for (profile of profiles(); track profile.id) {
+      <ion-select-option [value]="profile.id">
+        {{ profile.name }}
+      </ion-select-option>
+    }
+  </ion-select>
+
+  <ion-button
+    size="small"
+    fill="clear"
+    [disabled]="busy() || !hasDocuments()"
+    title="Neues Export Profil anlegen"
+    aria-label="Neues Export Profil anlegen"
+    (click)="addProfileRequested.emit()"
+  >
+    <ion-icon slot="start" name="add-outline" aria-hidden="true" />
+    Neu
+  </ion-button>
+
+  <ion-button
+    size="small"
+    fill="clear"
+    [disabled]="busy() || !selectedProfileId()"
+    title="Aktuelles Export Profil speichern"
+    aria-label="Aktuelles Export Profil speichern"
+    (click)="saveProfile()"
+  >
+    <ion-icon slot="start" name="save-outline" aria-hidden="true" />
+    Speichern
+  </ion-button>
+
+  <ion-button
+    size="small"
+    fill="clear"
+    color="danger"
+    [disabled]="busy() || !selectedProfileId()"
+    title="Aktuelles Export Profil löschen"
+    aria-label="Aktuelles Export Profil löschen"
+    (click)="requestRemove()"
+  >
+    <ion-icon slot="start" name="trash-outline" aria-hidden="true" />
+    Löschen
+  </ion-button>
+
+  <ion-note class="profile-bar__hint">
+    Ein Profil merkt sich, welche Vorlagen und Felder angehakt sind.
+  </ion-note>
+</div>

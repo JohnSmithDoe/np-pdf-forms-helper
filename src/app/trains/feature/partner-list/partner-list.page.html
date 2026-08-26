@@ -1,0 +1,20 @@
+<app-list-page
+  class="ion-page"
+  backHref="/trains"
+  [heading]="heading()"
+  emptyText="Partner entstehen beim Import, sobald ein Name bestätigt wird."
+  [itemTemplate]="partnerRow"
+/>
+
+<ng-template #partnerRow let-row let-ionList="ionList">
+  <app-list-item
+    [ionList]="ionList"
+    [title]="row.name"
+    leadingIcon="business-outline"
+    (deleteItem)="onRemove(row)"
+  >
+    @if (row.aliasCount) {
+      <span itemDetails>{{ row.aliasCount }} bekannte Schreibweise(n)</span>
+    }
+  </app-list-item>
+</ng-template>

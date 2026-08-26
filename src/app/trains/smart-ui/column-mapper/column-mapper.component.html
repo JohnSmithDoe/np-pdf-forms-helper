@@ -1,0 +1,94 @@
+@if (missing().length) {
+  <ion-card color="warning" data-testid="mapper-missing">
+    <ion-card-header>
+      <ion-card-title>Pflichtfelder fehlen noch</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      Bitte noch zuordnen: {{ missing().join(', ') }}.
+    </ion-card-content>
+  </ion-card>
+}
+
+@if (facade.autoMapped()) {
+  <ion-note class="column-mapper__hint">
+    Aus einer gespeicherten Vorlage übernommen — bitte kurz prüfen.
+  </ion-note>
+} @else {
+  <ion-note class="column-mapper__hint">
+    Automatisch vorgeschlagen — bitte kurz prüfen.
+  </ion-note>
+}
+
+<ion-list lines="full">
+  @for (row of rows(); track row.index) {
+    <ion-item data-testid="mapper-row">
+      <div class="column-mapper__row">
+        <ion-label class="column-mapper__source">
+          <h2 data-testid="mapper-header">{{ row.header }}</h2>
+          @for (sample of row.samples; track sample) {
+            <ion-note class="column-mapper__sample" data-testid="mapper-sample">
+              {{ sample }}
+            </ion-note>
+          }
+          @if (!row.samples.length) {
+            <ion-note>leer</ion-note>
+          }
+        </ion-label>
+
+        <ion-select
+          class="column-mapper__target"
+          label="Feld"
+          labelPlacement="stacked"
+          [value]="row.field"
+          (ionChange)="onField(row.index, $event)"
+          [attr.data-testid]="'mapper-field-' + row.index"
+        >
+          @for (entry of catalogue; track entry.field) {
+            <ion-select-option [value]="entry.field">
+              {{
+                entry.field === 'ignorieren'
+                  ? entry.label
+                  : groups[entry.group] + ' · ' + entry.label
+              }}
+            </ion-select-option>
+          }
+        </ion-select>
+
+        <div class="column-mapper__reading">
+          @if (row.field === 'betrag') {
+            <ion-segment
+              [value]="row.decimal ?? 'german'"
+              (ionChange)="onDecimal(row.index, $event)"
+              [attr.data-testid]="'mapper-decimal-' + row.index"
+            >
+              <ion-segment-button value="german">1.234,56</ion-segment-button>
+              <ion-segment-button value="english">1,234.56</ion-segment-button>
+            </ion-segment>
+          }
+          @if (row.field === 'datum') {
+            <ion-segment
+              [value]="row.dateOrder ?? 'dayFirst'"
+              (ionChange)="onDateOrder(row.index, $event)"
+              [attr.data-testid]="'mapper-order-' + row.index"
+            >
+              <ion-segment-button value="dayFirst">TT.MM</ion-segment-button>
+              <ion-segment-button value="monthFirst">MM.TT</ion-segment-button>
+            </ion-segment>
+          }
+          @if (row.field !== 'ignorieren') {
+            @for (value of row.parsed; track value) {
+              <ion-badge color="light" data-testid="mapper-parsed">{{
+                value
+              }}</ion-badge>
+            }
+          }
+          @if (row.warning) {
+            <ion-note color="warning" data-testid="mapper-warning">{{
+              row.warning
+            }}</ion-note>
+          }
+        </div>
+      </div>
+    </ion-item>
+  }
+</ion-list>

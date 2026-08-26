@@ -1,0 +1,15 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Dokumente erzeugen"
+  [step]="3"
+  [stepCount]="4"
+  nextLabel="Jetzt erzeugen"
+  nextColor="success"
+  [nextDisabled]="facade.busy()"
+  (back)="onBack()"
+  (next)="onGenerate()"
+>
+  <app-run-summary />
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

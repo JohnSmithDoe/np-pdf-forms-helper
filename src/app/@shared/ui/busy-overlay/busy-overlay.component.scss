@@ -1,0 +1,50 @@
+// ─── why ────────────────────────────────────────────────────────
+// The host is `display: contents` so the component occupies no box when idle —
+// the fixed scrim is the inner element, which `@if` removes entirely. The scrim
+// exists only while busy, so it swallows input rather than needing
+// `pointer-events: none`.
+//
+// The two colours are Ionic's own: `--ion-backdrop-color` is what every Ionic
+// overlay dims with, and the panel sits on the app background with a step
+// border. Nothing here picks a colour.
+// ────────────────────────────────────────────────────────────────
+
+:host {
+  display: contents;
+}
+
+.busy-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(
+    in srgb,
+    var(--ion-backdrop-color, #000) 32%,
+    transparent
+  );
+  user-select: none;
+}
+
+.busy-overlay__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem 2.5rem;
+  border: 1px solid var(--ion-color-step-150);
+  border-radius: 8px;
+  background: var(--ion-background-color);
+}
+
+// `ion-spinner` is sized from the outside, in CSS, like any other element.
+.busy-overlay__spinner {
+  width: 48px;
+  height: 48px;
+}
+
+.busy-overlay__label {
+  margin: 0;
+}

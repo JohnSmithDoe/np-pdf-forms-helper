@@ -1,0 +1,24 @@
+<app-list-page
+  class="ion-page"
+  backHref="/trains"
+  [heading]="heading()"
+  emptyText="Instandhaltungen entstehen beim Import."
+  [itemTemplate]="eventRow"
+/>
+
+<ng-template #eventRow let-row let-ionList="ionList">
+  <app-list-item
+    [ionList]="ionList"
+    [title]="row.wagen"
+    [note]="row.displayDate"
+    leadingIcon="build-outline"
+    [canDelete]="false"
+  >
+    <span itemDetails
+      >{{ row.kind }}{{ row.werkstatt ? ' · ' + row.werkstatt : '' }}</span
+    >
+    @if (row.amount) {
+      <ion-note itemEnd slot="end">{{ row.amount }} €</ion-note>
+    }
+  </app-list-item>
+</ng-template>

@@ -1,0 +1,94 @@
+<ion-card class="selection-list__card">
+  <ion-card-header class="selection-list__head">
+    <ion-card-title>Vorlagen</ion-card-title>
+    @if (hasDocuments()) {
+      <ion-note>{{ selectionSummary() }}</ion-note>
+    }
+  </ion-card-header>
+
+  @if (hasDocuments()) {
+    <ion-accordion-group
+      [multiple]="true"
+      [value]="expanded()"
+      (ionChange)="onExpandedChange($event)"
+    >
+      @for (document of documents(); track document.id) {
+        <ion-accordion [value]="document.id">
+          <ion-item slot="header" lines="full">
+            <ion-checkbox
+              slot="start"
+              [title]="document.name + ' für den Export auswählen'"
+              [checked]="document.selected"
+              [attr.aria-label]="document.name"
+              (click)="$event.stopPropagation()"
+              (keydown)="$event.stopPropagation()"
+              (ionChange)="onDocumentSelected(document, $event.detail.checked)"
+            />
+            <ion-label class="selection-list__name">
+              <h3>{{ document.name }}</h3>
+              <p>{{ meta(document) }}</p>
+            </ion-label>
+          </ion-item>
+
+          <div slot="content" class="selection-list__content">
+            @if (isExpanded(document.id)) {
+              @if (document.mapped.length) {
+                <ion-note class="selection-list__hint">
+                  Angehakte Felder werden beim Export gefüllt.
+                </ion-note>
+
+                @for (field of document.mapped; track field.origId) {
+                  <ion-item lines="none">
+                    <ion-checkbox
+                      slot="start"
+                      [title]="'Feld ' + field.mappedName + ' exportieren'"
+                      [checked]="field.selected"
+                      [attr.aria-label]="field.mappedName"
+                      (ionChange)="
+                        onFieldSelected(field, $event.detail.checked)
+                      "
+                    />
+                    <ion-label>
+                      <h3>{{ field.mappedName }}</h3>
+                      @if (origin(document, field); as source) {
+                        <p>{{ source }}</p>
+                      }
+                    </ion-label>
+                  </ion-item>
+                }
+              } @else if (document.type === 'resource') {
+                <ion-note class="selection-list__hint">
+                  Diese Vorlage wird nur kopiert und hat deshalb keine Felder.
+                </ion-note>
+              } @else {
+                <ion-note class="selection-list__hint">
+                  Diesem Dokument ist noch kein Feld zugeordnet — das geschieht
+                  unter „Dokumente einrichten“.
+                </ion-note>
+              }
+            }
+          </div>
+        </ion-accordion>
+      }
+    </ion-accordion-group>
+  } @else {
+    <div class="selection-list__empty">
+      <ion-icon
+        name="document-attach-outline"
+        color="warning"
+        size="large"
+        aria-hidden="true"
+      />
+      <ion-card-title>Noch keine Vorlage verknüpft</ion-card-title>
+      <p>
+        Zum Ausfüllen braucht es mindestens eine eingerichtete Vorlage. Das
+        Verknüpfen und Benennen der Felder passiert einmalig unter „Dokumente
+        einrichten“.
+      </p>
+      <ion-button color="success" (click)="setupRequested.emit()">
+        <ion-icon slot="start" name="build-outline" aria-hidden="true" />
+        Dokumente einrichten
+      </ion-button>
+    </div>
+  }
+</ion-card>

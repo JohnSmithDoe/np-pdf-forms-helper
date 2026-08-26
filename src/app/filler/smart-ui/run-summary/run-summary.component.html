@@ -1,0 +1,34 @@
+<ion-input
+  fill="outline"
+  class="run-summary__suffix"
+  label="Export Ordner Suffix"
+  labelPlacement="stacked"
+  helperText="Optional — wird an den Ordnernamen angehängt"
+  [value]="exportSuffix()"
+  (ionInput)="setExportSuffix($event)"
+/>
+
+<section class="run-summary__section">
+  <h2>Diese Dokumente werden erstellt</h2>
+  <ul class="run-summary__list">
+    @for (document of exportDocuments(); track document.id) {
+      <li>{{ document.name }}</li>
+    }
+  </ul>
+</section>
+
+<section class="run-summary__section">
+  <h2>Diese Werte werden eingesetzt</h2>
+  <ul class="run-summary__list">
+    @for (field of exportFields(); track field.mappedName) {
+      <li>
+        <strong>{{ field.mappedName }}:</strong>
+        @if (field.value) {
+          {{ field.value }}
+        } @else {
+          <ion-note>leer</ion-note>
+        }
+      </li>
+    }
+  </ul>
+</section>

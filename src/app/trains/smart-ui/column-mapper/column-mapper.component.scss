@@ -1,0 +1,40 @@
+:host {
+  display: block;
+}
+
+.column-mapper__hint {
+  display: block;
+  margin: 0.5rem 0;
+}
+
+// One wrapping row inside the item rather than three slots across it. Slots do
+// not wrap, so on a narrow window they push the page wider than the viewport and
+// the footer's buttons end up off-screen.
+.column-mapper__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.5rem 0;
+}
+
+.column-mapper__source {
+  flex: 1 1 14rem;
+}
+
+.column-mapper__sample {
+  display: block;
+}
+
+.column-mapper__target {
+  flex: 1 1 14rem;
+  max-width: 20rem;
+}
+
+.column-mapper__reading {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: 0.25rem;
+}

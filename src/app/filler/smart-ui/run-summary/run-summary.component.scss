@@ -1,0 +1,29 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only. An empty value is marked with `<ion-note>`, which is Ionic's own
+// muted role — a component naming a grey here is the regression this rule
+// exists to prevent.
+// ────────────────────────────────────────────────────────────────
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 40rem;
+}
+
+.run-summary__suffix {
+  width: 100%;
+}
+
+.run-summary__section > h2 {
+  margin-block: 0 0.5rem;
+}
+
+.run-summary__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}

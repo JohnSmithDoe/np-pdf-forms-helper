@@ -1,0 +1,114 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="cancel()">Abbrechen</ion-button>
+    </ion-buttons>
+    <ion-title role="heading" aria-level="1">Feld hinzufügen</ion-title>
+    <ion-buttons slot="end">
+      <ion-button
+        strong="true"
+        color="success"
+        [disabled]="!valid()"
+        (click)="onAdd()"
+      >
+        Hinzufügen
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <div class="field-dialog__content">
+    @if (type() === 'pdf') {
+      <ion-select
+        fill="outline"
+        class="field-dialog__field"
+        label="Feld aus der Vorlage"
+        labelPlacement="stacked"
+        interface="popover"
+        [value]="origId()"
+        (ionChange)="onFieldChosen($event.detail.value)"
+      >
+        @for (option of options(); track option.id) {
+          <ion-select-option [value]="option.id" [disabled]="option.disabled">
+            {{ option.path }}
+          </ion-select-option>
+        }
+      </ion-select>
+      <ion-note>Der Feldname aus der pdf Vorlage</ion-note>
+    }
+
+    @if (type() === 'xlsx') {
+      <div class="field-dialog__cell">
+        <ion-select
+          fill="outline"
+          class="field-dialog__field"
+          label="Arbeitsmappe"
+          labelPlacement="stacked"
+          placeholder="Die Arbeitsmappe der Zelle"
+          interface="popover"
+          [value]="origId()"
+          (ionChange)="onFieldChosen($event.detail.value)"
+        >
+          @for (option of options(); track option.id) {
+            <ion-select-option [value]="option.id" [disabled]="option.disabled">
+              {{ option.path }}
+            </ion-select-option>
+          }
+        </ion-select>
+
+        <ion-input
+          fill="outline"
+          class="field-dialog__field"
+          label="Spalte (A-ZZ)"
+          labelPlacement="stacked"
+          placeholder="Die Spalte der Zelle"
+          helperText="Die Spalte der Zelle die mit dem Wert gefüllt werden soll"
+          [value]="column()"
+          (ionInput)="onColumnInput($event)"
+        />
+
+        <ion-input
+          fill="outline"
+          class="field-dialog__field"
+          type="number"
+          label="Bezeichnung"
+          labelPlacement="stacked"
+          placeholder="Die Reihe der Zelle"
+          helperText="Die Reihe der Zelle die mit dem Wert gefüllt werden soll"
+          [value]="row()"
+          (ionInput)="onRowInput($event)"
+        />
+      </div>
+    }
+
+    <ion-input
+      fill="outline"
+      class="field-dialog__field"
+      label="Eigene Bezeichnung"
+      labelPlacement="stacked"
+      placeholder="Eigene Feldbezeichnung"
+      [value]="mappedName()"
+      (ionInput)="onNameInput($event)"
+      (ionFocus)="suggesting.set(true)"
+    />
+    <ion-note>
+      Kann man ändern muss man aber nicht. <br />
+      Felder mit gleichen Bezeichnungen erhalten auch den selben Wert
+    </ion-note>
+
+    @if (suggesting() && filteredNames().length) {
+      <ion-list class="field-dialog__suggestions" lines="full">
+        @for (name of filteredNames(); track name) {
+          <ion-item button="true" (click)="pickName(name)">
+            <ion-label>{{ name }}</ion-label>
+          </ion-item>
+        }
+      </ion-list>
+    }
+
+    @if (duplicate()) {
+      <ion-note color="danger">Dieses Feld existiert bereits</ion-note>
+    }
+  </div>
+</ion-content>

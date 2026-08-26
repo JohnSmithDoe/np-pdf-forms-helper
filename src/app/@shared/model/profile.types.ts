@@ -1,8 +1,8 @@
 // ─── why ────────────────────────────────────────────────────────
-// A hand-written mirror of `electron/bridge/shared.model.ts`. The Electron main
-// process keeps its own copy and the two are never imported across the process
-// boundary, so the JSON SHAPE is the contract and must stay identical on both
-// sides — only the TypeScript names differ here (no `I`/`T` prefix).
+// A hand-written mirror of `src-tauri/src/model.rs`. Nothing generates either
+// side and neither is imported across the process boundary, so the JSON SHAPE
+// is the contract and must stay identical on both — only the spelling differs
+// (camelCase here, `#[serde(rename_all)]` there). Change one, change the other.
 // ────────────────────────────────────────────────────────────────
 
 export interface Profile {

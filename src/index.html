@@ -1,15 +1,16 @@
 <!doctype html>
 <!-- ─── why ─────────────────────────────────────────────────────────
-     `data-theme` is the one mirror this document cannot enforce: it seeds the
-     theme that theme/_tokens.scss keys off, and the base value is the
-     UN-decorated light one, so leaving the attribute off is also correct.
-     `base href` stays relative because Electron loads the packaged build over
+     No theme attribute to set: colour is Ionic's, and dark mode comes from
+     `palettes/dark.system.css`, which keys off `prefers-color-scheme`. The
+     `color-scheme` meta below is what lets the OS paint the scrollbars and
+     form controls to match.
+     `base href` stays relative because the packaged build is served to the webview over
      `file://`, where an absolute `/` resolves to the filesystem root.
      ───────────────────────────────────────────────────────────────── -->
 <html lang="de">
   <head>
     <meta charset="utf-8" />
-    <title>npAusfüllhilfe</title>
+    <title>npDokumentenhilfe</title>
 
     <base href="./" />
 
@@ -38,7 +39,7 @@
       <img
         id="app-splash"
         src="assets/splash.png"
-        alt="npAusfüllhilfe wird geladen"
+        alt="npDokumentenhilfe wird geladen"
       />
     </app-root>
     <noscript>

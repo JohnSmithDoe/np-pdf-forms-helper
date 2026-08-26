@@ -1,0 +1,48 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button aria-label="Menü öffnen" />
+    </ion-buttons>
+    <ion-title>{{ wordmark }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="onExpertMode()">
+        <ion-icon slot="start" name="options-outline" aria-hidden="true" />
+        Expertenmodus
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <div class="wizard-start__choices">
+    <ion-card [button]="true" (click)="onSetup()">
+      <ion-card-header>
+        <ion-icon name="build-outline" aria-hidden="true" size="large" />
+        <ion-card-subtitle>Einmalig pro Dokument</ion-card-subtitle>
+        <ion-card-title>Dokumente einrichten</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        Eine Vorlage verknüpfen und ihren Feldern Namen geben. Felder mit
+        gleichem Namen werden später gemeinsam gefüllt.
+      </ion-card-content>
+    </ion-card>
+
+    <ion-card [button]="true" (click)="onFill()">
+      <ion-card-header>
+        <ion-icon name="create-outline" aria-hidden="true" size="large" />
+        <ion-card-subtitle>Der tägliche Weg</ion-card-subtitle>
+        <ion-card-title>Dokumente ausfüllen</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        Dokumente auswählen, Werte eingeben, fertige Kopien erzeugen. Die
+        Originale bleiben unverändert.
+      </ion-card-content>
+    </ion-card>
+  </div>
+
+  @if (!facade.hasDocuments()) {
+    <ion-note class="wizard-start__hint">
+      Es ist noch kein Dokument verknüpft — beginne mit „Dokumente einrichten“.
+    </ion-note>
+  }
+</ion-content>

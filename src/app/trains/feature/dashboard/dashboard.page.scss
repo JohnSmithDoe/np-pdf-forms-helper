@@ -1,0 +1,37 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only — the cards bring their own surface, and the counts are
+// `ion-card-subtitle` rather than a hand-set colour for the same reason.
+//
+// The tiles are a `grid` with a `minmax` track and not a wrapping flex row: they
+// carry counts that are read down a column, and `flex: 1 1 <basis>` gives the
+// last row of a wrap wider cards than the rows above it.
+//
+// The import card is deliberately full width above that grid. It is the only
+// action on the page, and a card the same size as the seven it feeds would read
+// as the eighth entity.
+// ────────────────────────────────────────────────────────────────
+
+.dashboard__lead {
+  margin-block: 0 1rem;
+  max-width: 44rem;
+}
+
+.dashboard__action {
+  margin: 0 0 1.5rem;
+}
+
+.dashboard__tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.dashboard__tile {
+  margin: 0;
+}
+
+.dashboard__hint {
+  display: block;
+  margin-block-start: 1.5rem;
+}

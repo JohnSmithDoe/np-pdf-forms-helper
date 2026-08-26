@@ -1,0 +1,17 @@
+<app-list-page
+  class="ion-page"
+  backHref="/trains"
+  heading="Zuordnungs-Vorlagen"
+  emptyText="Beim Import kann eine Zuordnung als Vorlage gespeichert werden."
+  [itemTemplate]="templateRow"
+/>
+
+<ng-template #templateRow let-row let-ionList="ionList">
+  <app-list-item
+    [ionList]="ionList"
+    [title]="row.name"
+    [note]="row.fields"
+    leadingIcon="albums-outline"
+    (deleteItem)="onRemove(row)"
+  />
+</ng-template>

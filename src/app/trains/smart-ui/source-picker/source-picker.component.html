@@ -1,0 +1,62 @@
+@let staging = facade.staging();
+
+@if (!staging) {
+  <ion-button color="success" (click)="pick()" data-testid="import-pick">
+    <ion-icon slot="start" name="cloud-upload-outline" aria-hidden="true" />
+    Datei auswählen
+  </ion-button>
+  <ion-note class="source-picker__hint">
+    Excel-Dateien (.xlsx), wie sie per E-Mail eintreffen.
+  </ion-note>
+} @else {
+  <ion-list lines="full">
+    <ion-item>
+      <ion-icon slot="start" name="document-outline" aria-hidden="true" />
+      <ion-label>
+        <h2 data-testid="import-file">{{ staging.file }}</h2>
+        <ion-note>{{ staging.summary.total }} Datenzeile(n)</ion-note>
+      </ion-label>
+    </ion-item>
+
+    @if (staging.sheets.length > 1) {
+      <ion-item>
+        <ion-select
+          label="Arbeitsmappe"
+          labelPlacement="stacked"
+          [value]="staging.sheet"
+          (ionChange)="onSheet($event)"
+          data-testid="import-sheet"
+        >
+          @for (sheet of staging.sheets; track sheet) {
+            <ion-select-option [value]="sheet">{{ sheet }}</ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+    }
+
+    <ion-item>
+      <ion-input
+        type="number"
+        label="Kopfzeile"
+        labelPlacement="stacked"
+        [value]="staging.plan.layout.headerRow"
+        (ionBlur)="onHeaderRow($event)"
+        data-testid="import-header-row"
+      />
+    </ion-item>
+  </ion-list>
+
+  @if (facade.autoMapped()) {
+    <ion-chip color="success" data-testid="import-template-hit">
+      Gespeicherte Vorlage erkannt und angewendet
+    </ion-chip>
+  }
+
+  <div class="source-picker__candidates">
+    @for (candidate of facade.candidates(); track candidate.reason) {
+      <ion-chip [outline]="!$first" data-testid="import-candidate">
+        {{ candidate.reason }} (Sicherheit {{ candidate.score }} %)
+      </ion-chip>
+    }
+  </div>
+}

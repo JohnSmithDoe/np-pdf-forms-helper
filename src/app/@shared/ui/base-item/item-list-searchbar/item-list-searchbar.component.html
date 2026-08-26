@@ -1,0 +1,7 @@
+<ion-searchbar
+  placeholder="Suchen"
+  [value]="query()"
+  [debounce]="250"
+  (ionInput)="onInput($any($event))"
+  data-testid="list-search"
+/>

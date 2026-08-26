@@ -1,0 +1,18 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only. The three choices wrap rather than shrink: their labels are the
+// difference between them, and a truncated "Mehrere Dateien" is the same button
+// twice.
+// ────────────────────────────────────────────────────────────────
+
+.setup-source__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block: 1.5rem;
+}
+
+.setup-source__hint {
+  display: block;
+  margin-block-start: 1.5rem;
+  max-width: 40rem;
+}

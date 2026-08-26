@@ -1,0 +1,94 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button aria-label="Menü öffnen" />
+    </ion-buttons>
+    <ion-title>Info</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <div class="info-page__body">
+    <section>
+      <h2>{{ wordmark }}</h2>
+      @if (info(); as info) {
+        <p>Version {{ info.version }}</p>
+      } @else if (unavailable(); as reason) {
+        <ion-note>{{ reason }}</ion-note>
+      }
+      <p>
+        Verknüpft PDF- und Excel-Vorlagen, benennt ihre Formularfelder und
+        erzeugt daraus ausgefüllte Kopien. Die Originale werden dabei nie
+        verändert.
+      </p>
+    </section>
+
+    <section>
+      <h3>Für die IT-Freigabe</h3>
+      <ion-list [inset]="true">
+        <ion-item>
+          <ion-label class="ion-text-wrap">
+            <h3>Keine Netzwerkverbindung</h3>
+            <ion-note>
+              Das Programm ruft keine Server auf und sendet keine Daten. Es
+              funktioniert vollständig offline.
+            </ion-note>
+          </ion-label>
+        </ion-item>
+        <ion-item>
+          <ion-label class="ion-text-wrap">
+            <h3>Keine zusätzlichen Programme</h3>
+            <ion-note>
+              Es werden keine externen Werkzeuge aufgerufen oder mitinstalliert.
+              PDF und Excel werden direkt im Programm gelesen und geschrieben.
+            </ion-note>
+          </ion-label>
+        </ion-item>
+        <ion-item>
+          <ion-label class="ion-text-wrap">
+            <h3>Keine Administratorrechte</h3>
+            <ion-note>
+              Installation und Betrieb laufen im Benutzerkontext. Es wird nichts
+              in die Registry oder in Systemordner geschrieben.
+            </ion-note>
+          </ion-label>
+        </ion-item>
+        <ion-item>
+          <ion-label class="ion-text-wrap">
+            <h3>Alle Daten bleiben lokal</h3>
+            <ion-note>
+              Gespeichert werden nur die Verweise auf die Vorlagen und die
+              Feldnamen — in den unten genannten Ordnern.
+            </ion-note>
+          </ion-label>
+        </ion-item>
+      </ion-list>
+    </section>
+
+    @if (info(); as info) {
+      <section>
+        <h3>Verwendete Ordner</h3>
+        <ion-list [inset]="true">
+          <ion-item>
+            <ion-label class="ion-text-wrap">
+              <h3>Daten</h3>
+              <ion-note>{{ info.dataPath }}</ion-note>
+            </ion-label>
+          </ion-item>
+          <ion-item>
+            <ion-label class="ion-text-wrap">
+              <h3>Erzeugte Dokumente</h3>
+              <ion-note>{{ info.outputPath }}</ion-note>
+            </ion-label>
+          </ion-item>
+          <ion-item>
+            <ion-label class="ion-text-wrap">
+              <h3>Zwischenablage / Vorschau</h3>
+              <ion-note>{{ info.cachePath }}</ion-note>
+            </ion-label>
+          </ion-item>
+        </ion-list>
+      </section>
+    }
+  </div>
+</ion-content>

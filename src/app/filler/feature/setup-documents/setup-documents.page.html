@@ -1,0 +1,42 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Verknüpfte Dokumente"
+  [step]="2"
+  [stepCount]="3"
+  (back)="onBack()"
+  (next)="onNext()"
+>
+  <p>
+    Diese Dokumente wurden verknüpft. Öffne ein Dokument, um seine Felder zu
+    benennen — das ist optional und kann später jederzeit nachgeholt werden.
+  </p>
+
+  <ion-list class="setup-documents__list" [inset]="true">
+    @for (document of facade.importedDocuments(); track document.id) {
+      <app-list-item
+        [title]="document.name"
+        leadingIcon="document-text-outline"
+        [canDelete]="false"
+        (selectItem)="onOpen(document)"
+      >
+        <ion-note itemDetails>
+          @if (document.type === 'resource') {
+            Wird nur kopiert — keine Felder
+          } @else if (document.mapped.length) {
+            {{ document.mapped.length }} Feld(er) zugeordnet
+          } @else {
+            Noch kein Feld zugeordnet
+          }
+        </ion-note>
+        <ion-icon
+          itemEnd
+          slot="end"
+          name="chevron-forward-outline"
+          aria-hidden="true"
+        />
+      </app-list-item>
+    }
+  </ion-list>
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

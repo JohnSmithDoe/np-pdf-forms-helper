@@ -1,8 +1,28 @@
-<mat-toolbar class="app-toolbar">
-  <mat-icon aria-hidden="true">description</mat-icon>
-  <span class="app-toolbar__wordmark">{{ wordmark }}</span>
-</mat-toolbar>
+<ion-app>
+  <ion-split-pane contentId="main-content" [disabled]="true">
+    <ion-menu contentId="main-content" [attr.aria-label]="wordmark">
+      <nav>
+        <ion-list>
+          @for (item of navItems; track item.route) {
+            <ion-menu-toggle [autoHide]="false">
+              <ion-item
+                [button]="true"
+                [routerLink]="item.route"
+                routerLinkActive="app-menu__item--active"
+                lines="none"
+                data-testid="menu-row"
+              >
+                <ion-icon slot="start" [name]="item.icon" aria-hidden="true" />
+                <ion-label>{{ item.label }}</ion-label>
+              </ion-item>
+            </ion-menu-toggle>
+          }
+        </ion-list>
+      </nav>
+    </ion-menu>
 
-<main class="app-content">
-  <router-outlet />
-</main>
+    <div class="ion-page" id="main-content">
+      <ion-router-outlet />
+    </div>
+  </ion-split-pane>
+</ion-app>

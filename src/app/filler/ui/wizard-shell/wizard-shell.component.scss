@@ -1,0 +1,12 @@
+// ─── why ────────────────────────────────────────────────────────
+// No `:host { display: … }` rule, deliberately. This element carries
+// `.ion-page`, which IS a flex column, and overriding it stops `ion-content`
+// flexing — the content takes the full page height and the footer is pushed off
+// the bottom of the viewport where it cannot be clicked. Same rule as
+// `@shared/feature/item-lists/list-page`.
+// ────────────────────────────────────────────────────────────────
+
+.wizard-shell__step {
+  display: block;
+  margin-block-end: 1rem;
+}

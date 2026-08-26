@@ -1,0 +1,38 @@
+<ion-item-sliding data-testid="list-row">
+  <ion-item
+    [button]="true"
+    [detail]="false"
+    lines="full"
+    (click)="selectItem.emit()"
+    data-testid="list-row-select"
+  >
+    @let icon = leadingIcon();
+    @if (icon) {
+      <ion-icon slot="start" [name]="icon" aria-hidden="true" />
+    }
+    <ion-label class="ion-text-wrap">
+      <h2 data-testid="list-row-title">{{ title() }}</h2>
+      @let detail = note();
+      @if (detail) {
+        <ion-note class="list-item__note" data-testid="list-row-note">{{
+          detail
+        }}</ion-note>
+      }
+      <ng-content select="[itemDetails]" />
+    </ion-label>
+    <ng-content select="[itemEnd]" />
+  </ion-item>
+
+  @if (canDelete()) {
+    <ion-item-options side="end">
+      <ion-item-option
+        color="danger"
+        [expandable]="true"
+        (click)="emitDelete()"
+        data-testid="list-row-delete"
+      >
+        <ion-icon slot="icon-only" name="trash-outline" aria-hidden="true" />
+      </ion-item-option>
+    </ion-item-options>
+  }
+</ion-item-sliding>

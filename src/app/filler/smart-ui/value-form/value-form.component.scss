@@ -1,0 +1,16 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only, and a column rather than the expert page's pair of panes: a
+// wizard step owns the whole width, so the fields do not have to share it.
+//
+// The "Verwendet in: …" line is unstyled for the same reason as in the expert
+// panel: `ion-input`'s `helperText` is a plain string property, not a projected
+// slot, and marking it up would mean an absolutely-positioned element under a
+// shadow-DOM input.
+// ────────────────────────────────────────────────────────────────
+
+.value-form__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 40rem;
+}

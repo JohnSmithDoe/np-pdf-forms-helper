@@ -1,0 +1,311 @@
+<ion-card class="document-list__card">
+  <ion-card-header class="document-list__head">
+    <div class="document-list__heading">
+      <ion-card-title>Vorlagen</ion-card-title>
+      @if (hasDocuments()) {
+        <ion-note>{{ selectionSummary() }}</ion-note>
+      }
+    </div>
+
+    <div class="document-list__head-actions">
+      <ion-button
+        size="small"
+        fill="clear"
+        [color]="optionsVisible() ? 'primary' : 'medium'"
+        title="Optionen einblenden"
+        aria-label="Optionen einblenden"
+        (click)="optionsVisible.set(!optionsVisible())"
+      >
+        <ion-icon slot="icon-only" name="options-outline" aria-hidden="true" />
+      </ion-button>
+
+      <ion-button
+        size="small"
+        fill="clear"
+        color="medium"
+        title="Dokumentenliste sortieren"
+        [attr.aria-label]="'Sortierung ändern, aktuell ' + sortDirection()"
+        [disabled]="!hasDocuments()"
+        (click)="onToggleSort()"
+      >
+        <ion-icon
+          slot="start"
+          name="swap-vertical-outline"
+          aria-hidden="true"
+        />
+        {{ sortDirection() }}
+      </ion-button>
+
+      <ion-button
+        size="small"
+        color="success"
+        title="Einzelne Datei hinzufügen"
+        aria-label="Einzelne Datei hinzufügen"
+        (click)="onAddDocument()"
+      >
+        <ion-icon
+          slot="start"
+          name="document-attach-outline"
+          aria-hidden="true"
+        />
+        Datei
+      </ion-button>
+
+      <ion-button
+        size="small"
+        fill="outline"
+        color="success"
+        title="Ganzen Ordner hinzufügen"
+        aria-label="Ganzen Ordner hinzufügen"
+        (click)="onAddDocumentFolder()"
+      >
+        <ion-icon slot="start" name="folder-open-outline" aria-hidden="true" />
+        Ordner
+      </ion-button>
+    </div>
+  </ion-card-header>
+
+  @if (optionsVisible()) {
+    <div class="document-list__options">
+      <div class="document-list__option">
+        <ion-toggle
+          labelPlacement="end"
+          [checked]="autoMapFields()"
+          (ionChange)="autoMapFields.set($event.detail.checked)"
+        >
+          Felder automatisch übernehmen
+        </ion-toggle>
+        <ion-note>
+          Beim Hinzufügen werden alle Formularfelder sofort zugeordnet.
+        </ion-note>
+      </div>
+
+      <ion-button
+        size="small"
+        fill="outline"
+        color="danger"
+        title="Programm zurücksetzen"
+        (click)="resetRequested.emit()"
+      >
+        <ion-icon slot="start" name="shield-outline" aria-hidden="true" />
+        Alles zurücksetzen
+      </ion-button>
+    </div>
+  }
+
+  @if (hasDocuments()) {
+    <ion-accordion-group
+      [multiple]="true"
+      [value]="expanded()"
+      (ionChange)="onExpandedChange($event)"
+    >
+      @for (document of documents(); track document.id) {
+        <ion-accordion [value]="document.id">
+          <ion-item slot="header" lines="full">
+            <ion-checkbox
+              slot="start"
+              [title]="document.name + ' für den Export auswählen'"
+              [checked]="document.selected"
+              [attr.aria-label]="document.name"
+              (click)="$event.stopPropagation()"
+              (keydown)="$event.stopPropagation()"
+              (ionChange)="onDocumentSelected(document, $event.detail.checked)"
+            />
+            <ion-label class="document-list__name">
+              <h3>{{ document.name }}</h3>
+              <p>{{ meta(document) }}</p>
+            </ion-label>
+
+            <div slot="end" class="document-list__actions">
+              @if (document.type === 'pdf') {
+                <ion-button
+                  size="small"
+                  fill="clear"
+                  color="medium"
+                  title="Feldnamen im Dokument anzeigen"
+                  aria-label="Feldnamen im Dokument anzeigen"
+                  (click)="onOpenPreview(document, $event)"
+                >
+                  <ion-icon
+                    slot="icon-only"
+                    name="eye-outline"
+                    aria-hidden="true"
+                  />
+                </ion-button>
+              }
+              @if (document.type !== 'resource') {
+                <ion-button
+                  size="small"
+                  fill="clear"
+                  title="Feld hinzufügen"
+                  aria-label="Feld hinzufügen"
+                  (click)="onAddField(document, $event)"
+                >
+                  <ion-icon
+                    slot="icon-only"
+                    name="add-outline"
+                    aria-hidden="true"
+                  />
+                </ion-button>
+              }
+              <ion-button
+                size="small"
+                fill="clear"
+                color="medium"
+                title="Original Dokument öffnen"
+                aria-label="Original Dokument öffnen"
+                (click)="onOpenDocument(document, $event)"
+              >
+                <ion-icon
+                  slot="icon-only"
+                  name="open-outline"
+                  aria-hidden="true"
+                />
+              </ion-button>
+              <ion-button
+                size="small"
+                fill="clear"
+                color="medium"
+                title="Dokument neu verknüpfen"
+                aria-label="Dokument neu verknüpfen"
+                (click)="onRemapDocument(document, $event)"
+              >
+                <ion-icon
+                  slot="icon-only"
+                  name="sync-outline"
+                  aria-hidden="true"
+                />
+              </ion-button>
+              <ion-button
+                size="small"
+                fill="clear"
+                color="danger"
+                title="Dokument entfernen"
+                aria-label="Dokument entfernen"
+                (click)="onRemoveDocument(document, $event)"
+              >
+                <ion-icon
+                  slot="icon-only"
+                  name="trash-outline"
+                  aria-hidden="true"
+                />
+              </ion-button>
+            </div>
+          </ion-item>
+
+          <div slot="content" class="document-list__content">
+            @if (isExpanded(document.id)) {
+              @if (document.mapped.length) {
+                <ion-note class="document-list__hint">
+                  Angehakte Felder werden beim Export gefüllt.
+                </ion-note>
+              }
+
+              @for (field of document.mapped; track field.origId) {
+                <ion-item lines="none" class="document-list__field">
+                  <ion-checkbox
+                    slot="start"
+                    aria-label="Exportieren"
+                    [title]="'Feld ' + field.mappedName + ' exportieren'"
+                    [checked]="field.selected"
+                    (ionChange)="onFieldSelected(field, $event.detail.checked)"
+                  />
+                  <div class="document-list__field-main">
+                    <ion-input
+                      fill="outline"
+                      [attr.aria-label]="fieldLabel(document, field)"
+                      [value]="field.mappedName"
+                      placeholder="Feldname"
+                      (ionBlur)="onNameBlur(field, $event)"
+                    />
+                    @if (origin(document, field); as source) {
+                      <ion-note>{{ source }}</ion-note>
+                    }
+                  </div>
+                  <ion-button
+                    size="small"
+                    fill="clear"
+                    color="danger"
+                    title="Feld entfernen"
+                    aria-label="Feld entfernen"
+                    (click)="removeFieldRequested.emit(field)"
+                  >
+                    <ion-icon
+                      slot="icon-only"
+                      name="trash-outline"
+                      aria-hidden="true"
+                    />
+                  </ion-button>
+                </ion-item>
+              }
+
+              @if (document.type === 'resource') {
+                <ion-note class="document-list__hint">
+                  Diese Vorlage wird nur kopiert und hat deshalb keine Felder.
+                </ion-note>
+              } @else if (!document.mapped.length) {
+                <div class="document-list__empty-fields">
+                  <ion-note
+                    >Diesem Dokument ist noch kein Feld zugeordnet.</ion-note
+                  >
+                  <ion-button
+                    size="small"
+                    fill="outline"
+                    (click)="onAddField(document, $event)"
+                  >
+                    <ion-icon
+                      slot="start"
+                      name="add-outline"
+                      aria-hidden="true"
+                    />
+                    Erstes Feld zuordnen
+                  </ion-button>
+                </div>
+              }
+            }
+          </div>
+        </ion-accordion>
+      }
+    </ion-accordion-group>
+  } @else {
+    <div class="document-list__empty">
+      <ion-icon
+        name="document-attach-outline"
+        color="warning"
+        size="large"
+        aria-hidden="true"
+      />
+      <ion-card-title>Noch keine Dokumente hinzugefügt</ion-card-title>
+      <p>
+        Verknüpfe deine Original-Vorlagen. Gespeichert wird nur der Verweis auf
+        die Datei — jeder Export nutzt wieder das Original.
+      </p>
+      <div class="document-list__empty-actions">
+        <ion-button color="success" (click)="onAddDocument()">
+          <ion-icon
+            slot="start"
+            name="document-attach-outline"
+            aria-hidden="true"
+          />
+          Datei auswählen
+        </ion-button>
+        <ion-button
+          fill="outline"
+          color="success"
+          (click)="onAddDocumentFolder()"
+        >
+          <ion-icon
+            slot="start"
+            name="folder-open-outline"
+            aria-hidden="true"
+          />
+          Ordner auswählen
+        </ion-button>
+      </div>
+      <ion-note>
+        Liegen die Vorlagen auf einem Server, muss dieser beim Export erreichbar
+        sein.
+      </ion-note>
+    </div>
+  }
+</ion-card>

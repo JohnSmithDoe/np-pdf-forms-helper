@@ -1,0 +1,49 @@
+@if (document(); as document) {
+  <header class="field-editor__bar">
+    <h2>{{ document.name }}</h2>
+    @if (document.type !== 'resource') {
+      <ion-button
+        color="success"
+        fill="outline"
+        (click)="addFieldRequested.emit(document)"
+      >
+        <ion-icon slot="start" name="add-outline" aria-hidden="true" />
+        Feld hinzufügen
+      </ion-button>
+    }
+  </header>
+
+  @for (field of document.mapped; track field.origId) {
+    <div class="field-editor__field">
+      <ion-input
+        fill="outline"
+        class="field-editor__name"
+        labelPlacement="stacked"
+        [label]="field.mappedName"
+        [value]="field.mappedName"
+        [placeholder]="field.mappedName"
+        (ionBlur)="onNameBlur(field, $event)"
+      />
+      <ion-button
+        fill="clear"
+        color="danger"
+        title="Feld entfernen"
+        aria-label="Feld entfernen"
+        (click)="removeFieldRequested.emit(field)"
+      >
+        <ion-icon slot="icon-only" name="trash-outline" aria-hidden="true" />
+      </ion-button>
+    </div>
+  }
+
+  @if (document.type === 'resource') {
+    <ion-note>
+      Diese Vorlage wird nur kopiert und hat deshalb keine Felder.
+    </ion-note>
+  } @else if (!document.mapped.length) {
+    <ion-note>
+      Für dieses Dokument wurde noch kein Feld zugeordnet. Füge eines hinzu oder
+      überspringe diesen Schritt.
+    </ion-note>
+  }
+}

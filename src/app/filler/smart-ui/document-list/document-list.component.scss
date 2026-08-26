@@ -1,0 +1,133 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only. No colour and no type anywhere: those are Ionic's, and where a
+// control needs an accent it asks for one on the element — `color="success"`
+// on the add buttons, `color="danger"` on the destructive ones, `color="medium"`
+// on the row's secondary icons. A stylesheet naming a value is what this port
+// removed, and the pane is an `ion-card` for the same reason: the surface, the
+// border and the shadow come from the component instead of from here.
+//
+// The card's own margin is dropped because the page's pane grid owns the gap.
+//
+// That container is also why the pane title is an `ion-card-title` and the field
+// rows are `ion-item`s: `ion-card` sets a MUTED text colour on everything it
+// holds, so plain markup inside it renders grey — readable for a note, wrong for
+// a name the user typed. Both components carry the full-contrast colour with
+// them, which is how the contrast is fixed without this file naming a colour.
+//
+// Everything not inside an item is indented to `1rem`, which is what `ion-item`
+// pads itself by, so the options row and the hints line up with the rows rather
+// than sitting half a step inside them.
+// ────────────────────────────────────────────────────────────────
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.document-list__card {
+  margin: 0;
+  padding-block-end: 0.5rem;
+}
+
+.document-list__head {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.document-list__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-inline-end: auto;
+  min-width: 0;
+}
+
+// One wrapping unit, so the add buttons never end up on a line of their own
+// while a quieter control keeps the title's row.
+.document-list__head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: end;
+  gap: 0.5rem;
+}
+
+.document-list__options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1rem 1rem;
+}
+
+.document-list__option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-inline-end: auto;
+}
+
+.document-list__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// The accordion header is one row: name on the left, actions right. `ion-item`
+// gives the slots; the buttons only need to stop stretching.
+.document-list__actions {
+  display: flex;
+  align-items: center;
+}
+
+.document-list__content {
+  padding-block: 0.5rem 1rem;
+}
+
+.document-list__hint {
+  display: block;
+  padding-inline: 1rem;
+}
+
+// Capped, not stretched: the name is a word, and a 40rem box for one word is
+// what made the old rows read as a form to fill in rather than a mapping.
+.document-list__field-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+  max-width: 24rem;
+  padding-block: 0.5rem;
+}
+
+.document-list__empty-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+}
+
+.document-list__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 2rem;
+  text-align: center;
+
+  > p {
+    margin: 0;
+    max-width: 34rem;
+  }
+}
+
+.document-list__empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}

@@ -1,0 +1,17 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Werte eingeben"
+  [step]="2"
+  [stepCount]="4"
+  (back)="onBack()"
+  (next)="onNext()"
+>
+  <p>
+    Ein Wert pro Feldname. Kommt derselbe Name in mehreren Dokumenten vor, wird
+    er überall eingesetzt.
+  </p>
+
+  <app-value-form />
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

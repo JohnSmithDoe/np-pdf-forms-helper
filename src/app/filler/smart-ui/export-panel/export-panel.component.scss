@@ -1,0 +1,104 @@
+// ─── why ────────────────────────────────────────────────────────
+// Layout only. No colour and no type: both are Ionic's, and an accent is asked
+// for on the element (`color="warning"` on the notice icon) rather than named
+// here. The pane is an `ion-card`, so its surface and border are the component's
+// own; its margin is dropped because the page's pane grid owns the gap.
+//
+// That container is also why every heading is an `ion-card-title`, every section
+// label an `ion-list-header` and every input an `ion-item`: `ion-card` sets a
+// MUTED text colour on everything it holds, so plain markup inside it renders
+// grey — readable for a note, wrong for a value the user typed. Those three
+// components each carry the full-contrast colour with them, which is how the
+// contrast is fixed without this file naming a colour.
+//
+// The value fields are a GRID and not a column. One per row made a five-field
+// export a screen and a half of half-empty boxes with the run button scrolled
+// off the top; `auto-fill` puts as many 18rem columns as fit and collapses to
+// one when the pane is narrow.
+//
+// "Verwendet in: …" is our own `ion-note` rather than the input's `helperText`,
+// which is a plain string property and cannot be laid out — the note can sit in
+// the field's own column and wrap with it.
+// ────────────────────────────────────────────────────────────────
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.export-panel__card {
+  margin: 0;
+  padding-block-end: 1rem;
+}
+
+.export-panel__head {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.export-panel__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-inline-end: auto;
+  min-width: 0;
+}
+
+// One wrapping unit, so the run button never ends up alone on a line while the
+// quieter folder button keeps the title's row.
+.export-panel__head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: end;
+  gap: 0.5rem;
+}
+
+.export-panel__documents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0 1rem 0.5rem;
+}
+
+// An `fill="outline"` input draws its label ON its top border, and `ion-item`
+// clips its content — so every input in an item needs the block padding this
+// class carries, or the label is cut in half.
+.export-panel__suffix {
+  max-width: 24rem;
+}
+
+.export-panel__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+}
+
+.export-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+  padding-block: 0.5rem;
+}
+
+.export-panel__notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 2rem;
+  text-align: center;
+
+  > p {
+    margin: 0;
+    max-width: 34rem;
+  }
+}
+
+.export-panel__idle {
+  display: block;
+  padding: 0 1rem 1rem;
+}

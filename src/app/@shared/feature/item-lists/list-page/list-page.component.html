@@ -1,0 +1,84 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      @if (backHref(); as href) {
+        <ion-back-button [defaultHref]="href" text="Zurück" />
+      } @else {
+        <ion-menu-button aria-label="Menü öffnen" />
+      }
+    </ion-buttons>
+    <ion-title>{{ heading() }}</ion-title>
+    <ion-buttons slot="end">
+      <ng-content select="[toolbarActions]" />
+      @if (canCreate) {
+        <ion-button
+          color="success"
+          aria-label="Neu anlegen"
+          (click)="onCreate()"
+          data-testid="list-create"
+        >
+          <ion-icon slot="icon-only" name="add-outline" aria-hidden="true" />
+        </ion-button>
+      }
+    </ion-buttons>
+  </ion-toolbar>
+
+  <ion-toolbar>
+    <app-item-list-searchbar
+      [query]="facade.searchResult()?.searchTerm"
+      (queryChange)="facade.search($event)"
+    />
+  </ion-toolbar>
+
+  @let options = facade.sortOptions?.() ?? [];
+  @if (options.length) {
+    <ion-toolbar>
+      <ion-buttons slot="start">
+        @for (option of options; track option.key) {
+          <ion-button
+            [fill]="facade.sort()?.sortBy === option.key ? 'solid' : 'clear'"
+            (click)="facade.setSortMode(option.key)"
+            [attr.data-testid]="'list-sort-' + option.key"
+          >
+            <ion-icon
+              slot="start"
+              [name]="sortIcon(option.key)"
+              aria-hidden="true"
+            />
+            {{ option.label }}
+          </ion-button>
+        }
+      </ion-buttons>
+    </ion-toolbar>
+  }
+</ion-header>
+
+<ion-content>
+  <ng-content select="[beforeList]" />
+
+  <ion-list #ionList>
+    @for (item of facade.items(); track item.id) {
+      <ng-container
+        *ngTemplateOutlet="
+          itemTemplate();
+          context: { $implicit: item, ionList: ionList }
+        "
+      />
+    }
+  </ion-list>
+
+  <app-item-list-empty
+    [isKnownEmpty]="isKnownEmpty()"
+    [isSearching]="!!facade.searchResult()"
+    [searchTerm]="facade.searchResult()?.searchTerm"
+    [emptyText]="emptyText()"
+    [createLabel]="canCreate ? createLabel() : undefined"
+    (createRequested)="onCreate()"
+  />
+
+  @if (canLoadMore) {
+    <ion-infinite-scroll (ionInfinite)="onLoadMore($event)">
+      <ion-infinite-scroll-content loadingText="Wird geladen …" />
+    </ion-infinite-scroll>
+  }
+</ion-content>

@@ -1,0 +1,38 @@
+<app-list-page
+  class="ion-page"
+  backHref="/trains"
+  heading="Radsätze"
+  emptyText="Radsätze entstehen beim Import, sobald eine Radsatznummer bestätigt wird."
+  [itemTemplate]="radsatzRow"
+/>
+
+<ng-template #radsatzRow let-row let-ionList="ionList">
+  <app-list-item
+    [ionList]="ionList"
+    [title]="row.number"
+    [note]="row.fittedTo ? 'eingebaut in ' + row.fittedTo : 'ausgebaut'"
+    leadingIcon="ellipse-outline"
+    (selectItem)="toggle(row.id)"
+    (deleteItem)="onRemove(row)"
+  >
+    <ng-container itemDetails>
+      @if (row.since) {
+        <ion-note>seit {{ row.since }}</ion-note>
+      }
+      @if (isExpanded(row.id)) {
+        @for (entry of row.history; track $index) {
+          <ion-note class="radsatz-list__history">
+            {{ entry.wagen || 'unbekannter Wagen' }}
+            @if (entry.position) {
+              · Position {{ entry.position }}
+            }
+            · {{ entry.installed || '?' }} – {{ entry.removed || 'heute' }}
+          </ion-note>
+        }
+        @if (!row.history.length) {
+          <ion-note>Noch kein Ein- oder Ausbau erfasst.</ion-note>
+        }
+      }
+    </ng-container>
+  </app-list-item>
+</ng-template>

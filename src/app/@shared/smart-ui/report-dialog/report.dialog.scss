@@ -1,0 +1,11 @@
+// ─── why ────────────────────────────────────────────────────────
+// No height floor: the modal sizes itself to its content, so a two-line report
+// does not sit in a half-empty box.
+//
+// The lines and the folder row are `ReportViewComponent`'s, and so is their
+// layout. Nothing about the body is styled from out here, or the dialog and the
+// wizards' result steps would drift apart again.
+//
+// The action buttons keep their meaning as Ionic roles (`color="secondary"` /
+// `color="success"`) on the elements themselves, so nothing is recoloured here.
+// ────────────────────────────────────────────────────────────────
