@@ -14,8 +14,9 @@
 #     and the Angular build emits the same bundle everywhere — so the cheapest
 #     runner is the honest one. That stops being true for PACKAGING: see the
 #     release seam at the bottom of this file.
-#   - `v*` rather than a semver glob, so a pre-release tag is verified too. Nothing
-#     here publishes, so no shape assertion is needed yet.
+#   - `v*` rather than a semver glob, so a pre-release tag is verified and packaged
+#     too. The shape assertion lives in `package`: the tag must equal the version
+#     the binary carries.
 #   - setup-node's `cache: pnpm` is unusable: it runs before corepack has made pnpm
 #     exist. Hence the explicit cache step.
 name: CI
@@ -25,6 +26,9 @@ on:
     branches: [master]
     tags: ['v*']
   pull_request:
+  # An installer on demand, without cutting a tag: `package` then uploads a
+  # workflow artifact and publishes nothing.
+  workflow_dispatch:
 
 # GitHub defaults this off — an omitted block means superseded pushes run to
 # completion. Tags are exempt so a future release job can never be cancelled
@@ -106,16 +110,103 @@ jobs:
       # download on the runner, and it has never been run anywhere but a
       # developer machine. Adding it is a deliberate step, not a drive-by.
 
-# --- RELEASE SEAM -----------------------------------------------------------
-# There is deliberately NO packaging, signing or artifact-upload job yet.
-#
-# What used to block it is gone: the app no longer shells out to an external
-# pdftk that made an installer unstartable on a runner. Packaging is now a matter
-# of doing it — the reason it is still absent is that nobody has, not that it
-# cannot be verified. Two constraints already known:
-#   - It must be a MATRIX over NATIVE runners — windows-latest for the NSIS
-#     installer, macos-latest for the .dmg. Cross-compiling is explicitly not the
-#     plan: both targets need the host toolchain (Windows: MSVC + WiX/NSIS; macOS:
-#     Xcode, and codesign/notarytool, which do not exist off a Mac).
-#   - It hangs off the tag trigger already wired above (`v*`), gated on `needs:
-#     verify`, and adds `contents: write` in ITS OWN job — this one stays read-only.
+  # Packaging runs on a NATIVE Windows runner, never cross-compiled: the NSIS
+  # bundle and the MSVC link need the host toolchain. Only on a `v*` tag (draft
+  # release) or a manual run (artifact only) — a Windows release build is ~10
+  # minutes and no push needs it. `contents: write` is granted HERE and nowhere
+  # else, so `verify`, which runs on every pull request, never holds a token
+  # that can publish.
+  package:
+    needs: verify
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Activate pnpm
+        run: corepack enable pnpm
+
+      # Asked rather than assumed: pnpm's store lives under %LOCALAPPDATA% on
+      # Windows, so a hard-coded `~/.pnpm-store` would cache an empty folder.
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: echo "dir=$(pnpm store path)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v6
+        with:
+          path: ${{ steps.pnpm-store.outputs.dir }}
+          key: pnpm-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-windows-
+
+      - run: pnpm install --frozen-lockfile
+
+      # The release profile is LTO + codegen-units=1, so a cold build is most of
+      # this job's wall-clock. Caches ~/.cargo and src-tauri/target, keyed on
+      # Cargo.lock and the toolchain.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # The version is written in three files and the installer is named after
+      # tauri.conf.json's. A tag that disagrees with any of them ships a file
+      # whose name lies about its contents, so it fails here, before ten minutes
+      # of compiling.
+      - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          conf=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          crate=$(sed -n 's/^version = "\(.*\)"$/\1/p' src-tauri/Cargo.toml | head -n1)
+          echo "tag=$tag package.json=$pkg tauri.conf.json=$conf Cargo.toml=$crate"
+          [ "$tag" = "$pkg" ] && [ "$tag" = "$conf" ] && [ "$tag" = "$crate" ]
+
+      # The only place `cargo test` runs on the platform the app ships on — the
+      # pre-push hook runs it on the macOS dev machine. Paths, line endings and
+      # file locking are where Windows differs, and the tests touch all three.
+      - name: Rust tests (Windows)
+        run: pnpm run rust:test
+
+      # `--bundles nsis` because tauri.conf.json also lists `dmg`, which cannot
+      # be built off a Mac. beforeBuildCommand runs `pnpm run build` itself.
+      - name: Bundle (NSIS)
+        run: pnpm tauri build --bundles nsis
+
+      # Two files: the installer (per-user, no admin rights) and the bare exe,
+      # which runs from any folder and keeps ./data beside itself. The bare exe
+      # relies on the WebView2 runtime that Windows 10/11 already ship.
+      - name: Collect
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          mkdir -p out
+          cp src-tauri/target/release/bundle/nsis/*-setup.exe out/
+          cp src-tauri/target/release/np-office-document-helper.exe "out/npDokumentenhilfe_${version}_x64-portable.exe"
+          ls -l out
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npDokumentenhilfe-windows
+          path: out/*.exe
+          if-no-files-found: error
+
+      # A DRAFT, so publishing stays a human click after the files have been
+      # looked at. `gh` ships on the runner, so no third-party action holds the
+      # write token. Create-if-absent plus `--clobber` makes re-running a failed
+      # tag safe instead of an "already exists" error.
+      - name: Draft GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --draft --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" out/*.exe --clobber
