@@ -46,6 +46,12 @@
 // would double every event in it. The key has to mean "this row", not "this row
 // as currently resolved".
 //
+// The radsatz and both fitting dates are IN the key. Without them a
+// wheelset-monitoring export — four fitted radsaetze per wagen, no Datum,
+// Leistung or Betrag — hashed all four rows of a wagen alike and flagged three
+// of every four as duplicates. The radsatz goes in as its normalised NUMBER,
+// for the same reason the werkstatt goes in as its name.
+//
 // AN INCOMPLETE PLAN IS NOT AN ERROR. Staging a half-mapped file is the normal
 // state of the mapping screen — every field the user picks re-stages, so
 // refusing until the required ones are mapped makes the FIRST pick fail and
@@ -296,7 +302,12 @@ fn stage_row(
         sender.as_deref(),
     );
 
-    let key = dedupe_key(&uic, &values, raw_of(&cells, FieldKind::Werkstatt));
+    let key = dedupe_key(
+        &uic,
+        &values,
+        raw_of(&cells, FieldKind::Werkstatt),
+        raw_of(&cells, FieldKind::Radsatznummer),
+    );
     let duplicate = input.db.event_exists(&key) || !seen_keys.insert(key.clone());
 
     let status = if rejected {
@@ -436,6 +447,7 @@ fn dedupe_key(
     nummer: &Option<String>,
     values: &[(FieldKind, Value)],
     werkstatt: Option<&str>,
+    radsatz: Option<&str>,
 ) -> String {
     let find = |wanted: FieldKind| {
         values
@@ -450,6 +462,9 @@ fn dedupe_key(
         &resolve::partner::match_key(werkstatt.unwrap_or("")),
         &find(FieldKind::Leistung),
         &find(FieldKind::Betrag),
+        &resolve::radsatz::match_key(radsatz.unwrap_or("")),
+        &find(FieldKind::EingebautAm),
+        &find(FieldKind::AusgebautAm),
     ])
 }
 
@@ -770,6 +785,35 @@ mod tests {
         assert_eq!(staged.summary.duplicates, 1);
         assert_eq!(staged.rows[0].status, RowStatus::NeedsInput);
         assert_eq!(staged.rows[1].status, RowStatus::Duplicate);
+    }
+
+    // Shape of a real wheelset-monitoring export: one row per FITTED radsatz,
+    // four per wagen, no Datum, Leistung or Betrag. Four radsaetze on one wagen
+    // are four fittings, not one fitting sent four times.
+    #[test]
+    fn four_radsaetze_on_one_wagen_are_not_duplicates_of_each_other() {
+        let fitted = Grid::from_text(
+            "Radsatzmonitoring",
+            &[
+                &["Wagennr.", "Radsatznummer", "Einbaudatum"],
+                &["21 81 2471 217-3", "AL240720", "02.08.2024"],
+                &["21 81 2471 217-3", "AL240719", "02.08.2024"],
+                &["21 81 2471 217-3", "AL240710", "02.08.2024"],
+                &["21 81 2471 217-3", "AL240717", "02.08.2024"],
+            ],
+        );
+        let (_f, db) = empty_db("stage-fitted");
+        let staged = run(
+            &fitted,
+            &plan(&[
+                (1, "Wagennr.", FieldKind::Wagennummer),
+                (2, "Radsatznummer", FieldKind::Radsatznummer),
+                (3, "Einbaudatum", FieldKind::EingebautAm),
+            ]),
+            &db,
+        )
+        .unwrap();
+        assert_eq!(staged.summary.duplicates, 0, "{:?}", staged.rows);
     }
 
     #[test]

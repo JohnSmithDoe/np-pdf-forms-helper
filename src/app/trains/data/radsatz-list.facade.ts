@@ -2,6 +2,10 @@
 // `ListPageFacade` over the radsaetze. Like the wagen there is no `create`: a
 // radsatz is born from an import, where its number was read off a document.
 //
+// The sender's system id is searchable but not shown: a user holding that
+// sender's report has the id in hand, and the row has no room for a second
+// identifier nobody else uses.
+//
 // The row shows where it is NOW, derived from its open einbau — a radsatz is
 // under at most one wagen, so "no open einbau" reads as ausgebaut rather than
 // as missing data.
@@ -25,6 +29,7 @@ import { TrainsStore } from './trains.store';
 
 export interface RadsatzRow extends BaseItem {
   number: string;
+  systemId: string;
   fittedTo: string;
   since: string;
   history: {
@@ -67,6 +72,7 @@ export class RadsatzListFacade implements ListPageFacade {
         id: radsatz.id,
         name: radsatz.nummer,
         number: radsatz.nummer,
+        systemId: radsatz.systemId ?? '',
         fittedTo: open ? wagenLabel(open.wagenId) : '',
         since: open?.eingebautAm ? formatIsoDate(open.eingebautAm) : '',
         history: [...own].sort(byNewest).map((einbau) => ({
@@ -85,7 +91,7 @@ export class RadsatzListFacade implements ListPageFacade {
     searchList(
       this.#rows() ?? [],
       this.#term(),
-      (row) => `${row.number} ${row.fittedTo}`
+      (row) => `${row.number} ${row.systemId} ${row.fittedTo}`
     )
   );
 

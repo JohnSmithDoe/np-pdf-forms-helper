@@ -24,6 +24,19 @@
 // sender resolves without a question. Without it the user answers the same thing
 // every month and stops using the import.
 //
+// ONLY WORK IS AN EVENT. An Instandhaltung is written when the row carries a
+// Datum, a Leistung, a Betrag or a Bemerkung; a row that only records a fitting
+// writes its Einbau and nothing else. Every row used to write one, so a real
+// wheelset-monitoring export — no work columns at all — left an empty event per
+// wagen. A row that changed nothing counts as skipped, not as imported.
+//
+// A FITTING ALREADY STORED IS NOT RE-RECORDED. Monitoring exports are snapshots
+// and arrive again: the same radsatz on the same wagen from the same install
+// date is the same Einbau. Identical, it is left alone; with a removal date the
+// stored one lacked, it is closed IN PLACE. Only a fitting the store has not
+// seen closes the radsatz's open one and starts a new record — the old path
+// did that every time, and each re-send left a zero-length Einbau behind.
+//
 // A wagen's `Likely` does NOT rewrite the stored number. The stored one is
 // presumed right and the incoming one is presumed to be the typo — the opposite
 // would let one bad file rewrite the fleet.
@@ -142,7 +155,7 @@ pub fn commit(
                     committed.partner += created.partner;
                     committed.radsaetze += u32::from(created.radsatz);
                     committed.einbauten += u32::from(created.einbau);
-                    committed.instandhaltungen += 1;
+                    committed.instandhaltungen += u32::from(created.instandhaltung);
                 }
                 Ok(None) => committed.skipped += 1,
                 Err(message) => {
@@ -194,10 +207,11 @@ struct Run<'a> {
 }
 
 /// The two raw cells a radsatz is built from. The Wellennummer rides along
-/// because it is STORED but never matched on — see `db::fill_wellennummer`.
+/// because it is STORED but never matched on — see `db::fill_identifiers`.
 struct RadsatzCells<'a> {
     nummer: Option<&'a str>,
     welle: Option<&'a str>,
+    system_id: Option<&'a str>,
 }
 
 struct Created {
@@ -205,6 +219,13 @@ struct Created {
     partner: u32,
     radsatz: bool,
     einbau: bool,
+    instandhaltung: bool,
+}
+
+impl Created {
+    fn anything(&self) -> bool {
+        self.wagen || self.partner > 0 || self.radsatz || self.einbau || self.instandhaltung
+    }
 }
 
 fn commit_row(
@@ -224,6 +245,7 @@ fn commit_row(
         partner: 0,
         radsatz: false,
         einbau: false,
+        instandhaltung: false,
     };
 
     let uic = match values.value(FieldKind::Wagennummer) {
@@ -322,6 +344,7 @@ fn commit_row(
         RadsatzCells {
             nummer: raw_of(row, FieldKind::Radsatznummer),
             welle: raw_of(row, FieldKind::Wellennummer),
+            system_id: raw_of(row, FieldKind::RadsatzSystemId),
         },
         stamp,
         sender.as_deref(),
@@ -334,25 +357,46 @@ fn commit_row(
     if let Some(radsatz_id) = &radsatz_id {
         let installed = iso_of(values, FieldKind::EingebautAm);
         let removed = iso_of(values, FieldKind::AusgebautAm);
-        if installed.is_some() || removed.is_some() {
-            if installed.is_some() {
-                tx.close_open_einbau(radsatz_id, installed.clone());
+        let known = tx
+            .db()
+            .einbau_of(radsatz_id, &wagen_id, installed.as_deref())
+            .cloned();
+        match known {
+            _ if installed.is_none() && removed.is_none() => {}
+            Some(einbau) if einbau.ausgebaut_am == removed => {}
+            Some(mut einbau) if einbau.is_open() => {
+                einbau.ausgebaut_am = removed;
+                tx.put_einbau(einbau);
+                created.einbau = true;
             }
-            tx.put_einbau(Einbau {
-                id: Uuid::new_v4().to_string(),
-                radsatz_id: radsatz_id.clone(),
-                wagen_id: wagen_id.clone(),
-                position: text_of(row, FieldKind::Einbauposition),
-                eingebaut_am: installed,
-                ausgebaut_am: removed,
-                source: provenance(file, sheet, row.row, stamp),
-            });
-            created.einbau = true;
+            _ => {
+                if installed.is_some() {
+                    tx.close_open_einbau(radsatz_id, installed.clone());
+                }
+                tx.put_einbau(Einbau {
+                    id: Uuid::new_v4().to_string(),
+                    radsatz_id: radsatz_id.clone(),
+                    wagen_id: wagen_id.clone(),
+                    position: text_of(row, FieldKind::Einbauposition),
+                    eingebaut_am: installed,
+                    ausgebaut_am: removed,
+                    source: provenance(file, sheet, row.row, stamp),
+                });
+                created.einbau = true;
+            }
         }
     }
 
-    if tx.db().event_exists(&values.dedupe_key) {
-        return Ok(None);
+    let leistung = string_of(values, FieldKind::Leistung);
+    let betrag_cent = match values.value(FieldKind::Betrag) {
+        Some(Value::Money(cents)) => Some(*cents),
+        _ => None,
+    };
+    let bemerkung = Some(string_of(values, FieldKind::Bemerkung)).filter(|text| !text.is_empty());
+    let is_work =
+        date.is_some() || !leistung.is_empty() || betrag_cent.is_some() || bemerkung.is_some();
+    if !is_work || tx.db().event_exists(&values.dedupe_key) {
+        return Ok(created.anything().then_some(created));
     }
 
     tx.put_instandhaltung(Instandhaltung {
@@ -361,15 +405,13 @@ fn commit_row(
         werkstatt_id,
         radsatz_id,
         datum: date,
-        leistung: string_of(values, FieldKind::Leistung),
-        betrag_cent: match values.value(FieldKind::Betrag) {
-            Some(Value::Money(cents)) => Some(*cents),
-            _ => None,
-        },
-        bemerkung: Some(string_of(values, FieldKind::Bemerkung)).filter(|text| !text.is_empty()),
+        leistung,
+        betrag_cent,
+        bemerkung,
         dedupe_key: values.dedupe_key.clone(),
         source: provenance(file, sheet, row.row, stamp),
     });
+    created.instandhaltung = true;
 
     Ok(Some(created))
 }
@@ -469,7 +511,11 @@ fn commit_radsatz(
     sender: Option<&str>,
     created: &mut Created,
 ) -> Result<Option<String>, String> {
-    let RadsatzCells { nummer: raw, welle } = cells;
+    let RadsatzCells {
+        nummer: raw,
+        welle,
+        system_id,
+    } = cells;
     if matches!(resolution, Resolution::Missing) {
         return Ok(None);
     }
@@ -482,7 +528,7 @@ fn commit_radsatz(
             if !key.is_empty() {
                 tx.learn_radsatz_alias(&id, &key, sender);
             }
-            tx.fill_wellennummer(&id, welle);
+            tx.fill_identifiers(&id, welle, system_id);
             Ok(Some(id))
         }
         Slot::Create => {
@@ -496,6 +542,7 @@ fn commit_radsatz(
                 match_key: key.clone(),
                 aliases: Vec::new(),
                 wellennummer: cleaned(welle),
+                system_id: cleaned(system_id),
                 bauart: None,
                 bemerkung: None,
                 created_at: stamp.to_string(),
@@ -954,6 +1001,26 @@ mod radsatz_tests {
         ])
     }
 
+    // A fitting AND work done in the same row: only work makes an event.
+    fn worked_grid() -> Grid {
+        Grid::from_text(
+            "Tabelle1",
+            &[
+                &["Wagennummer", "Radsatznummer", "Eingebaut am", "Leistung"],
+                &["21 81 2471 217-3", "RS-4711", "01.03.2025", "Radsatztausch"],
+            ],
+        )
+    }
+
+    fn worked_plan() -> super::super::model::ImportPlan {
+        radsatz_plan(&[
+            (1, "Wagennummer", FieldKind::Wagennummer),
+            (2, "Radsatznummer", FieldKind::Radsatznummer),
+            (3, "Eingebaut am", FieldKind::EingebautAm),
+            (4, "Leistung", FieldKind::Leistung),
+        ])
+    }
+
     #[test]
     fn a_radsatz_is_created_and_fitted_to_its_wagen() {
         let (_f, mut db) = fresh("radsatz-fit");
@@ -990,7 +1057,7 @@ mod radsatz_tests {
     #[test]
     fn the_event_records_which_radsatz_the_work_was_about() {
         let (_f, mut db) = fresh("radsatz-event");
-        let staged = run(&fitted_grid(), &fitted_plan(), &db);
+        let staged = run(&worked_grid(), &worked_plan(), &db);
         commit(
             &mut db,
             &staged.wire,
@@ -1082,6 +1149,145 @@ mod radsatz_tests {
         assert_eq!(db.einbauten().len(), 0);
     }
 
+    // The converse: a row that only records a FITTING is not work done. A real
+    // monitoring export has no Datum, Leistung or Betrag at all, and used to
+    // leave one empty Instandhaltung per wagen beside its Einbauten.
+    #[test]
+    fn a_fitting_alone_writes_no_instandhaltung() {
+        let (_f, mut db) = fresh("radsatz-noevent");
+        let staged = run(&fitted_grid(), &fitted_plan(), &db);
+        let result = commit(
+            &mut db,
+            &staged.wire,
+            &staged.values,
+            &decisions(vec![create_all(2)]),
+        )
+        .unwrap();
+
+        assert_eq!(result.einbauten, 1);
+        assert_eq!(result.instandhaltungen, 0);
+        assert_eq!(db.instandhaltungen_page(None, 0, 10).0.len(), 0);
+    }
+
+    // A snapshot is sent again with nothing changed. It used to close the open
+    // fitting on its own install date and open an identical one — a zero-length
+    // Einbau per radsatz per re-send.
+    #[test]
+    fn re_sending_an_unchanged_fitting_changes_nothing() {
+        let (_f, mut db) = fresh("radsatz-resend");
+        for _ in 0..2 {
+            let staged = run(&fitted_grid(), &fitted_plan(), &db);
+            commit(
+                &mut db,
+                &staged.wire,
+                &staged.values,
+                &CommitDecisions {
+                    staging_id: staged.wire.id.clone(),
+                    rows: vec![create_all(2)],
+                    save_template_as: None,
+                },
+            )
+            .unwrap();
+        }
+
+        let einbauten = db.einbauten();
+        assert_eq!(einbauten.len(), 1, "{einbauten:?}");
+        assert!(einbauten[0].is_open());
+    }
+
+    // The next snapshot knows the removal date of a fitting already stored: that
+    // closes the stored one rather than adding a second record of it.
+    #[test]
+    fn a_removal_date_for_a_stored_fitting_closes_it_in_place() {
+        let (_f, mut db) = fresh("radsatz-close");
+        let first = run(&fitted_grid(), &fitted_plan(), &db);
+        commit(
+            &mut db,
+            &first.wire,
+            &first.values,
+            &decisions(vec![create_all(2)]),
+        )
+        .unwrap();
+
+        let removed = Grid::from_text(
+            "Tabelle1",
+            &[
+                &[
+                    "Wagennummer",
+                    "Radsatznummer",
+                    "Eingebaut am",
+                    "Ausgebaut am",
+                ],
+                &["21 81 2471 217-3", "RS-4711", "01.03.2025", "15.09.2025"],
+            ],
+        );
+        let plan = radsatz_plan(&[
+            (1, "Wagennummer", FieldKind::Wagennummer),
+            (2, "Radsatznummer", FieldKind::Radsatznummer),
+            (3, "Eingebaut am", FieldKind::EingebautAm),
+            (4, "Ausgebaut am", FieldKind::AusgebautAm),
+        ]);
+        let second = run(&removed, &plan, &db);
+        commit(
+            &mut db,
+            &second.wire,
+            &second.values,
+            &CommitDecisions {
+                staging_id: second.wire.id.clone(),
+                rows: vec![create_all(2)],
+                save_template_as: None,
+            },
+        )
+        .unwrap();
+
+        let einbauten = db.einbauten();
+        assert_eq!(einbauten.len(), 1, "{einbauten:?}");
+        assert_eq!(einbauten[0].ausgebaut_am.as_deref(), Some("2025-09-15"));
+        assert_eq!(
+            einbauten[0].position.as_deref(),
+            Some("1"),
+            "the stored record kept"
+        );
+    }
+
+    // The sender's own id for a radsatz is stored and, like the Wellennummer,
+    // only ever fills a blank: a second sender's id does not overwrite it.
+    #[test]
+    fn the_system_id_is_stored_and_only_fills_a_blank() {
+        let (_f, mut db) = fresh("radsatz-systemid");
+        let plan = radsatz_plan(&[
+            (1, "Wagennr.", FieldKind::Wagennummer),
+            (2, "RadsatzID", FieldKind::RadsatzSystemId),
+            (3, "Radsatznummer", FieldKind::Radsatznummer),
+            (4, "Leistung", FieldKind::Leistung),
+        ]);
+        for (system_id, leistung) in [("180002238", "Profil gedreht"), ("999", "Lager getauscht")] {
+            let grid = Grid::from_text(
+                "Radsatzmonitoring",
+                &[
+                    &["Wagennr.", "RadsatzID", "Radsatznummer", "Leistung"],
+                    &["21 81 2471 217-3", system_id, "AL240720", leistung],
+                ],
+            );
+            let staged = run(&grid, &plan, &db);
+            commit(
+                &mut db,
+                &staged.wire,
+                &staged.values,
+                &CommitDecisions {
+                    staging_id: staged.wire.id.clone(),
+                    rows: vec![create_all(2)],
+                    save_template_as: None,
+                },
+            )
+            .unwrap();
+        }
+
+        let radsaetze = db.radsaetze();
+        assert_eq!(radsaetze.len(), 1);
+        assert_eq!(radsaetze[0].system_id.as_deref(), Some("180002238"));
+    }
+
     /// The same radsatz written four ways is one radsatz.
     #[test]
     fn a_radsatz_number_has_one_stored_form() {
@@ -1118,7 +1324,7 @@ mod radsatz_tests {
     #[test]
     fn removing_a_radsatz_takes_its_history_with_it() {
         let (_f, mut db) = fresh("radsatz-remove");
-        let staged = run(&fitted_grid(), &fitted_plan(), &db);
+        let staged = run(&worked_grid(), &worked_plan(), &db);
         commit(
             &mut db,
             &staged.wire,

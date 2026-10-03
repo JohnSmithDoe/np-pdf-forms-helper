@@ -137,6 +137,7 @@ export interface FakeRadsatz {
   matchKey: string;
   aliases: { matchKey: string; partnerId?: string }[];
   wellennummer?: string;
+  systemId?: string;
   bauart?: string;
   createdAt: string;
 }

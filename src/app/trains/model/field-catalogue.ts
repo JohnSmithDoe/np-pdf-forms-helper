@@ -145,6 +145,13 @@ export const FIELD_CATALOGUE: FieldDescriptor[] = [
     aliases: ['wellennummer', 'radsatzwelle', 'achsnummer', 'wellen nr'],
   },
   {
+    field: 'radsatzSystemId',
+    label: 'Radsatz-ID',
+    group: 'radsatz',
+    required: false,
+    aliases: ['radsatzid', 'radsatz id', 'radsatz-id'],
+  },
+  {
     field: 'einbauposition',
     label: 'Einbauposition',
     group: 'radsatz',

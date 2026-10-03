@@ -398,3 +398,28 @@ its later invoice. Modelling it means a mutable record (status, intake, exit) th
 UPDATES rather than appends, and that an Instandhaltung or an invoice line points at. Not built until
 a real invoice file shows that the join actually holds: designing the link from one side of it is
 guessing.
+
+## Snapshots of fitted radsaetze (appended 2026-10-03)
+
+**The first real wheelset-monitoring export broke three assumptions at once.** It lists every
+radsatz CURRENTLY FITTED, one row each, four per wagen, with an install date and no Datum,
+Leistung or Betrag — and it is regenerated and sent again. All three fixes are pinned by tests.
+
+- **The dedupe key now carries the radsatz number and both fitting dates.** It was wagen, Datum,
+  Werkstatt, Leistung, Betrag — so four fittings on one wagen hashed alike and three of every four
+  staged as duplicates. Changing the key's composition would normally orphan every stored key;
+  there is no deployed store yet, so nothing needed migrating.
+- **Only work is an event.** An Instandhaltung is written when the row has a Datum, Leistung,
+  Betrag or Bemerkung. Every row used to write one, so a fitting-only file left an empty event per
+  wagen. This is the converse of the existing rule that naming a radsatz records no fitting.
+- **A fitting already stored is not recorded again.** Same radsatz, same wagen, same install
+  date is the same Einbau: identical, it is left alone; with a removal date it lacked, it is
+  closed in place. Re-sending used to close the open fitting on its own install date and open a
+  copy — a zero-length Einbau per radsatz per re-send.
+
+**The sender's own radsatz id is a new field, `RadsatzSystemId` → `Radsatz.systemId`.** The export
+carries one per row, unique — a better identifier than the Radsatznummer, but only inside that one
+sender's system. It is stored and fills a blank exactly like the Wellennummer, and decides nothing:
+matching on it would need it scoped by sender the way aliases are, and one file from one sender is
+not the evidence to design that on. It is searchable in the Radsätze list, not shown. Named
+`systemId` because `radsatzId` is already the foreign key on `Einbau` and `Instandhaltung`.

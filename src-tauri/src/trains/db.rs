@@ -172,6 +172,19 @@ impl TrainsDb {
         self.einbauten.values().cloned().collect()
     }
 
+    pub fn einbau_of(
+        &self,
+        radsatz_id: &str,
+        wagen_id: &str,
+        eingebaut_am: Option<&str>,
+    ) -> Option<&Einbau> {
+        self.einbauten.values().find(|einbau| {
+            einbau.radsatz_id == radsatz_id
+                && einbau.wagen_id == wagen_id
+                && einbau.eingebaut_am.as_deref() == eingebaut_am
+        })
+    }
+
     pub fn radsatz(&self, id: &str) -> Option<&Radsatz> {
         self.radsaetze.get(id)
     }
@@ -465,21 +478,37 @@ impl Tx<'_> {
     }
 
     /// Kept, never matched on: the EN 13261 stamp on the axle is the only
-    /// near-global identifier a radsatz has, but no rule may lean on it until a
-    /// real sender file proves its format. Only fills a blank, so one sloppy file
-    /// cannot overwrite a good value.
-    pub fn fill_wellennummer(&mut self, radsatz_id: &str, welle: Option<&str>) {
-        let Some(welle) = welle.map(str::trim).filter(|value| !value.is_empty()) else {
-            return;
+    /// near-global identifier a radsatz has, and the system id is unique only in
+    /// ONE sender's system — no rule may lean on either until real files prove
+    /// it. Only fills a blank, so one sloppy file cannot overwrite a good value.
+    pub fn fill_identifiers(
+        &mut self,
+        radsatz_id: &str,
+        welle: Option<&str>,
+        system_id: Option<&str>,
+    ) {
+        let filled = |value: Option<&str>| {
+            value
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
         };
+        let (welle, system_id) = (filled(welle), filled(system_id));
         let Some(radsatz) = self.db.radsaetze.get(radsatz_id) else {
             return;
         };
-        if radsatz.wellennummer.is_some() {
+        let welle = welle.filter(|_| radsatz.wellennummer.is_none());
+        let system_id = system_id.filter(|_| radsatz.system_id.is_none());
+        if welle.is_none() && system_id.is_none() {
             return;
         }
         if let Some(radsatz) = self.radsaetze_mut().get_mut(radsatz_id) {
-            radsatz.wellennummer = Some(welle.to_string());
+            if welle.is_some() {
+                radsatz.wellennummer = welle;
+            }
+            if system_id.is_some() {
+                radsatz.system_id = system_id;
+            }
         }
     }
 

@@ -121,7 +121,7 @@ Das ist kein Beiwerk — es ist die Begründung für fast jede Entwurfsentscheid
 | Fachbegriff | Typ | Felder |
 | --- | --- | --- |
 | Wagen (Güterwagen) | `Wagen` | `nummer`, `halterId`, `eigentuemerId`, `bauart`, `bemerkung` |
-| Radsatz | `Radsatz` | `nummer`, `matchKey`, `aliases`, `wellennummer`, `bauart`, `bemerkung` |
+| Radsatz | `Radsatz` | `nummer`, `matchKey`, `aliases`, `wellennummer`, `systemId`, `bauart`, `bemerkung` |
 | Einbau (eines Radsatzes in einen Wagen) | `Einbau` | `radsatzId`, `wagenId`, `position`, `eingebautAm`, `ausgebautAm` |
 | Instandhaltung | `Instandhaltung` | `wagenId`, `werkstattId`, `radsatzId`, `datum`, `leistung`, `betragCent`, `bemerkung` |
 | Partner (Halter, Eigentümer, Werkstatt) | `Partner` | `rollen`, `name`, `bemerkung` |
@@ -148,6 +148,7 @@ Das ist kein Beiwerk — es ist die Begründung für fast jede Entwurfsentscheid
 | Bemerkung | `bemerkung` |
 | Radsatznummer | `radsatznummer` |
 | Radsatzwellennummer | `wellennummer` |
+| Radsatz-ID | `radsatzSystemId` |
 | Einbauposition | `einbauposition` |
 | Eingebaut am | `eingebautAm` |
 | Ausgebaut am | `ausgebautAm` |
@@ -253,6 +254,13 @@ Werkstatt. Ist er unbekannt, entscheidet eine blanke Nummer nie.
 
 Die **Radsatzwellennummer** wird erfasst, weil sie der einzige annähernd globale Bezeichner ist, den
 ein Radsatz hat — sie **entscheidet aber nichts**, solange kein reales Absenderformat vorliegt.
+
+Die **Radsatz-ID** (`systemId`) ist die Nummer, unter der das System **eines Absenders** den Radsatz
+führt — in einem realen Radsatzmonitoring eine neunstellige Zahl, eindeutig je Zeile. Eindeutig ist
+sie nur **in diesem einen System**; ein zweiter Absender vergibt seine eigene. Deshalb wird sie wie
+die Wellennummer **gespeichert, füllt nur eine Lücke und entscheidet nichts**. Im Code heißt sie
+`systemId` und nicht `radsatzId`, weil `radsatzId` schon der Verweis von `Einbau` und
+`Instandhaltung` auf den Radsatz ist.
 
 ### Einbauposition
 

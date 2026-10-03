@@ -249,6 +249,7 @@ mod tests {
             match_key: radsatz::match_key(nummer),
             aliases: Vec::new(),
             wellennummer: None,
+            system_id: None,
             bauart: None,
             bemerkung: None,
             created_at: "2026-08-16".into(),

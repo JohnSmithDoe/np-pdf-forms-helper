@@ -171,6 +171,8 @@ pub struct Radsatz {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wellennummer: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bauart: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bemerkung: Option<String>,
@@ -224,6 +226,7 @@ pub enum FieldKind {
     Bemerkung,
     Radsatznummer,
     Wellennummer,
+    RadsatzSystemId,
     Einbauposition,
     EingebautAm,
     AusgebautAm,
@@ -243,6 +246,7 @@ impl FieldKind {
             FieldKind::Bemerkung => "Bemerkung",
             FieldKind::Radsatznummer => "Radsatznummer",
             FieldKind::Wellennummer => "Radsatzwellennummer",
+            FieldKind::RadsatzSystemId => "Radsatz-ID",
             FieldKind::Einbauposition => "Einbauposition",
             FieldKind::EingebautAm => "Eingebaut am",
             FieldKind::AusgebautAm => "Ausgebaut am",

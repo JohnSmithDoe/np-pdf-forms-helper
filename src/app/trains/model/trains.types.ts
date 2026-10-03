@@ -51,6 +51,7 @@ export type FieldKind =
   | 'bemerkung'
   | 'radsatznummer'
   | 'wellennummer'
+  | 'radsatzSystemId'
   | 'einbauposition'
   | 'eingebautAm'
   | 'ausgebautAm'
@@ -95,6 +96,7 @@ export interface Radsatz {
   matchKey: string;
   aliases: RadsatzAlias[];
   wellennummer?: string;
+  systemId?: string;
   bauart?: string;
   bemerkung?: string;
   createdAt: string;

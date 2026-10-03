@@ -220,6 +220,7 @@ const radsaetze: FakeRadsatz[] = [
     matchKey: 'rs20240815',
     aliases: [{ matchKey: 'rs 815', partnerId: 'p-werk-schienenbein' }],
     wellennummer: 'W-88431',
+    systemId: '180002238',
     bauart: 'BA 004',
     createdAt: '2026-02-02',
   },
