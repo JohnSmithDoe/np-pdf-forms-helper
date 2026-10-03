@@ -11,7 +11,13 @@
 >
   @if (facade.cleaning(); as report) {
     <ion-list lines="none">
-      <ion-item>
+      <ion-item
+        button
+        [detail]="false"
+        (click)="onOpenOriginal()"
+        [attr.aria-label]="'Original öffnen: ' + report.file"
+        data-testid="clean-open-original"
+      >
         <ion-icon slot="start" name="document-outline" aria-hidden="true" />
         <ion-label class="ion-text-wrap">
           <h2 data-testid="clean-file">{{ report.file }}</h2>

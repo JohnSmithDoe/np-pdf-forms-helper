@@ -109,6 +109,7 @@ export class IntakeFacade {
   readonly cleaning = this.#store.cleaning;
   readonly decisions = this.#store.decisions;
   readonly cleanedReport = this.#store.cleanedReport;
+  readonly cleanedFile = this.#store.cleanedFile;
   readonly commitReport = this.#store.commitReport;
   readonly staging = this.#trains.staging;
 
@@ -258,7 +259,7 @@ export class IntakeFacade {
     this.#imports.reset();
     this.#imports.seedChoices(data.staging?.rows ?? []);
     this.#store.setCleaning(undefined);
-    this.#store.setCleanedReport(data.message ?? null);
+    this.#store.setCleaned(data.message ?? null, data.cleanedFile);
   }
 
   async discardClean(): Promise<void> {
@@ -286,6 +287,16 @@ export class IntakeFacade {
 
   finish(): void {
     this.#store.endCurrent();
+  }
+
+  async openOriginal(): Promise<void> {
+    const file = this.cleaning()?.file;
+    if (file) await this.#backend.openFile(file);
+  }
+
+  async openCleaned(): Promise<void> {
+    const file = this.cleanedFile();
+    if (file) await this.#backend.openFile(file);
   }
 
   async openFolder(folder: string): Promise<void> {

@@ -18,6 +18,9 @@
 // emission into a command — `smart-ui` is a strict leaf and four of them could
 // not be composed into one review.
 //
+// The original's line opens it in its own application: the review is a
+// comparison with the original, and that line is where it is named.
+//
 // „Verwerfen“ asks first: by this point the user may have corrected twenty
 // cells, and the backend keeps none of it once the cleaning is discarded.
 // ────────────────────────────────────────────────────────────────
@@ -74,6 +77,10 @@ export class GuidedCleanPage {
 
   constructor() {
     addIcons({ documentOutline });
+  }
+
+  protected async onOpenOriginal(): Promise<void> {
+    await this.#reports.run(() => this.facade.openOriginal());
   }
 
   protected async onCorrect({

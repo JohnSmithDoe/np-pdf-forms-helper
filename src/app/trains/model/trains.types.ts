@@ -388,5 +388,6 @@ export interface TrainsData {
   instandhaltungPage?: InstandhaltungPage;
   scan?: ScanFile[];
   cleaning?: CleanReport;
+  cleanedFile?: string;
   message?: ClientReport;
 }

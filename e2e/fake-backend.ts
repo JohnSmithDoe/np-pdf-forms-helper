@@ -672,6 +672,7 @@ export function install(seed: FakeSeed): void {
       return {
         ...(state.staging ? { staging: copy(state.staging) } : {}),
         counts: counts(),
+        cleanedFile: 'data/out/bereinigt-2026-10-03/bereinigt.xlsx',
         message: report(
           'Bereinigte Datei wurde geschrieben',
           [

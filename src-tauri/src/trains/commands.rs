@@ -232,7 +232,7 @@ pub fn write_clean(decisions: CleanDecisions, state: State<'_, AppState>) -> App
     let staged = stage_source(&written, source, Vec::new(), cleaned.confirmed, &state)?;
     *state.cleaning() = None;
 
-    Ok(staged.report(ClientReport {
+    Ok(staged.cleaned_file(&written).report(ClientReport {
         headline: "Bereinigte Datei wurde geschrieben".into(),
         messages: vec![
             format!("Datei wurde erstellt: {}", crate::doc::file_name(&written)),

@@ -19,7 +19,9 @@ import {
   inject,
 } from '@angular/core';
 import { Router } from '@angular/router';
-import { IonButton } from '@ionic/angular/standalone';
+import { IonButton, IonIcon } from '@ionic/angular/standalone';
+import { addIcons } from 'ionicons';
+import { openOutline } from 'ionicons/icons';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { ReportViewComponent } from '../../../@shared/ui/report-view/report-view.component';
@@ -34,6 +36,7 @@ import { IntakeFacade, type IntakeStep } from '../../data';
   imports: [
     BusyOverlayComponent,
     IonButton,
+    IonIcon,
     ReportViewComponent,
     WizardShellComponent,
   ],
@@ -44,6 +47,10 @@ export class GuidedResultPage {
   readonly #router = inject(Router);
 
   protected readonly hasNext = computed(() => this.facade.queue().length > 0);
+
+  constructor() {
+    addIcons({ openOutline });
+  }
 
   protected async onNext(): Promise<void> {
     if (!this.hasNext()) {
@@ -67,6 +74,10 @@ export class GuidedResultPage {
   protected async onDone(): Promise<void> {
     this.facade.finish();
     await this.#router.navigate(['/trains/import']);
+  }
+
+  protected onOpenCleaned(): void {
+    void this.#reports.run(() => this.facade.openCleaned());
   }
 
   protected onOpenFolder(folder: string): void {

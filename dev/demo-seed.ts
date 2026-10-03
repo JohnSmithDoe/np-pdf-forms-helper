@@ -509,7 +509,7 @@ export function demoScan(): FakeScanFile[] {
 
 export function demoClean(): FakeCleanReport {
   return {
-    file: 'Schienenbein Mai 2026.xlsx',
+    file: 'C:\\Eingang\\Schienenbein Mai 2026.xlsx',
     sheet: 'Mai',
     templateId: 'tpl-bremen',
     templateName: 'Schienenbein Waggonwerk — Monatsliste',

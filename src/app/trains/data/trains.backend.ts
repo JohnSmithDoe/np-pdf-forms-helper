@@ -49,6 +49,7 @@ export type TrainsCommand =
   | { command: 'reset_trains'; payload: Record<string, never> }
   | { command: 'create_trains_export'; payload: Record<string, never> }
   | { command: 'open_output_folder'; payload: { folder: string } }
+  | { command: 'open_file'; payload: { filename: string } }
   | { command: 'pick_import_folder'; payload: Record<string, never> }
   | { command: 'pick_import_files'; payload: Record<string, never> }
   | { command: 'scan_import_paths'; payload: { paths: string[] } }
@@ -192,8 +193,12 @@ export class TrainsBackend {
 
   // The opener is the filler's command and is deliberately reused: opening a
   // folder is not a trains concept, and a second command would be the same
-  // `opener` plugin call under a different name.
+  // `opener` plugin call under a different name. `open_file` likewise.
   openFolder(folder: string): Promise<TrainsData> {
     return this.#call({ command: 'open_output_folder', payload: { folder } });
+  }
+
+  openFile(filename: string): Promise<TrainsData> {
+    return this.#call({ command: 'open_file', payload: { filename } });
   }
 }

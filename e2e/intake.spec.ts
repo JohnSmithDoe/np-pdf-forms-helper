@@ -19,6 +19,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
   installFakeBackend,
+  recordedCalls,
   type FakeCleanReport,
   type FakeScanFile,
   type FakeStaging,
@@ -82,7 +83,7 @@ const UNSUPPORTED: FakeScanFile = {
 };
 
 const CLEAN: FakeCleanReport = {
-  file: 'auftraege.xlsx',
+  file: '/eingang/auftraege.xlsx',
   sheet: 'Tabelle1',
   templateId: 'builtin:werkstattauftraege',
   templateName: 'Werkstattaufträge',
@@ -221,7 +222,18 @@ test.describe('Geführter Import', () => {
 
     await expect(page).toHaveURL(/#\/trains\/import\/guided\/clean$/);
     const clean = step(page, 'guided-clean');
-    await expect(clean.getByTestId('clean-file')).toHaveText('auftraege.xlsx');
+    // The original's line opens it in its own application.
+    const original = clean.getByTestId('clean-open-original');
+    await expect(original).toContainText('auftraege.xlsx');
+    await original.click();
+    await expect
+      .poll(async () =>
+        (await recordedCalls(page)).find((call) => call.command === 'open_file')
+      )
+      .toEqual({
+        command: 'open_file',
+        args: { filename: '/eingang/auftraege.xlsx' },
+      });
     await expect(clean.getByTestId('clean-summary-fehler')).toContainText(
       '1 Fehler offen'
     );

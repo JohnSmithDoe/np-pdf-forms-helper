@@ -662,6 +662,8 @@ pub struct TrainsData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cleaning: Option<CleanReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleaned_file: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<crate::model::ClientReport>,
 }
 
@@ -712,6 +714,11 @@ impl TrainsData {
 
     pub fn cleaning(mut self, cleaning: CleanReport) -> Self {
         self.cleaning = Some(cleaning);
+        self
+    }
+
+    pub fn cleaned_file(mut self, path: &std::path::Path) -> Self {
+        self.cleaned_file = Some(path.to_string_lossy().into_owned());
         self
     }
 

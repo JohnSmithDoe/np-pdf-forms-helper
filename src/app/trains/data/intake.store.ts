@@ -53,6 +53,7 @@ type IntakeState = {
   cleaning: CleanReport | undefined;
   decisions: CleanDecisions;
   cleanedReport: ClientReport | null;
+  cleanedFile: string | undefined;
   commitReport: ClientReport | null;
 };
 
@@ -66,6 +67,7 @@ const initial: IntakeState = {
   cleaning: undefined,
   decisions: NO_DECISIONS,
   cleanedReport: null,
+  cleanedFile: undefined,
   commitReport: null,
 };
 
@@ -108,6 +110,7 @@ export const IntakeStore = signalStore(
         cleaning,
         decisions: NO_DECISIONS,
         cleanedReport: null,
+        cleanedFile: undefined,
         commitReport: null,
       });
     },
@@ -120,8 +123,11 @@ export const IntakeStore = signalStore(
       patchState(store, { decisions });
     },
 
-    setCleanedReport(cleanedReport: ClientReport | null): void {
-      patchState(store, { cleanedReport });
+    setCleaned(
+      cleanedReport: ClientReport | null,
+      cleanedFile: string | undefined
+    ): void {
+      patchState(store, { cleanedReport, cleanedFile });
     },
 
     setCommitReport(commitReport: ClientReport | null): void {
@@ -134,6 +140,7 @@ export const IntakeStore = signalStore(
         cleaning: undefined,
         decisions: NO_DECISIONS,
         cleanedReport: null,
+        cleanedFile: undefined,
         commitReport: null,
       });
     },
