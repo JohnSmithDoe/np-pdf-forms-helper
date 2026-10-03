@@ -28,6 +28,11 @@
 //     the caller's `order` is consulted only for `/` and `-`
 //   • a two-digit year maps 00–79 to 20xx and 80–99 to 19xx, and ALWAYS carries
 //     a warning: the file did not say, and a wrong century is invisible
+//   • a month NAME (`17. Juli 2023`, `09. Sept. 2024`) is day-first too, and
+//     only in German, Austrian spellings included. The senders write German; an
+//     English table would put `Mai` and `May` side by side to buy nothing. It is
+//     the fallback when the numeric split fails, so a numeric date never pays
+//     for the lowercase allocation
 //
 // `finish` always takes `(year, month, day)`; both callers reorder on the way
 // in, so nothing there has to infer which number is which. `to_iso` is the wire
@@ -135,7 +140,11 @@ pub fn parse_text(raw: &str, order: DateOrder) -> Parse {
     }
 
     let Some((first, second, third, separator)) = split(&trimmed) else {
-        return Err(invalid(&trimmed));
+        let Some((day, month, year)) = with_month_name(&trimmed) else {
+            return Err(invalid(&trimmed));
+        };
+        let (year, warning) = full_year(&year, &trimmed)?;
+        return finish(year, month, day.value, &trimmed, warning);
     };
 
     if first.len == 4 {
@@ -149,26 +158,77 @@ pub fn parse_text(raw: &str, order: DateOrder) -> Parse {
         (second, first)
     };
 
-    let (year, warning) = match third.len {
-        4 => (third.value, None),
-        1 | 2 => {
-            let year = if third.value <= 79 {
-                2000 + third.value
-            } else {
-                1900 + third.value
-            };
-            (
-                year,
-                Some(format!(
-                    "Zweistellige Jahreszahl „{}“ als {year} gelesen.",
-                    third.raw
-                )),
-            )
-        }
-        _ => return Err(invalid(&trimmed)),
-    };
-
+    let (year, warning) = full_year(&third, &trimmed)?;
     finish(year, month.value, day.value, &trimmed, warning)
+}
+
+fn full_year(year: &Part, raw: &str) -> Result<(i32, Option<String>), String> {
+    match year.len {
+        4 => Ok((year.value, None)),
+        1 | 2 => {
+            let full = if year.value <= 79 {
+                2000 + year.value
+            } else {
+                1900 + year.value
+            };
+            Ok((
+                full,
+                Some(format!(
+                    "Zweistellige Jahreszahl „{}“ als {full} gelesen.",
+                    year.raw
+                )),
+            ))
+        }
+        _ => Err(invalid(raw)),
+    }
+}
+
+const MONTHS: [(&str, i32); 28] = [
+    ("jan", 1),
+    ("januar", 1),
+    ("jän", 1),
+    ("jänner", 1),
+    ("feb", 2),
+    ("februar", 2),
+    ("mär", 3),
+    ("märz", 3),
+    ("maerz", 3),
+    ("mrz", 3),
+    ("apr", 4),
+    ("april", 4),
+    ("mai", 5),
+    ("jun", 6),
+    ("juni", 6),
+    ("jul", 7),
+    ("juli", 7),
+    ("aug", 8),
+    ("august", 8),
+    ("sep", 9),
+    ("sept", 9),
+    ("september", 9),
+    ("okt", 10),
+    ("oktober", 10),
+    ("nov", 11),
+    ("november", 11),
+    ("dez", 12),
+    ("dezember", 12),
+];
+
+fn with_month_name(raw: &str) -> Option<(Part, i32, Part)> {
+    let mut words = raw
+        .split(|c: char| c == '.' || text::is_space(c))
+        .filter(|word| !word.is_empty());
+    let day = part(words.next()?)?;
+    let name = words.next()?.to_lowercase();
+    let month = MONTHS
+        .iter()
+        .find(|(spelling, _)| *spelling == name)
+        .map(|(_, month)| *month)?;
+    let year = part(words.next()?)?;
+    if words.next().is_some() {
+        return None;
+    }
+    Some((day, month, year))
 }
 
 fn finish(year: i32, month: i32, day: i32, raw: &str, warning: Option<String>) -> Parse {
@@ -334,6 +394,49 @@ mod tests {
 
         let parsed = parse_text("31.12.99", DayFirst).unwrap();
         assert_eq!(parsed.value, Value::Date(Date::new(1999, 12, 31).unwrap()));
+    }
+
+    // Both spellings straight out of a real fleet export: full names for the
+    // short months, abbreviations with a dot for the rest.
+    #[test]
+    fn reads_a_written_out_german_month() {
+        assert_eq!(
+            date("17. Juli 2023", MonthFirst),
+            Date::new(2023, 7, 17).unwrap()
+        );
+        assert_eq!(
+            date("09. Sept. 2024", DayFirst),
+            Date::new(2024, 9, 9).unwrap()
+        );
+        assert_eq!(
+            date("3. März 2025", DayFirst),
+            Date::new(2025, 3, 3).unwrap()
+        );
+        assert_eq!(
+            date("1 DEZEMBER 2025", DayFirst),
+            Date::new(2025, 12, 1).unwrap()
+        );
+        assert_eq!(
+            date("2. Jänner 2026", DayFirst),
+            Date::new(2026, 1, 2).unwrap()
+        );
+    }
+
+    #[test]
+    fn a_month_name_keeps_the_two_digit_year_warning_and_the_day_check() {
+        let parsed = parse_text("17. Juli 23", DayFirst).unwrap();
+        assert_eq!(parsed.value, Value::Date(Date::new(2023, 7, 17).unwrap()));
+        assert!(parsed.warning.is_some());
+
+        assert!(parse_text("31. Juni 2025", DayFirst).is_err());
+    }
+
+    // English is deliberately not read — `May` is an error, not a fifth month.
+    #[test]
+    fn an_unknown_month_name_is_not_a_date() {
+        assert!(parse_text("17. May 2023", DayFirst).is_err());
+        assert!(parse_text("17. Juli", DayFirst).is_err());
+        assert!(parse_text("17. Juli 2023 extra", DayFirst).is_err());
     }
 
     #[test]

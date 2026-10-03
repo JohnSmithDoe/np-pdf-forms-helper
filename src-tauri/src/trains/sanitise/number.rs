@@ -18,7 +18,8 @@
 //   • `(1.234,00)` is accounting's negative and `1234-` is some exports'; both
 //     are stripped before the digit walk so it only ever sees digits
 //   • grouping marks carry no value — including every space character and the
-//     Swiss apostrophe
+//     Swiss apostrophe in all three spellings: `'`, the typographic `’`, and the
+//     PRIME `′` a real fleet export used for every km reading
 //   • a SECOND decimal separator means this is not a number in this style, and
 //     saying so beats inventing one of the two possible readings
 //
@@ -35,6 +36,7 @@ use super::{Parse, Parsed, Value};
 use crate::trains::model::DecimalStyle;
 
 const CURRENCY: [&str; 5] = ["€", "EUR", "CHF", "$", "USD"];
+const APOSTROPHES: [char; 3] = ['\'', '\u{2019}', '\u{2032}'];
 
 impl DecimalStyle {
     fn decimal(self) -> char {
@@ -88,7 +90,10 @@ fn to_f64(raw: &str, style: DecimalStyle) -> Result<Option<f64>, String> {
             }
             seen_decimal = true;
             digits.push('.');
-        } else if character == style.grouping() || text::is_space(character) || character == '\'' {
+        } else if character == style.grouping()
+            || text::is_space(character)
+            || APOSTROPHES.contains(&character)
+        {
             continue;
         } else {
             return Err(invalid(&trimmed));
@@ -175,6 +180,16 @@ mod tests {
         assert_eq!(number("1\u{00a0}234,56", German), 1234.56);
         assert_eq!(number("1\u{202f}234,56", German), 1234.56);
         assert_eq!(number("1'234.56", English), 1234.56);
+    }
+
+    // `′` is U+2032 PRIME, not an apostrophe at all — but it is what a real
+    // export wrote 283 times, and under either style it can only be grouping.
+    #[test]
+    fn accepts_every_apostrophe_spelling_as_grouping() {
+        assert_eq!(number("67\u{2032}543", German), 67_543.0);
+        assert_eq!(number("67\u{2032}543", English), 67_543.0);
+        assert_eq!(number("1\u{2019}234.56", English), 1234.56);
+        assert_eq!(number("1\u{2032}234\u{2032}567,5", German), 1_234_567.5);
     }
 
     #[test]

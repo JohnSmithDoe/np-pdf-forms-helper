@@ -17,6 +17,13 @@
 // bound what is left: past those the file is not a hand-kept maintenance list
 // any more, and saying so beats allocating for it.
 //
+// One shape of "too big" is not big at all: a formula filled down to row
+// 1,048,576 and pasted as values leaves a `0` in every row — a real sheet held
+// 175 rows of data under a million of those. `check_rows` names the row where
+// the zeros start instead of telling the user to split the file. It does NOT
+// trim them: `0` is a legitimate cell value, and which rows to drop is the
+// sender's decision, not this reader's.
+//
 // A `RawCell` carries all three forms because each answers a different question.
 // `text` is `value()` — the raw stringification, NOT `formatted_value()`, which
 // does not apply the number format and answers `45000` for a formatted date.
@@ -205,23 +212,22 @@ pub fn from_worksheet(worksheet: &umya_spreadsheet::Worksheet) -> AppResult<Grid
 
     let mut rows = 0_u32;
     let mut cols = 0_u32;
+    let mut last_not_zero = 0_u32;
     for cell in &cells {
-        if cell.value().trim().is_empty() {
+        let value = cell.value();
+        let value = value.trim();
+        if value.is_empty() {
             continue;
         }
-        rows = rows.max(cell.coordinate().row_num());
+        let row = cell.coordinate().row_num();
+        rows = rows.max(row);
         cols = cols.max(cell.coordinate().col_num());
+        if value != "0" {
+            last_not_zero = last_not_zero.max(row);
+        }
     }
 
-    if rows > MAX_ROWS {
-        return Err(AppError::Report(vec![
-            format!(
-                "Die Arbeitsmappe „{}“ enthält {rows} Zeilen.",
-                worksheet.name()
-            ),
-            format!("Verarbeitet werden höchstens {MAX_ROWS}. Bitte die Datei aufteilen."),
-        ]));
-    }
+    check_rows(worksheet.name(), rows, last_not_zero)?;
     cols = cols.min(MAX_COLS);
 
     let mut grid = vec![RawCell::default(); rows as usize * cols as usize];
@@ -247,6 +253,26 @@ pub fn from_worksheet(worksheet: &umya_spreadsheet::Worksheet) -> AppResult<Grid
         cols,
         cells: grid,
     })
+}
+
+fn check_rows(sheet: &str, rows: u32, last_not_zero: u32) -> AppResult<()> {
+    if rows <= MAX_ROWS {
+        return Ok(());
+    }
+    if last_not_zero <= MAX_ROWS {
+        let first_zero = last_not_zero + 1;
+        return Err(AppError::Report(vec![
+            format!(
+                "Die Arbeitsmappe „{sheet}“ reicht bis Zeile {rows}, aber ab Zeile {first_zero} steht nur noch „0“."
+            ),
+            "Vermutlich wurde eine Formel bis zum Blattende heruntergezogen.".into(),
+            format!("Bitte die Zeilen ab {first_zero} löschen und die Datei erneut einlesen."),
+        ]));
+    }
+    Err(AppError::Report(vec![
+        format!("Die Arbeitsmappe „{sheet}“ enthält {rows} Zeilen."),
+        format!("Verarbeitet werden höchstens {MAX_ROWS}. Bitte die Datei aufteilen."),
+    ]))
 }
 
 pub fn is_date_format(code: &str) -> bool {
@@ -338,5 +364,29 @@ mod tests {
             .map(|cell| cell.text.as_str())
             .collect();
         assert_eq!(values, ["1", "2"]);
+    }
+
+    // Shape of a real customer sheet: 175 rows of data, then `0` down to
+    // Excel's last row. The size is not the problem, the fill-down is.
+    #[test]
+    fn a_tail_of_zeros_is_named_rather_than_called_too_big() {
+        let messages = check_rows("nodepit", 1_048_576, 175)
+            .unwrap_err()
+            .into_messages();
+        assert!(messages[0].contains("ab Zeile 176"), "{}", messages[0]);
+        assert!(messages[2].contains("ab 176 löschen"), "{}", messages[2]);
+    }
+
+    #[test]
+    fn real_data_past_the_limit_is_still_too_big() {
+        let messages = check_rows("Liste", MAX_ROWS + 1, MAX_ROWS + 1)
+            .unwrap_err()
+            .into_messages();
+        assert!(messages[1].contains("höchstens"), "{}", messages[1]);
+    }
+
+    #[test]
+    fn zeros_inside_the_limit_are_data() {
+        assert!(check_rows("Liste", MAX_ROWS, 3).is_ok());
     }
 }
