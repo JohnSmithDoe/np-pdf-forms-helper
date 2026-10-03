@@ -33,6 +33,14 @@
               <ion-button
                 size="small"
                 fill="clear"
+                (click)="onOpenFolder(dokument.folder)"
+                data-testid="batch-open-folder"
+              >
+                Ordner öffnen
+              </ion-button>
+              <ion-button
+                size="small"
+                fill="clear"
                 (click)="onOpen(dokument.original)"
               >
                 Original

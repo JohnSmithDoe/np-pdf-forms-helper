@@ -5,8 +5,8 @@
 //
 // A plain list rather than the shared list shell: that shell's rows are
 // `BaseItem`s that open on a click and carry no actions, and every row here
-// has three (two copies to open, one import to start). A second kind of row in
-// the shell would be the shell growing a mode.
+// has four (its folder, two copies to open, one import to start). A second
+// kind of row in the shell would be the shell growing a mode.
 //
 // An imported document offers no „Importieren“, and that is only the
 // explanation: `stage_document` and `commit_document` refuse it themselves.
@@ -74,6 +74,10 @@ export class DocumentListPage {
 
   protected onOpen(path: string): void {
     void this.#reports.run(() => this.trains.openFile(path));
+  }
+
+  protected onOpenFolder(folder: string): void {
+    void this.#reports.run(() => this.trains.openFolder(folder));
   }
 
   protected async onImport(id: string): Promise<void> {

@@ -30,6 +30,14 @@
               <ion-button
                 size="small"
                 fill="clear"
+                (click)="onOpenFolder(dokument.folder)"
+                data-testid="documents-open-folder"
+              >
+                Ordner öffnen
+              </ion-button>
+              <ion-button
+                size="small"
+                fill="clear"
                 (click)="onOpen(dokument.original)"
               >
                 Original

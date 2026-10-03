@@ -34,6 +34,9 @@
 // thousand events is a hundred million comparisons; with them it is two thousand
 // lookups.
 //
+// A `Dokument` filed before it carried its `folder` gets it on load, from its
+// original's parent — the folder IS that parent, by construction in `adopt`.
+//
 // The SEVENTH store, `dokumente`, is the load ledger: one record per file the
 // app has taken ownership of, indexed by the ORIGINAL's content hash, which is
 // what makes "the same bytes dropped twice" one document. The files themselves
@@ -148,6 +151,13 @@ impl TrainsDb {
             by_radsatznummer: HashMap::new(),
             by_hash: HashMap::new(),
         };
+        for dokument in db.dokumente.values_mut() {
+            if dokument.folder.is_empty() {
+                if let Some(parent) = Path::new(&dokument.original).parent() {
+                    dokument.folder = parent.to_string_lossy().into_owned();
+                }
+            }
+        }
         db.reindex();
         Ok(db)
     }

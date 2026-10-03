@@ -182,6 +182,7 @@ const DOKUMENT: FakeDokument = {
   plan: PLAN,
   originalHash: 'a',
   cleanedHash: 'b',
+  folder: '/daten/dokumente/d1',
   original: '/daten/dokumente/d1/auftraege.xlsx',
   cleaned: '/daten/dokumente/d1/auftraege.bereinigt.xlsx',
   summary: {

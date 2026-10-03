@@ -445,6 +445,7 @@ export interface Dokument {
   plan: ImportPlan;
   originalHash: string;
   cleanedHash: string;
+  folder: string;
   original: string;
   cleaned: string;
   summary: CleanSummary;

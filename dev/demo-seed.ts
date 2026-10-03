@@ -1041,6 +1041,7 @@ const dokumente: FakeDokument[] = [
     plan: demoStaging().plan,
     originalHash: 'a1',
     cleanedHash: 'b1',
+    folder: 'data/trains/dokumente/dok-mai',
     original: 'data/trains/dokumente/dok-mai/Schienenbein Mai 2026.xlsx',
     cleaned:
       'data/trains/dokumente/dok-mai/Schienenbein Mai 2026.bereinigt.xlsx',
@@ -1061,6 +1062,7 @@ const dokumente: FakeDokument[] = [
     plan: demoStaging().plan,
     originalHash: 'a2',
     cleanedHash: 'b2',
+    folder: 'data/trains/dokumente/dok-april',
     original: 'data/trains/dokumente/dok-april/Schienenbein April 2026.xlsx',
     cleaned:
       'data/trains/dokumente/dok-april/Schienenbein April 2026.bereinigt.xlsx',

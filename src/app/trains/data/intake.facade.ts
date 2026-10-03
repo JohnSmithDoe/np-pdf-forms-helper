@@ -326,6 +326,10 @@ export class IntakeFacade {
     await this.#backend.openFile(path);
   }
 
+  async openFolder(folder: string): Promise<void> {
+    await this.#backend.openFolder(folder);
+  }
+
   async #reclean(decisions: CleanDecisions): Promise<void> {
     const data = await this.#backend.recleanFile(decisions);
     this.#store.setDecisions(decisions);

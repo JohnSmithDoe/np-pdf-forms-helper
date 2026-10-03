@@ -5,7 +5,7 @@
 // started by it, because the import is a separate act the user may take now,
 // later, or from the document list.
 //
-// Each filed file offers its two copies and its own „Importieren“; „Alle
+// Each filed file offers its folder, its two copies and its own „Importieren“; „Alle
 // importieren“ walks the filed-but-not-imported ones one document at a time.
 // A file the app already owned before this batch is listed with that document,
 // so a re-dropped folder still leads to what was made of it.
@@ -70,6 +70,10 @@ export class CleanBatchPage {
 
   protected onOpen(path: string): void {
     void this.#reports.run(() => this.facade.openFile(path));
+  }
+
+  protected onOpenFolder(folder: string): void {
+    void this.#reports.run(() => this.facade.openFolder(folder));
   }
 
   protected async onImport(id: string): Promise<void> {

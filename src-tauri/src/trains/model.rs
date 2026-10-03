@@ -569,6 +569,8 @@ pub struct Dokument {
     pub plan: ImportPlan,
     pub original_hash: String,
     pub cleaned_hash: String,
+    #[serde(default)]
+    pub folder: String,
     pub original: String,
     pub cleaned: String,
     pub summary: CleanSummary,
@@ -910,6 +912,7 @@ mod tests {
             plan: crate::trains::builtin::all()[0].plan.clone(),
             original_hash: "a".into(),
             cleaned_hash: "b".into(),
+            folder: "f".into(),
             original: "o".into(),
             cleaned: "c".into(),
             summary: CleanSummary::default(),

@@ -168,6 +168,7 @@ export interface FakeDokument {
   plan: FakeStaging['plan'];
   originalHash: string;
   cleanedHash: string;
+  folder: string;
   original: string;
   cleaned: string;
   summary: {
@@ -800,6 +801,7 @@ export function install(seed: FakeSeed): void {
         plan: copy(cleaning.plan),
         originalHash: id,
         cleanedHash: id,
+        folder: `data/trains/dokumente/${id}`,
         original: cleaning.file,
         cleaned: `data/trains/dokumente/${id}/bereinigt.xlsx`,
         summary: copy(cleaning.summary),

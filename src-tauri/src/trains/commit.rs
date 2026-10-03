@@ -746,6 +746,7 @@ pub(super) mod tests {
             plan: plan(),
             original_hash: "o1".into(),
             cleaned_hash: crate::trains::dokument::hash_of(&cleaned).unwrap(),
+            folder: String::new(),
             original: String::new(),
             cleaned: cleaned.to_string_lossy().into_owned(),
             summary: Default::default(),

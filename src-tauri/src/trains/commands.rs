@@ -687,6 +687,8 @@ mod tests {
         let dokument = filed.dokumente.unwrap().remove(0);
         assert_eq!(dokument.name, "monat.xlsx");
         assert_eq!(dokument.original_hash, dokument::hash_of(&file).unwrap());
+        assert!(Path::new(&dokument.folder).is_dir());
+        assert!(Path::new(&dokument.original).starts_with(&dokument.folder));
         assert!(Path::new(&dokument.original).is_file());
         assert!(Path::new(&dokument.cleaned).is_file());
         assert!(Path::new(&dokument.cleaned)
