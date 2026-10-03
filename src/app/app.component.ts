@@ -24,12 +24,18 @@
 // `@shared`: what the app is made of is a shell-level fact, and this is the only
 // other place besides `app.routes.ts` that names a domain.
 //
-// ONE ENTRY PER DOMAIN, which is what the list is now: Dokumente, Schattensystem,
-// Info. Trains used to put its eight screens here as siblings, so the menu was a
-// flat list in which nothing said that seven of them were entities of one module
-// and the eighth was how data gets in. Its entry lands on `/trains`, the domain's
-// dashboard, and that page is where its lists are reached — the menu says what
-// the app is made of, a hub says what a part is made of.
+// ONE ENTRY PER DOMAIN. Trains used to put its eight screens here as siblings,
+// so the menu was a flat list in which nothing said that seven of them were
+// entities of one module and the eighth was how data gets in. Its entry lands on
+// `/trains`, the domain's dashboard, and that page is where its lists are
+// reached — the menu says what the app is made of, a hub says what a part is
+// made of.
+//
+// The Schattensystem LEADS and the filler sits below it under „Werkzeuge“: the
+// Schattensystem is what the program is for now, and the form filler is the
+// tool it grew out of. The filler's entry is „Formulare ausfüllen“ rather than
+// „Dokumente“, because trains has a „Dokumente“ list of its own — the files it
+// owns — and two menu-level things with one name would be a guess every time.
 //
 // Icons are registered in the constructor because this is the component that
 // RENDERS them, and importing the symbol makes a typo a TypeScript error rather
@@ -44,6 +50,7 @@ import {
   IonItem,
   IonLabel,
   IonList,
+  IonListHeader,
   IonMenu,
   IonMenuToggle,
   IonRouterOutlet,
@@ -56,16 +63,25 @@ import {
   trainOutline,
 } from 'ionicons/icons';
 import { APP_WORDMARK } from './@shared/model/app.consts';
-import type { NavItem } from './@shared/model/nav.types';
+import type { NavGroup } from './@shared/model/nav.types';
 
-const NAV_ITEMS: NavItem[] = [
+const NAV_GROUPS: NavGroup[] = [
   {
-    route: '/documents',
-    label: 'Dokumente',
-    icon: 'document-text-outline',
+    items: [
+      { route: '/trains', label: 'Schattensystem', icon: 'train-outline' },
+      { route: '/about', label: 'Info', icon: 'information-circle-outline' },
+    ],
   },
-  { route: '/trains', label: 'Schattensystem', icon: 'train-outline' },
-  { route: '/about', label: 'Info', icon: 'information-circle-outline' },
+  {
+    header: 'Werkzeuge',
+    items: [
+      {
+        route: '/documents',
+        label: 'Formulare ausfüllen',
+        icon: 'document-text-outline',
+      },
+    ],
+  },
 ];
 
 @Component({
@@ -79,6 +95,7 @@ const NAV_ITEMS: NavItem[] = [
     IonItem,
     IonLabel,
     IonList,
+    IonListHeader,
     IonMenu,
     IonMenuToggle,
     IonRouterOutlet,
@@ -89,7 +106,7 @@ const NAV_ITEMS: NavItem[] = [
 })
 export class AppComponent {
   protected readonly wordmark = APP_WORDMARK;
-  protected readonly navItems = NAV_ITEMS;
+  protected readonly navGroups = NAV_GROUPS;
 
   constructor() {
     addIcons({ documentTextOutline, informationCircleOutline, trainOutline });

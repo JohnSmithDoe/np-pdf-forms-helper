@@ -112,7 +112,7 @@ guards let a legitimately-reached step through, a cold deep link bounces to step
 report renders as the PAGE with `ion-modal` at zero. Two traps it ran into, both worth knowing:
 **Ionic keeps the outgoing page in the DOM during a route transition**, so every locator is scoped to
 its own `app-page-…` element or `Weiter` matches twice; and `filler.spec.ts` now navigates to
-`/#/documents/expert` directly, because `/` redirects by view mode and the default is the wizard.
+`/#/documents/expert` directly, because `/documents` redirects by view mode and the default is the wizard (and `/` now opens the Schattensystem).
 
 `intake.spec.ts` covers both walks the same shallow way, seeded through `seed.scan`, `seed.clean`,
 `seed.dokumente` and `seed.document`; the fake's `reclean_file` only echoes decisions back and never
@@ -191,7 +191,7 @@ is the feature, which is why `smart-ui/column-mapper` shows sample values verbat
 backend made of them — and why they come from the COLUMN rather than the field, so an unmapped column
 still shows what is in it.
 
-**The menu carries ONE entry per domain** — Dokumente, **Schattensystem**, Info. `/trains` is a
+**The menu carries ONE entry per domain** — **Schattensystem** and Info first, then the filler as „Formulare ausfüllen“ under a „Werkzeuge“ heading (not „Dokumente“: trains has a Dokumente list of its own). The app opens on `/trains`. `/trains` is a
 DASHBOARD (`feature/dashboard`) and not a redirect to the import: it is the domain's only way in, so
 what it lands on has to reach everything else. Its tiles carry counts, which is what makes it more
 than a second menu — `counts` from the backend for Wagen, Radsätze and Instandhaltungen (the events

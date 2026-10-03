@@ -10,6 +10,9 @@
 // user sees in a wizard's URL, and it names the thing rather than the code. It
 // resolves further to the expert page or to the wizard depending on the stored
 // view mode, which is `filler.routes.ts`'s business and not the shell's.
+//
+// Anything unmatched — the empty path at startup included — lands on `trains`:
+// the Schattensystem is what the program opens on.
 // ────────────────────────────────────────────────────────────────
 
 import { Routes } from '@angular/router';
@@ -32,6 +35,6 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'documents',
+    redirectTo: 'trains',
   },
 ];

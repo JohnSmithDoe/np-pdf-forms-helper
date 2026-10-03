@@ -2,22 +2,33 @@
   <ion-split-pane contentId="main-content" [disabled]="true">
     <ion-menu contentId="main-content" [attr.aria-label]="wordmark">
       <nav>
-        <ion-list>
-          @for (item of navItems; track item.route) {
-            <ion-menu-toggle [autoHide]="false">
-              <ion-item
-                [button]="true"
-                [routerLink]="item.route"
-                routerLinkActive="app-menu__item--active"
-                lines="none"
-                data-testid="menu-row"
-              >
-                <ion-icon slot="start" [name]="item.icon" aria-hidden="true" />
-                <ion-label>{{ item.label }}</ion-label>
-              </ion-item>
-            </ion-menu-toggle>
-          }
-        </ion-list>
+        @for (group of navGroups; track group.header) {
+          <ion-list>
+            @if (group.header) {
+              <ion-list-header>
+                <ion-label>{{ group.header }}</ion-label>
+              </ion-list-header>
+            }
+            @for (item of group.items; track item.route) {
+              <ion-menu-toggle [autoHide]="false">
+                <ion-item
+                  [button]="true"
+                  [routerLink]="item.route"
+                  routerLinkActive="app-menu__item--active"
+                  lines="none"
+                  data-testid="menu-row"
+                >
+                  <ion-icon
+                    slot="start"
+                    [name]="item.icon"
+                    aria-hidden="true"
+                  />
+                  <ion-label>{{ item.label }}</ion-label>
+                </ion-item>
+              </ion-menu-toggle>
+            }
+          </ion-list>
+        }
       </nav>
     </ion-menu>
 
