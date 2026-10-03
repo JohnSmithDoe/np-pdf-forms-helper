@@ -1,0 +1,39 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/trains" text="Zurück" />
+    </ion-buttons>
+    <ion-title>Einstellungen</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <ion-list>
+    <ion-list-header>
+      <ion-label>Schreibweise der Wagennummer</ion-label>
+    </ion-list-header>
+    <ion-radio-group
+      [value]="facade.settings().wagennummer"
+      (ionChange)="onStyle($event)"
+      data-testid="settings-wagennummer"
+    >
+      @for (style of styles; track style.value) {
+        <ion-item>
+          <ion-radio [value]="style.value" justify="start" labelPlacement="end">
+            <ion-label>
+              <h2>{{ style.example }}</h2>
+              <p>{{ style.label }}</p>
+            </ion-label>
+          </ion-radio>
+        </ion-item>
+      }
+    </ion-radio-group>
+  </ion-list>
+  <ion-note>
+    Gilt überall im Schattensystem: in den Listen, beim Import, in den
+    bereinigten Dateien und in beiden Exporten. Bereits bereinigte Dateien
+    behalten ihre Schreibweise; beide Schreibweisen werden gleich gelesen.
+  </ion-note>
+</ion-content>
+
+<app-busy-overlay [busy]="facade.busy()" />

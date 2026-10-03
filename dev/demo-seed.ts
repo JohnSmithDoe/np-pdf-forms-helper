@@ -33,7 +33,10 @@
 //     Wagen, the two shapes that are easy to forget exist
 //
 // `demoScan()` is one file of every kind the hub has to show: recognised,
-// recognised twice (so the select starts empty), unknown, and not a workbook.
+// recognised twice (so the select starts empty), unknown, already owned, and
+// not a workbook. Two `dokumente` are seeded, one of them imported, so the
+// document list shows both states; `demoDocument()` is the Mai file as the
+// import walk stages it, with every resolution the walk renders.
 // `demoClean()` is a review with all three tiers — a Fehler per field kind that
 // can have one, a Deutung of each of the three readings, several format groups
 // — because a clean file shows none of the review screen.
@@ -47,6 +50,7 @@
 
 import type {
   FakeCleanReport,
+  FakeDokument,
   FakeDocument,
   FakeEinbau,
   FakeInstandhaltung,
@@ -497,6 +501,19 @@ export function demoScan(): FakeScanFile[] {
       sheets: ['Tabelle1'],
     },
     {
+      path: 'C:\\Eingang\\Schienenbein April 2026.xlsx',
+      name: 'Schienenbein April 2026.xlsx',
+      status: 'vorhanden',
+      matches: [],
+      sheets: ['April'],
+      message: 'Bereits bereinigt am 2026-09-04 und importiert am 2026-09-04.',
+      vorhanden: {
+        dokumentId: 'dok-april',
+        bereinigtAm: '2026-09-04',
+        importiertAm: '2026-09-04',
+      },
+    },
+    {
       path: 'C:\\Eingang\\Begleitschreiben.pdf',
       name: 'Begleitschreiben.pdf',
       status: 'nichtUnterstuetzt',
@@ -901,6 +918,163 @@ export function demoStaging(): FakeStaging {
   };
 }
 
+/** The cleaned copy of the Mai file as `stage_document` would stage it:
+ *  `demoStaging()` plus the entity groups `entities::group` computes in Rust —
+ *  written out by hand here, because grouping is not the fake's to re-derive.
+ *  The third Wagen is new to the store, so every resolution the walk has to
+ *  render appears at least once. */
+export function demoDocument(): FakeStaging {
+  const staging = demoStaging();
+  const fresh = { state: 'new', proposal: '37 80 4556 781-5' };
+  const third = staging.rows.find((row) => row.row === 4);
+  if (third) third.wagen = fresh;
+  const format = (
+    row: number,
+    column: number,
+    header: string,
+    raw: string,
+    clean: string,
+    rule: string
+  ) => ({ row, column, header, raw, clean, tier: 'format', rule });
+
+  return {
+    ...staging,
+    id: 'stg-dokument',
+    entities: {
+      partner: [
+        {
+          key: 'werkstatt:SCHIENENBEINWW',
+          kind: 'partner',
+          rolle: 'werkstatt',
+          spellings: ['Schienenbein WW'],
+          resolution: {
+            state: 'known',
+            id: 'p-werk-schienenbein',
+            name: 'Schienenbein Waggonwerk GmbH',
+          },
+          rows: [2, 4, 5],
+          changes: [
+            format(
+              2,
+              3,
+              'Werkstatt',
+              ' Schienenbein WW ',
+              'Schienenbein WW',
+              'Leerzeichen entfernt'
+            ),
+          ],
+        },
+        {
+          key: 'werkstatt:SCHIENENBWAGGONWERKSUED',
+          kind: 'partner',
+          rolle: 'werkstatt',
+          spellings: ['Schienenb. Waggonwerk Süd'],
+          resolution: staging.rows[1]?.werkstatt ?? { state: 'missing' },
+          rows: [3],
+          changes: [],
+        },
+      ],
+      wagen: [
+        {
+          key: '21 81 2471 217-3',
+          kind: 'wagen',
+          spellings: ['21 81 2471 217-3'],
+          resolution: { state: 'known', id: 'wg-1', name: '21 81 2471 217-3' },
+          rows: [2],
+          changes: [
+            format(
+              2,
+              1,
+              'Wagen-Nr.',
+              '21812471217-3',
+              '21 81 2471 217-3',
+              'Wagennummer vereinheitlicht'
+            ),
+          ],
+        },
+        {
+          key: '33 80 8012 345-2',
+          kind: 'wagen',
+          spellings: ['33 80 8012 345-2'],
+          resolution: { state: 'known', id: 'wg-2', name: '33 80 8012 345-2' },
+          rows: [3, 5],
+          changes: [],
+        },
+        {
+          key: '37 80 4556 781-5',
+          kind: 'wagen',
+          spellings: ['37 80 4556 781-5'],
+          resolution: fresh,
+          rows: [4],
+          changes: [],
+        },
+      ],
+      radsaetze: [
+        {
+          key: 'RS815@p-werk-schienenbein',
+          kind: 'radsatz',
+          spellings: ['RS 815'],
+          resolution: { state: 'known', id: 'rs-1', name: 'RS-2024-0815' },
+          rows: [2],
+          changes: [],
+        },
+        {
+          key: '04711B@',
+          kind: 'radsatz',
+          spellings: ['04711-B'],
+          resolution: staging.rows[1]?.radsatz ?? { state: 'missing' },
+          rows: [3],
+          changes: [],
+        },
+      ],
+    },
+  };
+}
+
+const dokumente: FakeDokument[] = [
+  {
+    id: 'dok-mai',
+    name: 'Schienenbein Mai 2026.xlsx',
+    sheet: 'Mai',
+    templateId: 'tpl-bremen',
+    templateName: 'Schienenbein Waggonwerk — Monatsliste',
+    plan: demoStaging().plan,
+    originalHash: 'a1',
+    cleanedHash: 'b1',
+    original: 'data/trains/dokumente/dok-mai/Schienenbein Mai 2026.xlsx',
+    cleaned:
+      'data/trains/dokumente/dok-mai/Schienenbein Mai 2026.bereinigt.xlsx',
+    summary: {
+      fehlerOffen: 0,
+      deutungenOffen: 0,
+      formatierungen: 28,
+      korrigiert: 2,
+    },
+    bereinigtAm: '2026-10-02',
+  },
+  {
+    id: 'dok-april',
+    name: 'Schienenbein April 2026.xlsx',
+    sheet: 'April',
+    templateId: 'tpl-bremen',
+    templateName: 'Schienenbein Waggonwerk — Monatsliste',
+    plan: demoStaging().plan,
+    originalHash: 'a2',
+    cleanedHash: 'b2',
+    original: 'data/trains/dokumente/dok-april/Schienenbein April 2026.xlsx',
+    cleaned:
+      'data/trains/dokumente/dok-april/Schienenbein April 2026.bereinigt.xlsx',
+    summary: {
+      fehlerOffen: 0,
+      deutungenOffen: 0,
+      formatierungen: 12,
+      korrigiert: 0,
+    },
+    bereinigtAm: '2026-09-04',
+    importiertAm: '2026-09-04',
+  },
+];
+
 let committed = 0;
 
 /** What a committed row "becomes". The fake does not run `commit.rs` — that is
@@ -921,6 +1095,7 @@ export function committedEvent(row: number): FakeInstandhaltung {
 }
 
 export const DEMO_SEED: FakeSeed = {
+  dokumente,
   wagen,
   partners,
   radsaetze,

@@ -475,3 +475,71 @@ on the Rust side and pinned by a serialisation test.
 Deliberately not done here: telematics entities (the telematics template maps only the Wagennummer
 until telematics has a model), the per-template row filter the order feed needs ("Workshop orders
 are a feed…" above), and subfolders — a scan reads one level deep.
+
+## Bereinigen und Import getrennt (appended 2026-10-03)
+
+**Getting a file in is two walks, and the first is complete without the second.** The guided import
+used to go file by file — clean, write the copy, stage it, preview rows, commit, next. Martin wanted
+the jobs apart: cleaning a whole batch is a closed cycle that ends in a batch summary and may be the
+only thing a user does; importing into the Schattensystem is a separate, later act. The two are told
+apart by a header label (`WizardShellComponent.phase`), not by a theme — a forced dark mode for one
+half was considered and dropped, because it would have meant the app overriding the OS palette.
+
+- **The app owns the files.** `clean_file` copies the original into `data/trains/dokumente/<id>/`
+  *before* reading it, and `write_clean` writes the cleaned copy and a `protokoll.json` beside it,
+  then files a `Dokument` record. It is the landing-zone pattern with a ledger: the record says which
+  step a file has reached (`bereinigt_am`, `importiert_am`). Reading the owned copy means what was
+  cleaned is byte for byte what is stored. An abandoned cleaning removes its folder.
+- **Identity is the content hash** of the original (`hash::bytes`, the same FNV-1a). The same bytes
+  dropped again — renamed, in another folder, or twice in one drop — are `vorhanden` in the scan and
+  refused by `clean_file`. A re-export differing in one cell is a new document; the row-level
+  `dedupe_key` catches its repeated rows on import.
+- **A template learns when a cleaning is FILED**, in the same transaction as the document
+  (`template::learned`). It used to learn at import, so a user who only cleaned answered the same
+  Deutung for every file; learning on each confirmed card would have taught readings from files the
+  user then abandoned.
+- **The mapper's only exit is a template.** An unknown file used to be mapped and committed directly
+  — the one path into the Schattensystem that skipped the cleaning. Now it is mapped, saved as a
+  named template (`save_template`), rescanned and cleaned like every other file. `commit_import` is
+  gone; `commit_document` is the only way in, and it refuses a staging that is not a document.
+- **The import walks ONE document by entity type**, in the commit's dependency order: Partner →
+  Wagen → Radsätze → Einträge → summary. One decision per entity group, not per row
+  (`entities::group`, keyed by each type's identity rule), expanded back to the per-row decisions
+  `commit` has always checked (`entities::expand`), so the gates did not move. Missing answer = skip.
+  `likely`/`ambiguous`/`new` groups start undecided and block their step. Several documents are not
+  merged into one walk — being asked about another file's entities would be confusing — and the
+  alias learned on commit makes the next file's question go away anyway.
+- **Plan/apply.** The steps only collect answers; the summary is the plan; „Importieren“ is one
+  transaction that also marks the document imported. Imported is final, enforced in `commit` and
+  `stage_document`, not by the hidden button. Answers live in the frontend only — leaving the walk
+  forgets them, deliberately: a half-answered walk resumed days later answers a store that has moved.
+- **A cleaned copy edited since cleaning is refused** at import (`cleaned_hash`): it would load
+  values nobody reviewed.
+- **Radsatz resolution stays decoupled from the Partner step.** A Radsatznummer is scoped by sender,
+  and the sender is the template partner or the row's *confirmed* Werkstatt. Re-resolving the
+  Radsätze with the walk's Partner answers would have made step three depend on step two. Instead
+  the groups are keyed by the sender STAGING used: a Werkstatt first confirmed in this walk makes its
+  Radsätze a question, never a silent match, and the commit still learns the alias against the
+  committed Werkstatt, so the sender's next file resolves cleanly.
+
+Deliberately not done here: a per-Wagen overview across types, deleting documents, and subfolders.
+The import walk is MVP quality for review; nothing of it has run in `tauri:dev` yet.
+
+## Wagennummer spelling is a Schattensystem setting (appended 2026-10-03)
+
+**One setting, `TrainsSettings.wagennummer`, decides how every Wagennummer is shown and written** —
+lists, import cards, the cleaned copies and both exports: `compact` (`338506591522`, the default)
+or `grouped` (`33 85 0659 152-2`). Users differ; Martin's side reads the grouped form, others the
+compact one. The store keeps the bare twelve digits as before, and both spellings parse back to
+them, so nothing that matches on a number is affected by switching.
+
+- **In the backend, not localStorage** (`data/trains/einstellungen.json`, read with defaults so an
+  old data folder loads): Rust writes the cleaned copies and exports, and every desk on one data
+  folder should spell numbers alike. `reset_trains` keeps it — it is configuration, not data.
+- **Exports follow it too.** Checked with Martin: the receiving ERP import must accept the chosen
+  spelling. If it turns out to need one fixed form, the export gets its own setting.
+- **Read where the database already is** (`db.settings()` in `stage`, `resolve`, `export`), and
+  passed into `clean::open` because a cleaning holds no store. `format::uic_display` stays grouped
+  for the parsers' own messages, which run before any setting is in reach.
+- **Existing cleaned copies are not rewritten.** The setting also changes what counts as a Format
+  change: in a compact Schattensystem a compact number is already clean.

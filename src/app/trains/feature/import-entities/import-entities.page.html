@@ -1,0 +1,70 @@
+<app-wizard-shell
+  class="ion-page"
+  [heading]="config.heading"
+  [phase]="phase"
+  phaseColor="tertiary"
+  [step]="config.step"
+  [stepCount]="steps"
+  [backLabel]="config.back ? 'Zurück' : 'Abbrechen'"
+  [nextLabel]="open() ? open() + ' offen' : 'Weiter'"
+  [nextDisabled]="open() > 0"
+  (back)="onBack()"
+  (next)="onNext()"
+>
+  @if (facade.dokument(); as dokument) {
+    <ion-note data-testid="import-document">{{ dokument.name }}</ion-note>
+  }
+  <p>{{ config.intro }}</p>
+
+  @if (open()) {
+    <div class="import-entities__bulk" data-testid="import-bulk">
+      @if (bulk().create) {
+        <ion-button
+          fill="outline"
+          color="success"
+          (click)="onBulk('create')"
+          data-testid="import-bulk-create"
+        >
+          Alle neuen anlegen ({{ bulk().create }})
+        </ion-button>
+      }
+      @if (bulk().suggestion) {
+        <ion-button
+          fill="outline"
+          (click)="onBulk('suggestion')"
+          data-testid="import-bulk-suggestion"
+        >
+          Alle Vorschläge übernehmen ({{ bulk().suggestion }})
+        </ion-button>
+      }
+      <ion-button
+        fill="outline"
+        color="medium"
+        (click)="onBulk('skip')"
+        data-testid="import-bulk-skip"
+      >
+        Alle offenen nicht übernehmen ({{ bulk().skip }})
+      </ion-button>
+    </div>
+  }
+
+  @for (section of sections(); track section.label) {
+    @if (section.label) {
+      <ion-list-header>
+        <ion-label>{{ section.label }}</ion-label>
+      </ion-list-header>
+    }
+    @for (view of section.views; track view.group.key) {
+      <app-entity-group
+        [group]="view.group"
+        [decision]="view.decision"
+        [dropped]="dropped(view)"
+        (decide)="onDecide(view, $event)"
+      />
+    }
+  } @empty {
+    <ion-note data-testid="import-empty">{{ config.empty }}</ion-note>
+  }
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

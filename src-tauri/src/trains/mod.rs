@@ -10,14 +10,18 @@
 //   recognise which saved template the header row belongs to, if exactly one
 //   sanitise/ raw cell text becomes a typed value, or a German complaint
 //   resolve/  a row's names and numbers become entity references
+//   clean/    the original, read 1:1 and written back as a cleaned copy
+//   dokument  the original and the copy, owned by the app as one record
 //   stage     all of the above, into a preview that touches NO database
+//   entities  that preview grouped per entity, and the answers back per row
 //   commit    the preview plus the user's decisions, into one batched write
 //   export/   the master workbook and the ERP artefact
 //
-// Staging is deliberately severed from committing. Nothing before `commit` can
-// change a stored byte, so "the import went wrong halfway" is not a state this
+// Staging is deliberately severed from committing. Nothing between `stage` and
+// `commit` can change a stored byte, so "the import went wrong halfway" is not a state this
 // code can reach — which is why a bad cell is a line in a report rather than an
-// aborted run.
+// aborted run. Cleaning has its own commit point — filing the document — and
+// it touches no entity: a cleaned file is in the ledger, not in the Schattensystem.
 // ────────────────────────────────────────────────────────────────
 
 pub mod builtin;
@@ -26,6 +30,8 @@ pub mod clock;
 pub mod commands;
 pub mod commit;
 pub mod db;
+pub mod dokument;
+pub mod entities;
 pub mod export;
 pub mod hash;
 pub mod model;
@@ -36,3 +42,4 @@ pub mod sanitise;
 pub mod scan;
 pub mod sheet;
 pub mod stage;
+pub mod template;

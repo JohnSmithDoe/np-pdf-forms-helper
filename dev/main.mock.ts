@@ -17,23 +17,26 @@
 // document is the report shape that earns a dialog and the fake's single
 // `picker` cannot produce it.
 //
-// `stage_import` (and `stage_import_path`, the guided import's hand-over of an
-// unrecognised file) — the picker again, and one thing more: the trains import
-// DISCARDS its staging when it is committed or cancelled, so a fake with one
-// seeded staging would serve the first file of a session and nothing after it.
-// Re-arming on every pick is what makes the screen usable by hand.
+// `stage_import` (and `stage_import_path`, the cleaning hub's hand-over of an
+// unrecognised file to the template mapper) — the picker again, and one thing
+// more: the mapper DISCARDS its staging when a template is saved or the file
+// dropped, so a fake with one seeded staging would serve the first file of a
+// session and nothing after it. Re-arming on every pick is what makes the
+// screen usable by hand.
 //
-// `commit_import` — the commit gates live in `trains/commit.rs` and are proved by
-// `cargo test`; the fake must not grow a second implementation of them. But a
-// commit that visibly changes nothing reads as a broken button, so the dev shell
-// invents one Instandhaltung per taken row and lets the fake answer with the
-// updated lists and counts.
+// `stage_document` re-arms `demoDocument()` for the same reason: the commit
+// lets go of the staging, and the next document walked would find nothing.
 //
-// `pick_import_folder` / `pick_import_files` / `scan_import_paths` — the guided
-// import's pickers, answered with a fresh `demoScan()` each time. `clean_file`
-// re-arms `demoClean()` and `write_clean` re-arms `demoStaging()`, for the same
-// reason `stage_import` does: the walk discards both slots per file, so one
-// seeded copy would serve the first file of a session and nothing after it.
+// `commit_document` — the commit gates live in `trains/commit.rs` and are
+// proved by `cargo test`; the fake must not grow a second implementation of
+// them. But a commit that visibly changes nothing reads as a broken button, so
+// the dev shell invents one Instandhaltung per taken row and lets the fake
+// answer with the updated lists and counts.
+//
+// `pick_import_folder` / `pick_import_files` / `scan_import_paths` — the
+// cleaning hub's pickers, answered with a fresh `demoScan()` each time.
+// `clean_file` re-arms `demoClean()`, because the walk discards the cleaning
+// per file and one seeded copy would serve only the first.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -48,6 +51,7 @@ import {
   committedEvent,
   DEMO_SEED,
   demoClean,
+  demoDocument,
   demoScan,
   demoStaging,
   nextPickedDocument,
@@ -59,7 +63,7 @@ interface FakeState {
   staging: FakeStaging | null;
   scan: FakeScanFile[] | null;
   clean: FakeCleanReport | null;
-  cleaned: FakeStaging | null;
+  document: FakeStaging | null;
   events: FakeInstandhaltung[];
 }
 
@@ -105,8 +109,8 @@ internals.invoke = (command, args = {}) => {
     return forward(command, args);
   }
 
-  if (command === 'write_clean') {
-    state.cleaned = demoStaging();
+  if (command === 'stage_document') {
+    state.document = demoDocument();
     return forward(command, args);
   }
 
@@ -115,10 +119,9 @@ internals.invoke = (command, args = {}) => {
     return forward(command, args);
   }
 
-  if (command === 'commit_import') {
-    const decisions = args['decisions'] as { rows: { row: number }[] };
-    for (const row of decisions.rows)
-      state.events.push(committedEvent(row.row));
+  if (command === 'commit_document') {
+    const decisions = args['decisions'] as { rows: number[] };
+    for (const row of decisions.rows) state.events.push(committedEvent(row));
     return forward(command, args);
   }
 

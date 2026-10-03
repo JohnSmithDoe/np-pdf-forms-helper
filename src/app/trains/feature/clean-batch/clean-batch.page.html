@@ -1,0 +1,84 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Bereinigung abgeschlossen"
+  phase="Bereinigen"
+  [step]="facade.progress().count"
+  [stepCount]="facade.progress().count"
+  backLabel="Zur Liste"
+  nextLabel="Fertig"
+  (back)="onBack()"
+  (next)="onDone()"
+>
+  <ion-note>
+    Die bereinigten Dateien liegen jetzt im Programm. Ins Schattensystem kommen
+    sie erst mit „Importieren“ — jetzt oder später unter Dokumente.
+  </ion-note>
+
+  <ion-list lines="full" data-testid="batch-list">
+    @for (row of facade.summary(); track row.file.path) {
+      @let status = chip(row);
+      <ion-item data-testid="batch-row">
+        <ion-label class="ion-text-wrap">
+          <h2>{{ row.file.name }}</h2>
+          @if (row.result?.report; as report) {
+            <p>{{ report.headline }}</p>
+            @for (line of report.messages; track $index) {
+              <p>{{ line }}</p>
+            }
+          } @else if (row.file.message) {
+            <p>{{ row.file.message }}</p>
+          }
+          @if (row.dokument; as dokument) {
+            <p>
+              <ion-button
+                size="small"
+                fill="clear"
+                (click)="onOpen(dokument.original)"
+              >
+                Original
+              </ion-button>
+              <ion-button
+                size="small"
+                fill="clear"
+                (click)="onOpen(dokument.cleaned)"
+                data-testid="batch-open-cleaned"
+              >
+                Bereinigte Datei
+              </ion-button>
+              @if (!dokument.importiertAm) {
+                <ion-button
+                  size="small"
+                  fill="clear"
+                  color="success"
+                  (click)="onImport(dokument.id)"
+                  data-testid="batch-import"
+                >
+                  Importieren
+                </ion-button>
+              } @else {
+                <ion-note>importiert am {{ dokument.importiertAm }}</ion-note>
+              }
+            </p>
+          }
+        </ion-label>
+        <ion-chip slot="end" [color]="status.color">
+          {{ status.label }}
+        </ion-chip>
+      </ion-item>
+    }
+  </ion-list>
+
+  @if (facade.importable().length) {
+    <ion-button
+      wizardFooter
+      fill="clear"
+      color="success"
+      (click)="onImportAll()"
+      data-testid="batch-import-all"
+    >
+      Alle importieren ({{ facade.importable().length }})
+    </ion-button>
+  }
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

@@ -103,7 +103,7 @@ pub fn write(db: &TrainsDb, folder: &Path) -> AppResult<Vec<String>> {
 
 fn wagen_nummer(db: &TrainsDb, id: &str) -> String {
     db.wagen_by_id(id)
-        .map(|wagen| format::uic_display(&wagen.nummer))
+        .map(|wagen| format::uic_in(&wagen.nummer, db.settings().wagennummer))
         .unwrap_or_default()
 }
 
@@ -123,7 +123,7 @@ fn wagen_rows(db: &TrainsDb) -> Vec<Vec<String>> {
                 .unwrap_or_default();
             vec![
                 wagen.id,
-                format::uic_display(&wagen.nummer),
+                format::uic_in(&wagen.nummer, db.settings().wagennummer),
                 wagen.bauart.unwrap_or_default(),
                 owner,
                 wagen.bemerkung.unwrap_or_default(),
@@ -253,9 +253,25 @@ mod tests {
         write(&db, &out).unwrap();
 
         let source = grid::read(&out.join("erp-import.xlsx"), Some("Wartungen")).unwrap();
-        assert_eq!(source.grid.text(2, 2), "21 81 2471 217-3");
+        assert_eq!(source.grid.text(2, 2), "218124712173");
         assert_eq!(source.grid.text(3, 2), "31.12.2025");
         assert_eq!(source.grid.text(6, 2), "1234,56");
+    }
+
+    /// The Schattensystem setting reaches the export too — one spelling everywhere.
+    #[test]
+    fn the_wagennummer_goes_out_in_the_configured_spelling() {
+        let (folder, mut db) = seeded("erp-grouped");
+        db.save_settings(crate::trains::model::TrainsSettings {
+            wagennummer: crate::trains::model::UicStyle::Grouped,
+        })
+        .unwrap();
+        let out = folder.join("run");
+        std::fs::create_dir_all(&out).unwrap();
+        write(&db, &out).unwrap();
+
+        let source = grid::read(&out.join("erp-import.xlsx"), Some("Wartungen")).unwrap();
+        assert_eq!(source.grid.text(2, 2), "21 81 2471 217-3");
     }
 
     #[test]
@@ -330,7 +346,7 @@ mod tests {
             "digits stay text, leading zero kept"
         );
         assert_eq!(radsaetze.text(3, 2), "180043025");
-        assert_eq!(radsaetze.text(6, 2), "21 81 2471 217-3");
+        assert_eq!(radsaetze.text(6, 2), "218124712173");
 
         let einbauten = grid::read(&file, Some("Einbauten")).unwrap().grid;
         assert_eq!(einbauten.rows, 3, "header plus both fittings");

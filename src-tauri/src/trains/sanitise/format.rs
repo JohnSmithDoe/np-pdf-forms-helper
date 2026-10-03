@@ -17,6 +17,12 @@
 // the stores keep ISO, so the exporters would otherwise each carry their own
 // split-and-reorder, which is what they did.
 //
+// A wagen number has TWO spellings and the Schattensystem setting picks one:
+// `Compact` (`338506591522`) or `Grouped` (`33 85 0659 152-2`). `uic_in` and
+// `styled` are what everything that SHOWS or WRITES a number calls with that
+// setting; `uic_display` stays the grouped form for the parsers' own messages,
+// which run before any setting is in reach. Both read back to the same digits.
+//
 // `money` is always two decimals, always a comma, and NEVER a grouping mark: a
 // grouping mark is for reading and this output is for re-importing. `uic` is the
 // grouping people read a wagen number in, derived every time and never stored;
@@ -28,6 +34,7 @@
 // ────────────────────────────────────────────────────────────────
 
 use super::{Date, Uic, Value};
+use crate::trains::model::UicStyle;
 
 pub fn date(value: Date) -> String {
     format!("{:02}.{:02}.{:04}", value.day, value.month, value.year)
@@ -64,6 +71,20 @@ pub fn uic_display(digits: &str) -> String {
     )
 }
 
+pub fn uic_in(digits: &str, style: UicStyle) -> String {
+    match style {
+        UicStyle::Compact => digits.to_string(),
+        UicStyle::Grouped => uic_display(digits),
+    }
+}
+
+pub fn styled(input: &Value, style: UicStyle) -> String {
+    match input {
+        Value::Uic(uic_value) => uic_in(uic_value.as_str(), style),
+        other => value(other),
+    }
+}
+
 pub fn value(input: &Value) -> String {
     match input {
         Value::Empty => String::new(),
@@ -79,6 +100,20 @@ mod tests {
     use super::super::{date as date_parser, number as number_parser, wagen};
     use super::*;
     use crate::trains::model::{DateOrder, DecimalStyle};
+
+    #[test]
+    fn a_wagen_number_is_written_in_the_chosen_style_and_reads_back_alike() {
+        assert_eq!(uic_in("338506591522", UicStyle::Compact), "338506591522");
+        assert_eq!(
+            uic_in("338506591522", UicStyle::Grouped),
+            "33 85 0659 152-2"
+        );
+        for style in [UicStyle::Compact, UicStyle::Grouped] {
+            let written = uic_in("218124712173", style);
+            let parsed = wagen::parse(&written).expect("re-reads");
+            assert_eq!(styled(&parsed.value, style), written);
+        }
+    }
 
     #[test]
     fn renders_the_german_forms() {

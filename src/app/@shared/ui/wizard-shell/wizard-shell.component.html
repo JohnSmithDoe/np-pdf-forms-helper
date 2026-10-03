@@ -4,6 +4,11 @@
       <ion-menu-button aria-label="Menü öffnen" />
     </ion-buttons>
     <ion-title>{{ heading() }}</ion-title>
+    @if (phase(); as phase) {
+      <ion-chip slot="end" [color]="phaseColor()" data-testid="wizard-phase">
+        {{ phase }}
+      </ion-chip>
+    }
   </ion-toolbar>
   <ion-toolbar>
     <ion-progress-bar

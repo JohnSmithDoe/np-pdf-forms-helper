@@ -42,12 +42,27 @@
 // confirmed one way or the other, a `FormatGroup` asks nothing. `CleanDecisions`
 // is sent WHOLE on every call — the backend keeps no decisions between calls,
 // the same as `restage_import` takes the whole plan.
+//
+// `TrainsSettings` is the Schattensystem's own configuration and lives in the
+// backend, not in localStorage: it changes what Rust writes into cleaned copies
+// and exports, so Rust has to hold it.
+//
+// A `Dokument` is a file the app OWNS once its cleaning is filed: original and
+// cleaned copy in the data folder, identified by the original's content hash,
+// with `importiertAm` set once — and only once — it reaches the Schattensystem.
+// The import walk answers ENTITIES, not rows: `EntityGroups` is what the backend
+// grouped, `EntityDecisions` one answer per group `key` plus the rows to take.
 // ────────────────────────────────────────────────────────────────
 
 import type { ClientReport } from '../../@shared/model/client.types';
 
 export type DecimalStyle = 'german' | 'english';
 export type DateOrder = 'dayFirst' | 'monthFirst';
+export type UicStyle = 'compact' | 'grouped';
+
+export interface TrainsSettings {
+  wagennummer: UicStyle;
+}
 export type ReaderKind = 'headerRow' | 'manual';
 export type PartnerRolle = 'halter' | 'eigentuemer' | 'werkstatt';
 
@@ -221,6 +236,7 @@ export interface StagedRow {
   eigentuemer: Resolution;
   radsatz: Resolution;
   issues: CellIssue[];
+  sender?: string;
 }
 
 export interface StagedSummary {
@@ -243,24 +259,52 @@ export interface StagedImport {
   candidates: LayoutCandidate[];
   rows: StagedRow[];
   summary: StagedSummary;
+  dokumentId?: string;
+  entities?: EntityGroups;
 }
 
 export type EntityDecision =
   { action: 'use'; id: string } | { action: 'create' } | { action: 'skip' };
 
-export interface RowDecision {
+export type EntityKind = 'partner' | 'wagen' | 'radsatz';
+
+export interface ProtocolLine {
   row: number;
-  wagen: EntityDecision;
-  werkstatt: EntityDecision;
-  halter: EntityDecision;
-  eigentuemer: EntityDecision;
-  radsatz: EntityDecision;
+  column: number;
+  header: string;
+  raw: string;
+  clean: string;
+  tier: Tier;
+  rule: string;
 }
 
-export interface CommitDecisions {
+export interface EntityGroup {
+  key: string;
+  kind: EntityKind;
+  rolle?: PartnerRolle;
+  spellings: string[];
+  resolution: Resolution;
+  rows: number[];
+  changes: ProtocolLine[];
+}
+
+export interface EntityGroups {
+  partner: EntityGroup[];
+  wagen: EntityGroup[];
+  radsaetze: EntityGroup[];
+}
+
+export interface EntityChoice {
+  key: string;
+  decision: EntityDecision;
+}
+
+export interface EntityDecisions {
   stagingId: string;
-  rows: RowDecision[];
-  saveTemplateAs?: string;
+  partner: EntityChoice[];
+  wagen: EntityChoice[];
+  radsaetze: EntityChoice[];
+  rows: number[];
 }
 
 export interface TrainsCounts {
@@ -268,6 +312,7 @@ export interface TrainsCounts {
   partners: number;
   events: number;
   radsaetze: number;
+  dokumente: number;
 }
 
 export interface InstandhaltungPage {
@@ -277,7 +322,18 @@ export interface InstandhaltungPage {
 }
 
 export type ScanStatus =
-  'erkannt' | 'mehrdeutig' | 'unbekannt' | 'nichtUnterstuetzt' | 'unlesbar';
+  | 'erkannt'
+  | 'mehrdeutig'
+  | 'unbekannt'
+  | 'nichtUnterstuetzt'
+  | 'unlesbar'
+  | 'vorhanden';
+
+export interface Vorhanden {
+  dokumentId: string;
+  bereinigtAm: string;
+  importiertAm?: string;
+}
 
 export interface ScanMatch {
   templateId: string;
@@ -292,6 +348,7 @@ export interface ScanFile {
   matches: ScanMatch[];
   sheets: string[];
   message?: string;
+  vorhanden?: Vorhanden;
 }
 
 export type Reading =
@@ -342,6 +399,8 @@ export interface FormatGroup {
   samples: FormatSample[];
 }
 
+export type Tier = 'fehler' | 'deutung' | 'format';
+
 export interface CleanSummary {
   fehlerOffen: number;
   deutungenOffen: number;
@@ -377,6 +436,22 @@ export interface CleanDecisions {
   confirmations: Confirmation[];
 }
 
+export interface Dokument {
+  id: string;
+  name: string;
+  sheet: string;
+  templateId: string;
+  templateName: string;
+  plan: ImportPlan;
+  originalHash: string;
+  cleanedHash: string;
+  original: string;
+  cleaned: string;
+  summary: CleanSummary;
+  bereinigtAm: string;
+  importiertAm?: string;
+}
+
 export interface TrainsData {
   wagen?: Wagen[];
   partners?: Partner[];
@@ -388,6 +463,7 @@ export interface TrainsData {
   instandhaltungPage?: InstandhaltungPage;
   scan?: ScanFile[];
   cleaning?: CleanReport;
-  cleanedFile?: string;
+  dokumente?: Dokument[];
+  settings?: TrainsSettings;
   message?: ClientReport;
 }

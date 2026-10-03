@@ -19,6 +19,12 @@
 // (not a workbook) and `Unlesbar` (a workbook that would not open, or a folder
 // that could not be listed). One bad file never fails the scan.
 //
+// A file whose BYTES the app already owns is `Vorhanden`, with the date it was
+// cleaned and, if so, imported — identity is the content hash, not the name, so
+// a renamed copy is found and an edited one is not. The same bytes twice in one
+// drop are `Vorhanden` too, pointing at the first: cleaning both would file one
+// document twice.
+//
 // Excel's owner files are skipped silently. Windows writes `~$Name.xlsx` beside
 // every workbook somebody has open, and listing it as an unreadable workbook
 // would be a false alarm on exactly the folder the user is working in. Hidden
@@ -27,11 +33,17 @@
 
 use std::path::{Path, PathBuf};
 
-use super::model::{ImportTemplate, ScanFile, ScanMatch, ScanStatus};
+use std::collections::HashMap;
+
+use super::model::{ImportTemplate, ScanFile, ScanMatch, ScanStatus, Vorhanden};
 use super::recognise;
 use super::sheet::grid;
 
-pub fn scan(paths: &[PathBuf], templates: &[ImportTemplate]) -> Vec<ScanFile> {
+pub fn scan(
+    paths: &[PathBuf],
+    templates: &[ImportTemplate],
+    owned: &dyn Fn(&str) -> Option<Vorhanden>,
+) -> Vec<ScanFile> {
     let mut files = Vec::new();
     let mut unreadable = Vec::new();
     for path in paths {
@@ -48,11 +60,50 @@ pub fn scan(paths: &[PathBuf], templates: &[ImportTemplate]) -> Vec<ScanFile> {
     let mut seen = std::collections::HashSet::new();
     files.retain(|file| seen.insert(file.clone()));
 
+    let mut first_of: HashMap<String, String> = HashMap::new();
     files
         .iter()
-        .map(|path| file(path, templates))
+        .map(|path| {
+            let mut scanned = file(path, templates);
+            if !matches!(
+                scanned.status,
+                ScanStatus::NichtUnterstuetzt | ScanStatus::Unlesbar
+            ) {
+                match super::dokument::hash_of(path) {
+                    Ok(hash) => mark_owned(&mut scanned, &hash, owned, &mut first_of),
+                    Err(error) => return failed(path, error),
+                }
+            }
+            scanned
+        })
         .chain(unreadable)
         .collect()
+}
+
+fn mark_owned(
+    scanned: &mut ScanFile,
+    hash: &str,
+    owned: &dyn Fn(&str) -> Option<Vorhanden>,
+    first_of: &mut HashMap<String, String>,
+) {
+    if let Some(vorhanden) = owned(hash) {
+        scanned.message = Some(match &vorhanden.importiert_am {
+            Some(when) => format!(
+                "Bereits bereinigt am {} und importiert am {when}.",
+                vorhanden.bereinigt_am
+            ),
+            None => format!("Bereits bereinigt am {}.", vorhanden.bereinigt_am),
+        });
+        scanned.status = ScanStatus::Vorhanden;
+        scanned.vorhanden = Some(vorhanden);
+        return;
+    }
+    if let Some(first) = first_of.get(hash) {
+        scanned.status = ScanStatus::Vorhanden;
+        scanned.message = Some(format!("Gleicher Inhalt wie „{first}“ in dieser Auswahl."));
+        return;
+    }
+    first_of.insert(hash.to_string(), scanned.name.clone());
 }
 
 fn failed(path: &Path, error: crate::error::AppError) -> ScanFile {
@@ -63,6 +114,7 @@ fn failed(path: &Path, error: crate::error::AppError) -> ScanFile {
         matches: Vec::new(),
         sheets: Vec::new(),
         message: Some(error.into_messages().join(" ")),
+        vorhanden: None,
     }
 }
 
@@ -84,6 +136,7 @@ fn file(path: &Path, templates: &[ImportTemplate]) -> ScanFile {
         matches: Vec::new(),
         sheets: Vec::new(),
         message: None,
+        vorhanden: None,
     };
     if !is_workbook(path) {
         scanned.status = ScanStatus::NichtUnterstuetzt;
@@ -140,7 +193,7 @@ mod tests {
             &[("Tabelle1", &[&["Asset"], &["x"]])],
         );
 
-        let scanned = scan(&[folder.path().to_path_buf()], &builtin::all());
+        let scanned = scan(&[folder.path().to_path_buf()], &builtin::all(), &|_| None);
         assert_eq!(names(&scanned), vec!["a.xlsx", "b.xlsx"]);
     }
 
@@ -156,7 +209,7 @@ mod tests {
             &[("Tabelle1", &[&["Asset"], &["x"]])],
         );
 
-        let scanned = scan(&[folder.path().to_path_buf()], &builtin::all());
+        let scanned = scan(&[folder.path().to_path_buf()], &builtin::all(), &|_| None);
         assert_eq!(names(&scanned), vec!["Liste.xlsx"]);
     }
 
@@ -165,7 +218,11 @@ mod tests {
     fn a_file_named_twice_is_listed_once() {
         let folder = TempDir::new("scan-twice");
         let file = workbook(&folder, "a.xlsx", &[("Tabelle1", &[&["Asset"], &["x"]])]);
-        let scanned = scan(&[folder.path().to_path_buf(), file], &builtin::all());
+        let scanned = scan(
+            &[folder.path().to_path_buf(), file],
+            &builtin::all(),
+            &|_| None,
+        );
         assert_eq!(scanned.len(), 1);
     }
 
@@ -185,7 +242,7 @@ mod tests {
         folder.write("3-notiz.pdf", "%PDF");
         folder.write("4-kaputt.xlsx", "not a zip");
 
-        let scanned = scan(&[folder.path().to_path_buf()], &builtin::all());
+        let scanned = scan(&[folder.path().to_path_buf()], &builtin::all(), &|_| None);
         let statuses: Vec<ScanStatus> = scanned.iter().map(|file| file.status).collect();
         assert_eq!(
             statuses,
@@ -212,7 +269,7 @@ mod tests {
                 ("Telematik", &[&["Asset", "Stadt"], &["x", "y"]]),
             ],
         );
-        let scanned = scan(&[file], &builtin::all());
+        let scanned = scan(&[file], &builtin::all(), &|_| None);
         assert_eq!(scanned[0].status, ScanStatus::Erkannt);
         assert_eq!(scanned[0].matches[0].sheet, "Telematik");
         assert_eq!(scanned[0].sheets, vec!["Übersicht", "Telematik"]);
@@ -238,8 +295,49 @@ mod tests {
                 ],
             )],
         );
-        let scanned = scan(&[file], &builtin::all());
+        let scanned = scan(&[file], &builtin::all(), &|_| None);
         assert_eq!(scanned[0].status, ScanStatus::Mehrdeutig);
         assert_eq!(scanned[0].matches.len(), 2);
+    }
+
+    #[test]
+    fn a_file_the_app_already_owns_is_vorhanden_with_its_dates() {
+        let folder = TempDir::new("scan-owned");
+        let file = workbook(&folder, "a.xlsx", &[("Tabelle1", &[&["Asset"], &["x"]])]);
+        let hash = crate::trains::dokument::hash_of(&file).unwrap();
+        let owned = |seen: &str| {
+            (seen == hash).then(|| Vorhanden {
+                dokument_id: "d1".into(),
+                bereinigt_am: "2026-10-01".into(),
+                importiert_am: Some("2026-10-02".into()),
+            })
+        };
+
+        let scanned = scan(&[file], &builtin::all(), &owned);
+        assert_eq!(scanned[0].status, ScanStatus::Vorhanden);
+        assert_eq!(scanned[0].vorhanden.as_ref().unwrap().dokument_id, "d1");
+        assert!(scanned[0]
+            .message
+            .as_deref()
+            .unwrap()
+            .contains("importiert"));
+    }
+
+    /// Identity is the bytes: a renamed copy in the same drop is one document.
+    #[test]
+    fn the_same_bytes_twice_in_one_drop_are_cleaned_once() {
+        let folder = TempDir::new("scan-copy");
+        let file = workbook(&folder, "a.xlsx", &[("Tabelle1", &[&["Asset"], &["x"]])]);
+        std::fs::copy(&file, folder.join("a - Kopie.xlsx")).unwrap();
+
+        let scanned = scan(&[folder.path().to_path_buf()], &builtin::all(), &|_| None);
+        let statuses: Vec<ScanStatus> = scanned.iter().map(|file| file.status).collect();
+        assert_eq!(names(&scanned), vec!["a - Kopie.xlsx", "a.xlsx"]);
+        assert_eq!(statuses, vec![ScanStatus::Erkannt, ScanStatus::Vorhanden]);
+        assert!(scanned[1]
+            .message
+            .as_deref()
+            .unwrap()
+            .contains("a - Kopie.xlsx"));
     }
 }

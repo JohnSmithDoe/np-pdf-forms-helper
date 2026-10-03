@@ -74,7 +74,9 @@ export class EventListFacade implements ListPageFacade {
         kind: event.leistung,
         date,
         displayDate: date ? formatIsoDate(date) : 'ohne Datum',
-        wagen: wagen ? formatUic(wagen.nummer) : '',
+        wagen: wagen
+          ? formatUic(wagen.nummer, this.#store.settings().wagennummer)
+          : '',
         werkstatt: event.werkstattId
           ? (partners.get(event.werkstattId)?.name ?? '')
           : '',

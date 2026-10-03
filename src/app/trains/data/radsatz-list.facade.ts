@@ -62,7 +62,9 @@ export class RadsatzListFacade implements ListPageFacade {
     const wagenById = this.#store.wagenById();
     const wagenLabel = (id: string): string => {
       const wagen = wagenById.get(id);
-      return wagen ? formatUic(wagen.nummer) : '';
+      return wagen
+        ? formatUic(wagen.nummer, this.#store.settings().wagennummer)
+        : '';
     };
 
     return radsaetze.map((radsatz) => {

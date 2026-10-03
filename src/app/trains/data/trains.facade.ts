@@ -11,7 +11,8 @@
 
 import { inject, Injectable } from '@angular/core';
 import { BackendService } from '../../@shared/data/backend/backend.service';
-import type { Partner, Wagen } from '../model/trains.types';
+import type { ClientReport } from '../../@shared/model/client.types';
+import type { Partner, TrainsSettings, Wagen } from '../model/trains.types';
 import { TrainsBackend } from './trains.backend';
 import { TrainsStore } from './trains.store';
 
@@ -32,6 +33,8 @@ export class TrainsFacade {
   readonly einbauten = this.#store.einbauten;
   readonly partners = this.#store.partners;
   readonly templates = this.#store.templates;
+  readonly dokumente = this.#store.dokumente;
+  readonly settings = this.#store.settings;
   readonly events = this.#store.events;
   readonly eventTotal = this.#store.eventTotal;
   readonly counts = this.#store.counts;
@@ -70,6 +73,14 @@ export class TrainsFacade {
     this.#store.applyTrainsData(await this.#backend.removePartner(id));
   }
 
+  async saveSettings(settings: TrainsSettings): Promise<void> {
+    this.#store.applyTrainsData(await this.#backend.saveSettings(settings));
+  }
+
+  async openFile(path: string): Promise<void> {
+    await this.#backend.openFile(path);
+  }
+
   async removeTemplate(id: string): Promise<void> {
     this.#store.applyTrainsData(await this.#backend.removeTemplate(id));
   }
@@ -84,7 +95,9 @@ export class TrainsFacade {
     await this.#backend.openFolder(folder);
   }
 
-  async createExport(): Promise<void> {
-    this.#store.applyTrainsData(await this.#backend.createExport());
+  async createExport(): Promise<ClientReport | undefined> {
+    const data = await this.#backend.createExport({ silent: true });
+    this.#store.applyTrainsData(data);
+    return data.message;
   }
 }

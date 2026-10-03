@@ -29,6 +29,7 @@ import {
   withState,
 } from '@ngrx/signals';
 import type {
+  Dokument,
   ImportTemplate,
   Instandhaltung,
   Einbau,
@@ -36,6 +37,7 @@ import type {
   StagedImport,
   TrainsCounts,
   TrainsData,
+  TrainsSettings,
   Wagen,
   Radsatz,
 } from '../model/trains.types';
@@ -48,6 +50,8 @@ type TrainsState = {
   einbauten: Einbau[] | undefined;
   events: Instandhaltung[] | undefined;
   eventTotal: number;
+  dokumente: Dokument[] | undefined;
+  settings: TrainsSettings;
   counts: TrainsCounts;
   staging: StagedImport | undefined;
 };
@@ -60,7 +64,9 @@ const initial: TrainsState = {
   einbauten: undefined,
   events: undefined,
   eventTotal: 0,
-  counts: { wagen: 0, partners: 0, events: 0, radsaetze: 0 },
+  dokumente: undefined,
+  settings: { wagennummer: 'compact' },
+  counts: { wagen: 0, partners: 0, events: 0, radsaetze: 0, dokumente: 0 },
   staging: undefined,
 };
 
@@ -81,6 +87,12 @@ export const TrainsStore = signalStore(
           (store.radsaetze() ?? []).map((radsatz) => [radsatz.id, radsatz])
         )
     ),
+    dokumentById: computed(
+      () =>
+        new Map(
+          (store.dokumente() ?? []).map((dokument) => [dokument.id, dokument])
+        )
+    ),
     wagenById: computed(
       () => new Map((store.wagen() ?? []).map((wagen) => [wagen.id, wagen]))
     ),
@@ -93,6 +105,8 @@ export const TrainsStore = signalStore(
       if (data.templates) next.templates = data.templates;
       if (data.radsaetze) next.radsaetze = data.radsaetze;
       if (data.einbauten) next.einbauten = data.einbauten;
+      if (data.dokumente) next.dokumente = data.dokumente;
+      if (data.settings) next.settings = data.settings;
       if (data.counts) next.counts = data.counts;
       if (data.staging) next.staging = data.staging;
       if (data.instandhaltungPage) {

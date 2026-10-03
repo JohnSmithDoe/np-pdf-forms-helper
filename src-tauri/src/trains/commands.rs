@@ -17,15 +17,21 @@
 //
 // A cancelled picker is not a failure and gets no report — same as `add_documents`.
 //
-// The guided import is a second held slot, `cleaning`, beside `staging`: the
-// file being cleaned and the cleaned file being previewed are two different
-// files, and one slot would have the second overwrite the first mid-flow.
-// `write_clean` is where one becomes the other — it re-runs the cleaning with
-// the decisions it was SENT rather than trusting the last report, refuses while
-// anything is open (`clean::ready`), writes the copy and stages THAT with the
-// confirmed plan. `commit_import` then teaches the plan's readings to its
-// template — for a guided import and a manual one alike, since a reading the
-// user set in the mapper is just as confirmed.
+// Cleaning is a second held slot, `cleaning`, beside `staging`: the file being
+// cleaned and a document being imported are different things, and one slot
+// would have either overwrite the other. `clean_file` ADOPTS the original before
+// reading it — copies it into the document's own folder, refusing bytes already
+// owned — so what is cleaned is what is stored. `write_clean` is the cleaning's
+// commit point: it re-runs the cleaning with the decisions it was SENT rather
+// than trusting the last report, refuses while anything is open
+// (`clean::ready`), writes the copy and its protocol, and files the record and
+// what the template learned in ONE transaction. It stages nothing: importing is
+// a separate, later act, started from the document by `stage_document`.
+//
+// `commit_document` takes one decision per ENTITY and lets `entities::expand`
+// turn them into the per-row decisions `commit` checks. There is no other way
+// in any more — `commit_import` went with the manual import, and the mapper's
+// only exit is `save_template`, after which the file is cleaned like any other.
 // ────────────────────────────────────────────────────────────────
 
 use std::path::{Path, PathBuf};
@@ -38,12 +44,14 @@ use crate::model::ClientReport;
 use crate::picker;
 use crate::state::AppState;
 use crate::trains::db::TrainsDb;
+use crate::trains::dokument::{self, Cleaning, Filed};
 use crate::trains::model::{
-    CleanDecisions, CommitDecisions, ImportPlan, Partner, Radsatz, TrainsData, Wagen,
+    CleanDecisions, EntityDecisions, ImportPlan, Partner, Radsatz, TrainsData, TrainsSettings,
+    Vorhanden, Wagen,
 };
 use crate::trains::sheet::grid;
 use crate::trains::stage::{stage, HeldImport, StageInput};
-use crate::trains::{clean, commit, export, recognise, scan};
+use crate::trains::{clean, commit, entities, export, recognise, scan, template};
 
 fn everything(db: &TrainsDb) -> TrainsData {
     TrainsData::nothing()
@@ -52,6 +60,8 @@ fn everything(db: &TrainsDb) -> TrainsData {
         .radsaetze(db.radsaetze())
         .einbauten(db.einbauten())
         .templates(db.templates())
+        .dokumente(db.dokumente())
+        .settings(db.settings())
         .counts(db.counts())
 }
 
@@ -135,21 +145,84 @@ pub fn discard_import(state: State<'_, AppState>) -> AppResult<TrainsData> {
 }
 
 #[tauri::command(async)]
-pub fn commit_import(
-    decisions: CommitDecisions,
+pub fn stage_document(id: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    stage_owned(&id, &state)
+}
+
+fn stage_owned(id: &str, state: &AppState) -> AppResult<TrainsData> {
+    let found = state.trains().dokument(id).cloned();
+    let dokument =
+        found.ok_or_else(|| AppError::Report(vec!["Das Dokument gibt es nicht mehr.".into()]))?;
+    let cleaned = dokument::importable(&dokument)?;
+    let protocol = match cleaned.parent() {
+        Some(folder) => dokument::read_protocol(folder)?,
+        None => Vec::new(),
+    };
+    let source = grid::read(&cleaned, Some(&dokument.sheet))?;
+
+    let mut staged = stage(StageInput {
+        id: Uuid::new_v4().to_string(),
+        file: dokument.name.clone(),
+        sheets: source.sheets.clone(),
+        candidates: Vec::new(),
+        grid: &source.grid,
+        plan: &dokument.plan,
+        db: &state.trains(),
+    })?;
+    staged.wire.dokument_id = Some(dokument.id.clone());
+    staged.wire.entities = Some(entities::group(&staged.wire, &protocol));
+
+    let wire = staged.wire.clone();
+    *state.staging() = Some(HeldImport {
+        grid: source.grid,
+        wire: staged.wire,
+        values: staged.values,
+    });
+    Ok(TrainsData::nothing()
+        .staging(wire)
+        .counts(state.trains().counts()))
+}
+
+#[tauri::command(async)]
+pub fn commit_document(
+    decisions: EntityDecisions,
     state: State<'_, AppState>,
 ) -> AppResult<TrainsData> {
-    let held = state.staging();
-    let held = held.as_ref().ok_or_else(stale)?;
-    let mut db = state.trains();
-    let mut report = commit::commit(&mut db, &held.wire, &held.values, &decisions)?.report();
+    commit_owned(&decisions, &state)
+}
 
-    if let Some(template_id) = &held.wire.plan.template_id {
-        if let Some(line) = commit::learn(&mut db, template_id, &held.wire.plan)? {
-            report.messages.push(line);
-        }
+fn commit_owned(decisions: &EntityDecisions, state: &AppState) -> AppResult<TrainsData> {
+    let mut held = state.staging();
+    let staging = held.as_ref().ok_or_else(stale)?;
+    if staging.wire.dokument_id.is_none() {
+        return Err(AppError::Report(vec![
+            "Importiert wird nur ein bereinigtes Dokument.".into(),
+        ]));
     }
+    let rows = entities::expand(&staging.wire, decisions);
+    let mut db = state.trains();
+    let report = commit::commit(&mut db, &staging.wire, &staging.values, &rows)?.report();
+    *held = None;
     Ok(everything(&db).report(report))
+}
+
+#[tauri::command]
+pub fn save_template(name: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    let mut held = state.staging();
+    let plan = held.as_ref().ok_or_else(stale)?.wire.plan.clone();
+    let template = template::save(&name, &plan)?;
+    let saved = template.name.clone();
+    let mut db = state.trains();
+    db.transaction(|tx| {
+        tx.put_template(template);
+        Ok(())
+    })?;
+    *held = None;
+    Ok(TrainsData::nothing()
+        .templates(db.templates())
+        .report(ClientReport::headline(format!(
+            "Vorlage „{saved}“ wurde gespeichert"
+        ))))
 }
 
 #[tauri::command(async)]
@@ -189,14 +262,50 @@ pub fn clean_file(
     template_id: String,
     state: State<'_, AppState>,
 ) -> AppResult<TrainsData> {
-    let template = state
-        .trains()
-        .template(&template_id)
-        .ok_or_else(|| AppError::Report(vec!["Die gewählte Vorlage gibt es nicht mehr.".into()]))?;
-    let held = clean::open(Path::new(&path), &sheet, &template)?;
-    let report = held.run(&CleanDecisions::default())?.report;
-    *state.cleaning() = Some(held);
-    Ok(TrainsData::nothing().cleaning(report))
+    adopt_and_clean(Path::new(&path), &sheet, &template_id, &state)
+}
+
+fn adopt_and_clean(
+    path: &Path,
+    sheet: &str,
+    template_id: &str,
+    state: &AppState,
+) -> AppResult<TrainsData> {
+    let hash = dokument::hash_of(path)?;
+    let (template, root, uic) = {
+        let db = state.trains();
+        if let Some(owned) = db.dokument_by_hash(&hash) {
+            return Err(AppError::Report(vec![
+                format!(
+                    "„{}“ wurde bereits am {} bereinigt.",
+                    crate::doc::file_name(path),
+                    owned.bereinigt_am
+                ),
+                format!("Es liegt unter den Dokumenten als „{}“.", owned.name),
+            ]));
+        }
+        let template = db.template(template_id).ok_or_else(|| {
+            AppError::Report(vec!["Die gewählte Vorlage gibt es nicht mehr.".into()])
+        })?;
+        (template, db.dokumente_folder(), db.settings().wagennummer)
+    };
+
+    let adopted = dokument::adopt(path, &root)?;
+    let opened = clean::open(&adopted.path, sheet, &template, uic)
+        .and_then(|held| held.run(&CleanDecisions::default()).map(|run| (held, run)));
+    let (held, run) = match opened {
+        Ok(opened) => opened,
+        Err(error) => {
+            dokument::discard(&adopted.folder);
+            return Err(error);
+        }
+    };
+
+    let previous = state.cleaning().replace(Cleaning { adopted, held });
+    if let Some(previous) = previous {
+        dokument::discard(&previous.adopted.folder);
+    }
+    Ok(TrainsData::nothing().cleaning(run.report))
 }
 
 #[tauri::command(async)]
@@ -204,57 +313,105 @@ pub fn reclean_file(
     decisions: CleanDecisions,
     state: State<'_, AppState>,
 ) -> AppResult<TrainsData> {
-    let held = state.cleaning();
-    let held = held.as_ref().ok_or_else(stale)?;
-    Ok(TrainsData::nothing().cleaning(held.run(&decisions)?.report))
+    let cleaning = state.cleaning();
+    let cleaning = cleaning.as_ref().ok_or_else(stale)?;
+    Ok(TrainsData::nothing().cleaning(cleaning.held.run(&decisions)?.report))
 }
 
 #[tauri::command(async)]
 pub fn write_clean(decisions: CleanDecisions, state: State<'_, AppState>) -> AppResult<TrainsData> {
-    let (cleaned, path, sheet) = {
-        let held = state.cleaning();
-        let held = held.as_ref().ok_or_else(stale)?;
-        (
-            held.run(&decisions)?,
-            held.path.clone(),
-            held.grid.sheet.clone(),
-        )
-    };
+    file_cleaned(&decisions, &state)
+}
+
+fn file_cleaned(decisions: &CleanDecisions, state: &AppState) -> AppResult<TrainsData> {
+    let mut slot = state.cleaning();
+    let cleaning = slot.as_ref().ok_or_else(stale)?;
+    let cleaned = cleaning.held.run(decisions)?;
     clean::ready(&cleaned.report)?;
 
-    let folder = state
-        .config
-        .output_path
-        .join(format!("bereinigt-{}", crate::trains::clock::today_iso()));
-    let written = clean::write::write(&path, &sheet, &cleaned.changes, &folder)?;
+    let adopted = &cleaning.adopted;
+    let sheet = cleaning.held.grid.sheet.clone();
+    let written = clean::write::write(&adopted.path, &sheet, &cleaned.changes, &adopted.folder)?;
 
-    let source = grid::read(&written, Some(&sheet))?;
-    let staged = stage_source(&written, source, Vec::new(), cleaned.confirmed, &state)?;
-    *state.cleaning() = None;
+    let mut db = state.trains();
+    let filed = dokument::write_protocol(&adopted.folder, &cleaned.changes)
+        .and_then(|()| {
+            dokument::record(
+                adopted,
+                Filed {
+                    sheet: &sheet,
+                    template_id: &cleaned.report.template_id,
+                    template_name: &cleaned.report.template_name,
+                    plan: cleaned.confirmed.clone(),
+                    cleaned: &written,
+                    summary: cleaned.report.summary,
+                    stamp: &crate::trains::clock::today_iso(),
+                },
+            )
+        })
+        .and_then(|record| {
+            let lesson = template::learned(&db, &cleaned.report.template_id, &cleaned.confirmed);
+            let line = lesson.as_ref().map(|(_, line)| line.clone());
+            db.transaction(|tx| {
+                tx.put_dokument(record);
+                if let Some((learned, _)) = lesson {
+                    tx.put_template(learned);
+                }
+                Ok(())
+            })
+            .map(|()| line)
+        });
+    let learned = match filed {
+        Ok(line) => line,
+        Err(error) => {
+            let _ = std::fs::remove_file(&written);
+            let _ = std::fs::remove_file(adopted.folder.join(dokument::PROTOCOL_FILE));
+            return Err(error);
+        }
+    };
 
-    Ok(staged.cleaned_file(&written).report(ClientReport {
-        headline: "Bereinigte Datei wurde geschrieben".into(),
-        messages: vec![
-            format!("Datei wurde erstellt: {}", crate::doc::file_name(&written)),
-            format!(
-                "{} Änderung(en) im Blatt „{}“ protokolliert.",
-                cleaned.changes.len(),
-                clean::write::PROTOCOL
-            ),
-        ],
-        message_folder: Some(folder.to_string_lossy().into_owned()),
-    }))
+    let mut messages = vec![format!(
+        "{} Änderung(en) im Blatt „{}“ der bereinigten Datei protokolliert.",
+        cleaned.changes.len(),
+        clean::write::PROTOCOL
+    )];
+    messages.extend(learned);
+    let name = adopted.name.clone();
+    *slot = None;
+
+    Ok(TrainsData::nothing()
+        .dokumente(db.dokumente())
+        .templates(db.templates())
+        .counts(db.counts())
+        .report(ClientReport {
+            headline: format!("„{name}“ wurde bereinigt"),
+            messages,
+            message_folder: None,
+        }))
 }
 
 #[tauri::command]
 pub fn discard_clean(state: State<'_, AppState>) -> AppResult<TrainsData> {
-    *state.cleaning() = None;
+    abandon_cleaning(&state);
     Ok(TrainsData::nothing())
 }
 
+fn abandon_cleaning(state: &AppState) {
+    if let Some(cleaning) = state.cleaning().take() {
+        dokument::discard(&cleaning.adopted.folder);
+    }
+}
+
 fn scanned(paths: &[PathBuf], state: &AppState) -> TrainsData {
-    let templates = state.trains().templates();
-    TrainsData::nothing().scan(scan::scan(paths, &templates))
+    let db = state.trains();
+    let owned = |hash: &str| {
+        db.dokument_by_hash(hash).map(|dokument| Vorhanden {
+            dokument_id: dokument.id.clone(),
+            bereinigt_am: dokument.bereinigt_am.clone(),
+            importiert_am: dokument.importiert_am.clone(),
+        })
+    };
+    TrainsData::nothing().scan(scan::scan(paths, &db.templates(), &owned))
 }
 
 #[tauri::command]
@@ -343,6 +500,18 @@ pub fn remove_partner(id: String, state: State<'_, AppState>) -> AppResult<Train
 }
 
 #[tauri::command]
+pub fn save_trains_settings(
+    settings: TrainsSettings,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    let mut db = state.trains();
+    db.save_settings(settings)?;
+    Ok(TrainsData::nothing()
+        .settings(db.settings())
+        .report(ClientReport::headline("Einstellungen wurden gespeichert")))
+}
+
+#[tauri::command]
 pub fn remove_template(id: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
     if crate::trains::builtin::is_builtin(&id) {
         return Err(AppError::Report(vec![
@@ -362,8 +531,9 @@ pub fn remove_template(id: String, state: State<'_, AppState>) -> AppResult<Trai
 #[tauri::command]
 pub fn reset_trains(state: State<'_, AppState>) -> AppResult<TrainsData> {
     let mut db = state.trains();
-    db.reset()?;
     *state.staging() = None;
+    *state.cleaning() = None;
+    db.reset()?;
     Ok(everything(&db).report(ClientReport::headline("Zugdaten wurden zurückgesetzt")))
 }
 
@@ -421,4 +591,196 @@ fn stale() -> AppError {
         "Die Vorschau ist nicht mehr aktuell.".into(),
         "Bitte den Import erneut starten.".into(),
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::{workbook, TempDir};
+    use crate::trains::model::{
+        ColumnBinding, EntityChoice, EntityDecision, FieldKind, ImportPlan,
+    };
+    use crate::trains::sheet::layout::LayoutHint;
+    use crate::trains::sheet::readers::ReaderKind;
+
+    const HEADERS: [&str; 4] = ["Wagennummer", "Datum", "Werkstatt", "Leistung"];
+
+    fn monatsliste(state: &AppState) -> String {
+        let plan = ImportPlan {
+            reader: ReaderKind::HeaderRow,
+            layout: LayoutHint {
+                header_row: Some(1),
+                first_data_row: 2,
+                last_data_row: None,
+            },
+            columns: [
+                FieldKind::Wagennummer,
+                FieldKind::Datum,
+                FieldKind::Werkstatt,
+                FieldKind::Leistung,
+            ]
+            .into_iter()
+            .zip(HEADERS)
+            .enumerate()
+            .map(|(position, (field, header))| ColumnBinding {
+                header: header.into(),
+                index: position as u32 + 1,
+                field,
+                decimal: None,
+                date_order: None,
+            })
+            .collect(),
+            template_id: None,
+            date1904: false,
+        };
+        let saved = template::save("Monatsliste", &plan).unwrap();
+        let id = saved.id.clone();
+        state
+            .trains()
+            .transaction(|tx| {
+                tx.put_template(saved);
+                Ok(())
+            })
+            .unwrap();
+        id
+    }
+
+    fn sender_file(folder: &TempDir) -> PathBuf {
+        workbook(
+            folder,
+            "monat.xlsx",
+            &[(
+                "Tabelle1",
+                &[
+                    &HEADERS,
+                    &[
+                        "218124712173",
+                        "31.12.2025",
+                        "Schienenbein Waggonwerk GmbH",
+                        "Bremsprobe",
+                    ],
+                ],
+            )],
+        )
+    }
+
+    fn owned_folders(state: &AppState) -> usize {
+        std::fs::read_dir(state.trains().dokumente_folder())
+            .map(|entries| entries.count())
+            .unwrap_or(0)
+    }
+
+    /// The whole life of a file: adopted, cleaned, filed — then, separately,
+    /// staged per entity and imported, after which it is final.
+    #[test]
+    fn a_file_is_cleaned_into_a_document_and_imported_once() {
+        let folder = TempDir::new("cmd-flow");
+        let state = folder.state();
+        let template = monatsliste(&state);
+        let file = sender_file(&folder);
+
+        let opened = adopt_and_clean(&file, "Tabelle1", &template, &state).unwrap();
+        assert!(opened.cleaning.is_some());
+        let filed = file_cleaned(&CleanDecisions::default(), &state).unwrap();
+        assert!(state.cleaning().is_none());
+
+        let dokument = filed.dokumente.unwrap().remove(0);
+        assert_eq!(dokument.name, "monat.xlsx");
+        assert_eq!(dokument.original_hash, dokument::hash_of(&file).unwrap());
+        assert!(Path::new(&dokument.original).is_file());
+        assert!(Path::new(&dokument.cleaned).is_file());
+        assert!(Path::new(&dokument.cleaned)
+            .with_file_name(dokument::PROTOCOL_FILE)
+            .is_file());
+        assert_eq!(dokument.importiert_am, None);
+
+        // Filing staged nothing: importing is a separate act.
+        assert!(state.staging().is_none());
+
+        let staged = stage_owned(&dokument.id, &state).unwrap().staging.unwrap();
+        let groups = staged.entities.unwrap();
+        assert_eq!(groups.wagen.len(), 1);
+        assert_eq!(groups.partner.len(), 1);
+        assert!(
+            !groups.wagen[0].changes.is_empty(),
+            "the Wagennummer's reformatting is shown on its group"
+        );
+
+        let decisions = EntityDecisions {
+            staging_id: staged.id.clone(),
+            partner: vec![EntityChoice {
+                key: groups.partner[0].key.clone(),
+                decision: EntityDecision::Create,
+            }],
+            wagen: vec![EntityChoice {
+                key: groups.wagen[0].key.clone(),
+                decision: EntityDecision::Create,
+            }],
+            radsaetze: Vec::new(),
+            rows: vec![2],
+        };
+        let committed = commit_owned(&decisions, &state).unwrap();
+        assert_eq!(committed.counts.unwrap().instandhaltungen, 1);
+        assert!(state
+            .trains()
+            .dokument(&dokument.id)
+            .unwrap()
+            .importiert_am
+            .is_some());
+
+        let again = stage_owned(&dokument.id, &state).unwrap_err();
+        assert!(again.into_messages()[0].contains("bereits"));
+    }
+
+    #[test]
+    fn bytes_already_owned_are_refused_before_anything_is_copied() {
+        let folder = TempDir::new("cmd-twice");
+        let state = folder.state();
+        let template = monatsliste(&state);
+        let file = sender_file(&folder);
+        adopt_and_clean(&file, "Tabelle1", &template, &state).unwrap();
+        file_cleaned(&CleanDecisions::default(), &state).unwrap();
+
+        let copy = folder.join("monat - Kopie.xlsx");
+        std::fs::copy(&file, &copy).unwrap();
+        let error = adopt_and_clean(&copy, "Tabelle1", &template, &state).unwrap_err();
+        assert!(error.into_messages()[0].contains("bereits"));
+        assert_eq!(owned_folders(&state), 1);
+    }
+
+    /// A cleaning the user walks away from leaves no folder, no record and
+    /// nothing learned.
+    #[test]
+    fn an_abandoned_cleaning_leaves_nothing_behind() {
+        let folder = TempDir::new("cmd-abandon");
+        let state = folder.state();
+        let template = monatsliste(&state);
+        adopt_and_clean(&sender_file(&folder), "Tabelle1", &template, &state).unwrap();
+        assert_eq!(owned_folders(&state), 1);
+
+        abandon_cleaning(&state);
+        assert_eq!(owned_folders(&state), 0);
+        assert_eq!(state.trains().counts().dokumente, 0);
+    }
+
+    #[test]
+    fn a_staging_from_the_mapper_cannot_be_imported() {
+        let folder = TempDir::new("cmd-mapper");
+        let state = folder.state();
+        read_and_stage(&sender_file(&folder), None, &state).unwrap();
+        let staging_id = state.staging().as_ref().unwrap().wire.id.clone();
+        let error = commit_owned(
+            &EntityDecisions {
+                staging_id,
+                partner: Vec::new(),
+                wagen: Vec::new(),
+                radsaetze: Vec::new(),
+                rows: vec![2],
+            },
+            &state,
+        )
+        .unwrap_err();
+        assert!(error.into_messages()[0].contains("bereinigtes Dokument"));
+        assert_eq!(state.trains().counts().instandhaltungen, 0);
+    }
 }

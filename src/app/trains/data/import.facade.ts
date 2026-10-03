@@ -1,39 +1,32 @@
 // ─── why ────────────────────────────────────────────────────────
-// The import wizard's API. It owns the four-stage walk and the decisions, and it
-// is the only thing that knows both the staged preview and what the user did
-// with it.
+// The template mapper's API: a file nobody has a template for is staged, its
+// columns mapped, and the mapping saved as a template — after which the file is
+// cleaned like every other. It imports nothing; there is no way into the
+// Schattensystem that skips the cleaning.
 //
 // Auto-mapping runs ONCE, when a file arrives without a template — re-running it
 // on every restage would overwrite the user's own choices with a guess. A
-// template hit skips it entirely, which is the whole payoff: the second file
-// from a sender costs nothing.
+// template hit skips it entirely: a template already carries the user's own
+// mapping, and guessing over it would replace a decision with an assumption.
 //
-// `stagePath` is `pickFile` without the picker: the guided import hands an
+// `stagePath` is `pickFile` without the picker: the cleaning hub hands an
 // unrecognised file over by path, and it must land on the mapping step exactly
-// as a picked file does — same auto-mapping, same template rule.
-//
-// `decisions` is public because the guided import commits the same preview
-// through `IntakeFacade`, silently; two copies of the row→decision mapping would
-// drift on the next entity added.
-//
-// `commit` sends only the rows the user ticked. Everything else is not "skipped"
-// as an instruction, it is simply not asked for.
+// as a picked file does — same auto-mapping, same template rule. `handedOver`
+// remembers that it came from the hub, so saving can send the user back there.
 // ────────────────────────────────────────────────────────────────
 
-import { computed, inject, Injectable } from '@angular/core';
+import { computed, inject, Injectable, signal } from '@angular/core';
 import type {
   ColumnBinding,
-  CommitDecisions,
   DecimalStyle,
   DateOrder,
   FieldKind,
   ImportPlan,
-  RowStatus,
   TrainsData,
 } from '../model/trains.types';
 import { requiredFields } from '../model/field-catalogue';
 import { suggestBindings } from '../util/column-suggest.util';
-import { ImportStore, type RowChoice, type Stage } from './import.store';
+import { ImportStore, type Stage } from './import.store';
 import { TrainsBackend } from './trains.backend';
 import { TrainsStore } from './trains.store';
 
@@ -42,15 +35,13 @@ export class ImportFacade {
   readonly #backend = inject(TrainsBackend);
   readonly #trains = inject(TrainsStore);
   readonly #store = inject(ImportStore);
+  readonly #handedOver = signal(false);
 
   readonly staging = this.#trains.staging;
   readonly stage = this.#store.stage;
-  readonly choices = this.#store.choices;
-  readonly statusFilter = this.#store.statusFilter;
-  readonly templateName = this.#store.templateName;
+  readonly handedOver = this.#handedOver.asReadonly();
 
   readonly plan = computed(() => this.staging()?.plan);
-  readonly summary = computed(() => this.staging()?.summary);
   readonly sheets = computed(() => this.staging()?.sheets ?? []);
   readonly candidates = computed(() => this.staging()?.candidates ?? []);
   readonly autoMapped = computed(
@@ -64,28 +55,18 @@ export class ImportFacade {
     );
   });
 
-  readonly canReview = computed(
+  readonly canSave = computed(
     () => !!this.staging() && this.missingRequired().length === 0
   );
 
-  readonly rows = computed(() => {
-    const all = this.staging()?.rows ?? [];
-    const filter = this.statusFilter();
-    return filter ? all.filter((row) => row.status === filter) : all;
-  });
-
-  readonly includedRows = computed(() =>
-    (this.staging()?.rows ?? []).filter(
-      (row) => this.choices()[row.row]?.include
-    )
-  );
-
   async pickFile(): Promise<void> {
+    this.#handedOver.set(false);
     await this.#adopt(await this.#backend.stageImport());
   }
 
   async stagePath(path: string): Promise<void> {
     await this.#adopt(await this.#backend.stageImportPath(path));
+    this.#handedOver.set(true);
   }
 
   async #adopt(data: TrainsData): Promise<void> {
@@ -94,12 +75,8 @@ export class ImportFacade {
     if (!data.staging) return;
 
     const plan = data.staging.plan;
-    // A template already carries the user's own mapping; guessing over it would
-    // replace a decision with an assumption.
     if (!plan.templateId) {
       await this.applyPlan({ ...plan, columns: suggestBindings(plan.columns) });
-    } else {
-      this.#seed();
     }
     this.#store.setStage('mapping');
   }
@@ -115,7 +92,6 @@ export class ImportFacade {
 
   async applyPlan(plan: ImportPlan): Promise<void> {
     this.#trains.applyTrainsData(await this.#backend.restageImport(plan));
-    this.#seed();
   }
 
   async setField(index: number, field: FieldKind): Promise<void> {
@@ -144,48 +120,10 @@ export class ImportFacade {
     this.#store.setStage(stage);
   }
 
-  setFilter(status: RowStatus | undefined): void {
-    this.#store.setFilter(status);
-  }
-
-  setTemplateName(name: string): void {
-    this.#store.setTemplateName(name);
-  }
-
-  setChoice(row: number, patch: Partial<RowChoice>): void {
-    this.#store.setChoice(row, patch);
-  }
-
-  setAllIncluded(include: boolean): void {
-    this.#store.setAllIncluded(
-      this.rows().map((row) => row.row),
-      include
-    );
-  }
-
-  decisions(): CommitDecisions | undefined {
-    const staging = this.staging();
-    if (!staging) return undefined;
-    const choices = this.choices();
-    return {
-      stagingId: staging.id,
-      rows: this.includedRows().map((row) => ({
-        row: row.row,
-        wagen: choices[row.row]?.wagen ?? { action: 'create' },
-        werkstatt: choices[row.row]?.werkstatt ?? { action: 'create' },
-        halter: choices[row.row]?.halter ?? { action: 'create' },
-        eigentuemer: choices[row.row]?.eigentuemer ?? { action: 'skip' },
-        radsatz: choices[row.row]?.radsatz ?? { action: 'create' },
-      })),
-      saveTemplateAs: this.templateName().trim() || undefined,
-    };
-  }
-
-  async commit(): Promise<void> {
-    const decisions = this.decisions();
-    if (!decisions) return;
-    this.#trains.applyTrainsData(await this.#backend.commitImport(decisions));
-    await this.discard();
+  async saveTemplate(name: string): Promise<void> {
+    this.#trains.applyTrainsData(await this.#backend.saveTemplate(name));
+    this.#trains.clearStaging();
+    this.#store.reset();
   }
 
   async discard(): Promise<void> {
@@ -206,9 +144,5 @@ export class ImportFacade {
         column.index === index ? change(column) : column
       ),
     });
-  }
-
-  #seed(): void {
-    this.#store.seedChoices(this.staging()?.rows ?? []);
   }
 }

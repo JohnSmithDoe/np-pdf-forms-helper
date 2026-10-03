@@ -1,0 +1,27 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Import abgeschlossen"
+  [phase]="phase"
+  phaseColor="tertiary"
+  [step]="steps"
+  [stepCount]="steps"
+  [showBack]="false"
+  [nextLabel]="hasNext() ? 'Nächstes Dokument' : 'Fertig'"
+  nextColor="success"
+  (next)="onNext()"
+>
+  @if (facade.report(); as report) {
+    <section data-testid="import-result">
+      <h2>{{ report.headline }}</h2>
+      <app-report-view [report]="report" />
+    </section>
+  }
+
+  @if (hasNext()) {
+    <ion-button wizardFooter fill="clear" (click)="onDone()">
+      Fertig
+    </ion-button>
+  }
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

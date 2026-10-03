@@ -16,12 +16,21 @@
 // derived from the loaded list the same way `PartnerListFacade` filters it, and a
 // partner in two roles is counted in both — which is what the lists show too.
 //
+// Einstellungen is the one tile with no count — it is not a list — and it comes
+// last for the same reason.
+//
 // `undefined` means "not loaded yet" and renders no number at all, rather than a
 // 0 that would read as an empty store. The route sits under the domain's
 // resolver, so in practice the data is there before the page is.
 //
-// Import gets no count and comes first: it is the only tile that is an ACTION,
-// and everything the others show arrives through it.
+// Bereinigen gets no count and comes first: it is the only tile that is an
+// ACTION, and everything the others show arrives through it. Dokumente comes
+// right after it — the files the app owns, and the place an import starts from
+// once the cleaning is done.
+//
+// „Export erstellen“ sits in the toolbar here because the dashboard is the
+// domain's one way in. It runs `silent` and presents its own report, since no
+// page in trains listens on `report$` any more.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -32,6 +41,7 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import {
+  IonButton,
   IonButtons,
   IonCard,
   IonCardContent,
@@ -52,12 +62,17 @@ import {
   buildOutline,
   businessOutline,
   cloudUploadOutline,
+  colorWandOutline,
+  documentsOutline,
   ellipseOutline,
   peopleOutline,
   ribbonOutline,
+  settingsOutline,
   trainOutline,
 } from 'ionicons/icons';
+import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { TrainsFacade } from '../../data';
+import type { ClientReport } from '../../../@shared/model/client.types';
 import type { PartnerRolle } from '../../model/trains.types';
 
 interface DashboardTile {
@@ -66,6 +81,7 @@ interface DashboardTile {
   icon: string;
   description: string;
   count?: number;
+  subtitle?: string;
 }
 
 @Component({
@@ -75,6 +91,7 @@ interface DashboardTile {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'ion-page' },
   imports: [
+    IonButton,
     IonButtons,
     IonCard,
     IonCardContent,
@@ -93,21 +110,30 @@ interface DashboardTile {
 export class TrainsDashboardPage {
   readonly #facade = inject(TrainsFacade);
   readonly #router = inject(Router);
+  readonly #reports = inject(ReportPresenterService);
 
   protected readonly loaded = this.#facade.loaded;
 
   protected readonly importTile: DashboardTile = {
-    route: '/trains/import',
-    label: 'Import',
-    icon: 'cloud-upload-outline',
+    route: '/trains/clean',
+    label: 'Bereinigen',
+    icon: 'color-wand-outline',
     description:
-      'Einen Ordner oder Dateien einlesen, erkennen lassen, bereinigen, prüfen und übernehmen.',
+      'Einen Ordner oder Dateien einlesen, erkennen lassen und bereinigen. Ins Schattensystem kommt dabei noch nichts.',
   };
 
   protected readonly tiles = computed<DashboardTile[]>(() => {
     const counts = this.#facade.counts();
     const loaded = this.#facade.loaded();
     return [
+      {
+        route: '/trains/documents',
+        label: 'Dokumente',
+        icon: 'documents-outline',
+        description:
+          'Die bereinigten Dateien — von hier aus ins Schattensystem importieren.',
+        count: loaded ? counts.dokumente : undefined,
+      },
       {
         route: '/trains/wagen',
         label: 'Wagen',
@@ -157,6 +183,13 @@ export class TrainsDashboardPage {
         description: 'Gespeicherte Spaltenzuordnungen, eine je Dateiform.',
         count: this.#facade.templates()?.length,
       },
+      {
+        route: '/trains/settings',
+        label: 'Einstellungen',
+        icon: 'settings-outline',
+        description: 'Wie das Schattensystem Wagennummern schreibt und zeigt.',
+        subtitle: 'Für alle Listen und Dateien',
+      },
     ];
   });
 
@@ -166,9 +199,12 @@ export class TrainsDashboardPage {
       buildOutline,
       businessOutline,
       cloudUploadOutline,
+      colorWandOutline,
+      documentsOutline,
       ellipseOutline,
       peopleOutline,
       ribbonOutline,
+      settingsOutline,
       trainOutline,
     });
   }
@@ -180,6 +216,16 @@ export class TrainsDashboardPage {
 
   protected open(tile: DashboardTile): void {
     void this.#router.navigate([tile.route]);
+  }
+
+  protected async onExport(): Promise<void> {
+    let report: ClientReport | undefined;
+    const ok = await this.#reports.run(async () => {
+      report = await this.#facade.createExport();
+    });
+    if (!ok || !report) return;
+    const folder = await this.#reports.show(report);
+    if (folder) await this.#reports.run(() => this.#facade.openFolder(folder));
   }
 
   #partnerCount(role: PartnerRolle): number | undefined {

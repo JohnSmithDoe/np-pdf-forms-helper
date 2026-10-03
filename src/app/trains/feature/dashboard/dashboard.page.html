@@ -4,6 +4,12 @@
       <ion-menu-button aria-label="Menü öffnen" />
     </ion-buttons>
     <ion-title>Schattensystem</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="onExport()" data-testid="trains-export">
+        <ion-icon slot="start" name="cloud-upload-outline" aria-hidden="true" />
+        Export erstellen
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
@@ -21,7 +27,7 @@
   >
     <ion-card-header>
       <ion-icon [name]="importTile.icon" aria-hidden="true" size="large" />
-      <ion-card-subtitle>Hier kommen die Daten herein</ion-card-subtitle>
+      <ion-card-subtitle>Hier kommen die Dateien herein</ion-card-subtitle>
       <ion-card-title>{{ importTile.label }}</ion-card-title>
     </ion-card-header>
     <ion-card-content>{{ importTile.description }}</ion-card-content>
@@ -37,7 +43,9 @@
       >
         <ion-card-header>
           <ion-icon [name]="tile.icon" aria-hidden="true" size="large" />
-          <ion-card-subtitle>{{ entries(tile.count) }}</ion-card-subtitle>
+          <ion-card-subtitle>{{
+            tile.subtitle ?? entries(tile.count)
+          }}</ion-card-subtitle>
           <ion-card-title>{{ tile.label }}</ion-card-title>
         </ion-card-header>
         <ion-card-content>{{ tile.description }}</ion-card-content>

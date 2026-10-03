@@ -40,7 +40,7 @@ use std::path::{Path, PathBuf};
 
 use super::model::{
     CardExample, CleanDecisions, CleanReport, CleanSummary, Confirmation, DeutungCard, FehlerCell,
-    FieldKind, FormatGroup, FormatSample, ImportPlan, ImportTemplate, Reading, Tier,
+    FieldKind, FormatGroup, FormatSample, ImportPlan, ImportTemplate, Reading, Tier, UicStyle,
 };
 use super::reading::{read_column, reads_a_date, Confirmed, Interpretation, Question};
 use super::recognise;
@@ -73,9 +73,15 @@ pub struct HeldClean {
     pub grid: Grid,
     pub plan: ImportPlan,
     pub template_name: String,
+    pub uic: UicStyle,
 }
 
-pub fn open(path: &Path, sheet: &str, template: &ImportTemplate) -> AppResult<HeldClean> {
+pub fn open(
+    path: &Path,
+    sheet: &str,
+    template: &ImportTemplate,
+    uic: UicStyle,
+) -> AppResult<HeldClean> {
     let source = grid::read(path, Some(sheet))?;
     let (detected, _) = recognise::detected(&source.grid)?;
     let plan = recognise::rebind(template, &detected);
@@ -96,6 +102,7 @@ pub fn open(path: &Path, sheet: &str, template: &ImportTemplate) -> AppResult<He
         grid: source.grid,
         plan,
         template_name: template.name.clone(),
+        uic,
     })
 }
 
@@ -105,6 +112,7 @@ struct Column<'a> {
     hinweise: Vec<CardExample>,
     hinweis_count: u32,
     corrections: &'a HashMap<(u32, u32), &'a str>,
+    uic: UicStyle,
 }
 
 struct Sink {
@@ -164,6 +172,7 @@ impl HeldClean {
                 hinweise: Vec::new(),
                 hinweis_count: 0,
                 corrections: &corrections,
+                uic: self.uic,
             };
             for (row, cell) in &cells {
                 clean_cell(&mut column, plan, *cell, *row, &mut sink);
@@ -314,7 +323,7 @@ fn clean_cell(
                 date_format: false,
             };
             parse_cell(&column.interpretation, plan, Some(&cell))
-                .map(|parsed| format::value(&parsed.value))
+                .map(|parsed| format::styled(&parsed.value, column.uic))
         };
         match outcome {
             Ok(clean) => {
@@ -340,7 +349,7 @@ fn clean_cell(
             return;
         }
     };
-    let clean = format::value(&value);
+    let clean = format::styled(&value, column.uic);
 
     if let Some(message) = warning {
         column.hinweis_count += 1;
@@ -420,14 +429,52 @@ mod tests {
     }
 
     fn cleaned(grid: &Grid, plan: &ImportPlan, decisions: &CleanDecisions) -> Cleaned {
+        cleaned_in(grid, plan, decisions, UicStyle::Grouped)
+    }
+
+    fn cleaned_in(
+        grid: &Grid,
+        plan: &ImportPlan,
+        decisions: &CleanDecisions,
+        uic: UicStyle,
+    ) -> Cleaned {
         HeldClean {
             path: "liste.xlsx".into(),
             grid: grid.clone(),
             plan: plan.clone(),
             template_name: "Liste".into(),
+            uic,
         }
         .run(decisions)
         .unwrap()
+    }
+
+    /// The setting decides what the cleaned copy writes — and so what counts
+    /// as a change at all: a compact number in a compact Schattensystem is
+    /// already clean, the grouped one is the one rewritten.
+    #[test]
+    fn the_wagennummer_is_cleaned_into_the_configured_spelling() {
+        let grid = Grid::from_text(
+            "Tabelle1",
+            &[&["Wagennummer"], &["338506591522"], &["33 85 0659 152-2"]],
+        );
+        let plan = plan_for(&grid, &[("Wagennummer", FieldKind::Wagennummer)]);
+
+        // Row 2 is stored as a NUMBER, so it is a format change under either
+        // setting (the copy writes text); row 3 is the one the setting decides.
+        let compact = cleaned_in(&grid, &plan, &none(), UicStyle::Compact);
+        assert!(compact
+            .changes
+            .iter()
+            .all(|change| change.clean == "338506591522"));
+        assert!(compact.changes.iter().any(|change| change.row == 3));
+
+        let grouped = cleaned_in(&grid, &plan, &none(), UicStyle::Grouped);
+        assert!(grouped
+            .changes
+            .iter()
+            .all(|change| change.clean == "33 85 0659 152-2"));
+        assert!(grouped.changes.iter().all(|change| change.row != 3));
     }
 
     fn builtin(id: &str) -> ImportTemplate {
@@ -782,9 +829,14 @@ mod tests {
             "fremd.xlsx",
             &[("Tabelle1", &[&["Kunde", "Ort"], &["a", "b"]])],
         );
-        let refused = open(&file, "Tabelle1", &builtin("builtin:telematik"))
-            .err()
-            .unwrap();
+        let refused = open(
+            &file,
+            "Tabelle1",
+            &builtin("builtin:telematik"),
+            UicStyle::Grouped,
+        )
+        .err()
+        .unwrap();
         assert!(refused.into_messages()[0].contains("Telematikdaten"));
     }
 
@@ -799,7 +851,13 @@ mod tests {
                 &[&["Stadt", "Asset"], &["Sehnde", "3385 0659 002-9"]],
             )],
         );
-        let held = open(&file, "Sheet1", &builtin("builtin:telematik")).unwrap();
+        let held = open(
+            &file,
+            "Sheet1",
+            &builtin("builtin:telematik"),
+            UicStyle::Grouped,
+        )
+        .unwrap();
         assert_eq!(held.plan.columns[1].field, FieldKind::Wagennummer);
         assert_eq!(held.plan.columns[1].index, 2);
         assert!(held.run(&none()).unwrap().report.cards.is_empty());

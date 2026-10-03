@@ -1,0 +1,56 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Einträge prüfen"
+  [phase]="phase"
+  phaseColor="tertiary"
+  [step]="4"
+  [stepCount]="steps"
+  [nextLabel]="facade.takenRows().length + ' Zeile(n) übernehmen'"
+  (back)="onBack()"
+  (next)="onNext()"
+>
+  <p>
+    Jede Zeile der Datei, mit dem, was sie schreibt. Abgewählte Zeilen werden
+    nicht übernommen.
+  </p>
+  <div class="import-entries__bulk">
+    <ion-button fill="outline" (click)="onAll(true)" data-testid="entries-all">
+      Alle auswählen
+    </ion-button>
+    <ion-button
+      fill="outline"
+      color="medium"
+      (click)="onAll(false)"
+      data-testid="entries-none"
+    >
+      Alle abwählen
+    </ion-button>
+  </div>
+  <ion-list lines="full" data-testid="import-entries">
+    @for (entry of facade.entries(); track entry.row.row) {
+      <ion-item data-testid="import-entry">
+        <ion-checkbox
+          slot="start"
+          [checked]="entry.included"
+          [disabled]="locked(entry)"
+          (ionChange)="onToggle(entry, $event)"
+          [attr.aria-label]="'Zeile ' + entry.row.row + ' übernehmen'"
+        />
+        <ion-label class="ion-text-wrap">
+          <h3>Zeile {{ entry.row.row }}</h3>
+          <p>{{ line(entry) }}</p>
+          @if (reason(entry); as reason) {
+            <ion-note>{{ reason }}</ion-note>
+          }
+        </ion-label>
+        @for (write of entry.writes; track write) {
+          <ion-chip slot="end" [color]="entry.included ? 'primary' : 'medium'">
+            {{ write }}
+          </ion-chip>
+        }
+      </ion-item>
+    }
+  </ion-list>
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

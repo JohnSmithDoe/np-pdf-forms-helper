@@ -23,6 +23,12 @@
 // when Weiter is dead. That is what keeps the same chrome over a step that
 // imports a file and a step that shows a report.
 //
+// `phase` names WHICH job a step belongs to when one domain runs two walks the
+// user must not confuse — trains cleans and imports, and only the second
+// writes to the Schattensystem. It is a chip in the toolbar, coloured through
+// Ionic's own `color`, because a label is what tells the two apart without the
+// app taking over the theme.
+//
 // `nextDisabled` is an input rather than something inferred here, because the
 // condition differs per step and only the step knows it — and a Weiter that
 // looks alive but does nothing is worse than one visibly not ready.
@@ -38,6 +44,7 @@ import {
 import {
   IonButton,
   IonButtons,
+  IonChip,
   IonContent,
   IonFooter,
   IonHeader,
@@ -59,6 +66,7 @@ import { chevronBackOutline, chevronForwardOutline } from 'ionicons/icons';
   imports: [
     IonButton,
     IonButtons,
+    IonChip,
     IonContent,
     IonFooter,
     IonHeader,
@@ -74,6 +82,9 @@ export class WizardShellComponent {
   readonly heading = input.required<string>();
   readonly step = input.required<number>();
   readonly stepCount = input.required<number>();
+
+  readonly phase = input<string>();
+  readonly phaseColor = input('primary');
 
   readonly backLabel = input('Zurück');
   readonly nextLabel = input('Weiter');

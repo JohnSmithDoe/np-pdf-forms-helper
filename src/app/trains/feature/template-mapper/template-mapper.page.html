@@ -1,0 +1,75 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/trains/clean" text="Zurück" />
+    </ion-buttons>
+    <ion-title>Vorlage anlegen</ion-title>
+    <ion-chip slot="end" color="primary" data-testid="phase-chip">
+      Bereinigen
+    </ion-chip>
+  </ion-toolbar>
+
+  <ion-toolbar>
+    <ion-segment
+      [value]="stage()"
+      (ionChange)="onStage($any($event).detail.value)"
+      data-testid="import-stages"
+    >
+      <ion-segment-button value="source">1 · Quelle</ion-segment-button>
+      <ion-segment-button value="mapping" [disabled]="!facade.staging()">
+        2 · Zuordnung
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  @switch (stage()) {
+    @case ('source') {
+      <app-source-picker (failed)="presentError($event)" />
+    }
+    @default {
+      <app-column-mapper (failed)="presentError($event)" />
+    }
+  }
+</ion-content>
+
+@if (facade.staging()) {
+  <ion-footer>
+    <ion-toolbar>
+      <ion-buttons slot="start">
+        <ion-button
+          color="danger"
+          (click)="onDiscard()"
+          data-testid="import-discard"
+        >
+          Verwerfen
+        </ion-button>
+      </ion-buttons>
+      <ion-buttons slot="end">
+        @if (stage() === 'source') {
+          <ion-button fill="solid" (click)="onStage('mapping')">
+            Weiter
+          </ion-button>
+        } @else {
+          @if (!facade.canSave()) {
+            <ion-note class="ion-padding-end">
+              Die Wagennummer muss zugeordnet sein.
+            </ion-note>
+          }
+          <ion-button
+            fill="solid"
+            color="success"
+            [disabled]="!facade.canSave()"
+            (click)="onSave()"
+            data-testid="template-save"
+          >
+            Als Vorlage speichern
+          </ion-button>
+        }
+      </ion-buttons>
+    </ion-toolbar>
+  </ion-footer>
+}
+
+<app-busy-overlay [busy]="trains.busy()" />

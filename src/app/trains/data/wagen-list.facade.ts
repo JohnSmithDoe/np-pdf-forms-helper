@@ -47,7 +47,7 @@ export class WagenListFacade implements ListPageFacade {
     if (!wagen) return undefined;
     const partners = this.#store.partnerById();
     return wagen.map((wagen) => {
-      const uic = formatUic(wagen.nummer);
+      const uic = formatUic(wagen.nummer, this.#store.settings().wagennummer);
       return {
         id: wagen.id,
         name: uic,

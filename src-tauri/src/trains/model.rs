@@ -57,6 +57,23 @@
 // message, and a full list would make the convention the performance problem.
 // `counts` carries the total.
 //
+// A `Dokument` is a file the app OWNS: the original and its cleaned copy are
+// copied into `data/trains/dokumente/<id>/`, and the record is the load ledger —
+// what came in (`original_hash`, the identity), what it was cleaned with
+// (`plan`, so a later import does not depend on how the template has moved on),
+// and whether it has been imported (`importiert_am`, final once set).
+// `cleaned_hash` is what lets an import notice the copy was edited in Excel.
+//
+// `EntityDecisions` is the import walk's answer: ONE decision per entity group,
+// not per row, plus the rows to take. `entities::expand` turns it into the
+// per-row `CommitDecisions` the commit has always run on, which is why that one
+// is no longer on the wire.
+//
+// `TrainsSettings` is the Schattensystem's own configuration, stored beside the
+// data rather than in the browser's localStorage: it changes what the backend
+// WRITES (cleaned copies, exports), so the backend has to know it, and it holds
+// for every desk that shares the data folder.
+//
 // Three fields go out RENAMED, because the frontend reads those keys: the
 // partner list as `partners`, and the counts as `partners` and `events`. They had
 // drifted apart unnoticed — the e2e fake speaks the frontend's names — so a test
@@ -73,6 +90,20 @@ use super::sheet::readers::ReaderKind;
 pub enum DecimalStyle {
     German,
     English,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UicStyle {
+    #[default]
+    Compact,
+    Grouped,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TrainsSettings {
+    pub wagennummer: UicStyle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -400,6 +431,8 @@ pub struct StagedRow {
     pub eigentuemer: Resolution,
     pub radsatz: Resolution,
     pub issues: Vec<CellIssue>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sender: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
@@ -426,6 +459,10 @@ pub struct StagedImport {
     pub candidates: Vec<Candidate>,
     pub rows: Vec<StagedRow>,
     pub summary: StagedSummary,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dokument_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entities: Option<EntityGroups>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -454,13 +491,99 @@ pub struct RowDecision {
     pub radsatz: EntityDecision,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitDecisions {
     pub staging_id: String,
     pub rows: Vec<RowDecision>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityChoice {
+    pub key: String,
+    pub decision: EntityDecision,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityDecisions {
+    pub staging_id: String,
+    #[serde(default)]
+    pub partner: Vec<EntityChoice>,
+    #[serde(default)]
+    pub wagen: Vec<EntityChoice>,
+    #[serde(default)]
+    pub radsaetze: Vec<EntityChoice>,
+    pub rows: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EntityKind {
+    Partner,
+    Wagen,
+    Radsatz,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityGroup {
+    pub key: String,
+    pub kind: EntityKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rolle: Option<PartnerRolle>,
+    pub spellings: Vec<String>,
+    pub resolution: Resolution,
+    pub rows: Vec<u32>,
+    pub changes: Vec<ProtocolLine>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityGroups {
+    pub partner: Vec<EntityGroup>,
+    pub wagen: Vec<EntityGroup>,
+    pub radsaetze: Vec<EntityGroup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtocolLine {
+    pub row: u32,
+    pub column: u32,
+    pub header: String,
+    pub raw: String,
+    pub clean: String,
+    pub tier: Tier,
+    pub rule: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Dokument {
+    pub id: String,
+    pub name: String,
+    pub sheet: String,
+    pub template_id: String,
+    pub template_name: String,
+    pub plan: ImportPlan,
+    pub original_hash: String,
+    pub cleaned_hash: String,
+    pub original: String,
+    pub cleaned: String,
+    pub summary: CleanSummary,
+    pub bereinigt_am: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub save_template_as: Option<String>,
+    pub importiert_am: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Vorhanden {
+    pub dokument_id: String,
+    pub bereinigt_am: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub importiert_am: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -471,6 +594,7 @@ pub enum ScanStatus {
     Unbekannt,
     NichtUnterstuetzt,
     Unlesbar,
+    Vorhanden,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -491,9 +615,11 @@ pub struct ScanFile {
     pub sheets: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vorhanden: Option<Vorhanden>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Tier {
     Fehler,
@@ -571,7 +697,7 @@ pub struct FormatGroup {
     pub samples: Vec<FormatSample>,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CleanSummary {
     pub fehler_offen: u32,
@@ -628,6 +754,7 @@ pub struct TrainsCounts {
     #[serde(rename = "events")]
     pub instandhaltungen: u32,
     pub radsaetze: u32,
+    pub dokumente: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -662,7 +789,9 @@ pub struct TrainsData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cleaning: Option<CleanReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub cleaned_file: Option<String>,
+    pub dokumente: Option<Vec<Dokument>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settings: Option<TrainsSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<crate::model::ClientReport>,
 }
@@ -717,8 +846,13 @@ impl TrainsData {
         self
     }
 
-    pub fn cleaned_file(mut self, path: &std::path::Path) -> Self {
-        self.cleaned_file = Some(path.to_string_lossy().into_owned());
+    pub fn settings(mut self, settings: TrainsSettings) -> Self {
+        self.settings = Some(settings);
+        self
+    }
+
+    pub fn dokumente(mut self, dokumente: Vec<Dokument>) -> Self {
+        self.dokumente = Some(dokumente);
         self
     }
 
@@ -750,8 +884,52 @@ mod tests {
         assert!(value.get("partners").is_some(), "{value}");
         assert_eq!(
             value["counts"],
-            json!({ "wagen": 0, "partners": 0, "events": 0, "radsaetze": 0 })
+            json!({ "wagen": 0, "partners": 0, "events": 0, "radsaetze": 0, "dokumente": 0 })
         );
+    }
+
+    /// The new wire, pinned the same way: these are the keys `trains.types.ts`
+    /// and the e2e fake speak.
+    #[test]
+    fn the_document_wire_goes_out_and_comes_in_under_its_camel_case_keys() {
+        assert_eq!(
+            serde_json::to_value(ScanStatus::Vorhanden).unwrap(),
+            "vorhanden"
+        );
+        assert_eq!(
+            serde_json::to_value(EntityKind::Radsatz).unwrap(),
+            "radsatz"
+        );
+
+        let dokument = Dokument {
+            id: "d1".into(),
+            name: "monat.xlsx".into(),
+            sheet: "Tabelle1".into(),
+            template_id: "t1".into(),
+            template_name: "Monatsliste".into(),
+            plan: crate::trains::builtin::all()[0].plan.clone(),
+            original_hash: "a".into(),
+            cleaned_hash: "b".into(),
+            original: "o".into(),
+            cleaned: "c".into(),
+            summary: CleanSummary::default(),
+            bereinigt_am: "2026-10-03".into(),
+            importiert_am: None,
+        };
+        let value = serde_json::to_value(&dokument).unwrap();
+        for key in ["templateId", "originalHash", "cleanedHash", "bereinigtAm"] {
+            assert!(value.get(key).is_some(), "{key} in {value}");
+        }
+        assert!(value.get("importiertAm").is_none());
+
+        let decisions: EntityDecisions = serde_json::from_value(json!({
+            "stagingId": "s1",
+            "partner": [{ "key": "werkstatt:ULA", "decision": { "action": "create" } }],
+            "rows": [2]
+        }))
+        .unwrap();
+        assert_eq!(decisions.partner[0].decision, EntityDecision::Create);
+        assert!(decisions.wagen.is_empty());
     }
 
     #[test]

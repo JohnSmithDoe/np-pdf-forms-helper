@@ -7,9 +7,10 @@
 // The `command` strings and payload keys ARE the `#[tauri::command]` names and
 // their parameters, so nothing translates on the way out.
 //
-// `silent` is taken by the two commands whose report the guided import renders
-// as a PAGE — `write_clean` and `commit_import` — the same opt-in per call that
-// `FillerBackend` uses. The manual import calls `commit_import` loud.
+// `silent` is taken by the commands whose report the caller presents itself —
+// `write_clean` (the cleaning's batch summary), `commit_document` (the
+// import's result) and `create_trains_export` (the dashboard) — the same
+// opt-in per call that `FillerBackend` uses.
 // ────────────────────────────────────────────────────────────────
 
 import { inject, Injectable } from '@angular/core';
@@ -19,10 +20,11 @@ import {
 } from '../../@shared/data/backend/backend.service';
 import type {
   CleanDecisions,
-  CommitDecisions,
+  EntityDecisions,
   ImportPlan,
   Partner,
   TrainsData,
+  TrainsSettings,
   Wagen,
   Radsatz,
 } from '../model/trains.types';
@@ -38,7 +40,9 @@ export type TrainsCommand =
   | { command: 'restage_import'; payload: { plan: ImportPlan } }
   | { command: 'restage_sheet'; payload: { sheet: string } }
   | { command: 'discard_import'; payload: Record<string, never> }
-  | { command: 'commit_import'; payload: { decisions: CommitDecisions } }
+  | { command: 'save_template'; payload: { name: string } }
+  | { command: 'stage_document'; payload: { id: string } }
+  | { command: 'commit_document'; payload: { decisions: EntityDecisions } }
   | { command: 'save_waggon'; payload: { wagen: Wagen } }
   | { command: 'remove_waggon'; payload: { id: string } }
   | { command: 'save_wheelset'; payload: { radsatz: Radsatz } }
@@ -46,6 +50,7 @@ export type TrainsCommand =
   | { command: 'save_partner'; payload: { partner: Partner } }
   | { command: 'remove_partner'; payload: { id: string } }
   | { command: 'remove_template'; payload: { id: string } }
+  | { command: 'save_trains_settings'; payload: { settings: TrainsSettings } }
   | { command: 'reset_trains'; payload: Record<string, never> }
   | { command: 'create_trains_export'; payload: Record<string, never> }
   | { command: 'open_output_folder'; payload: { folder: string } }
@@ -104,12 +109,20 @@ export class TrainsBackend {
     return this.#call({ command: 'discard_import', payload: {} });
   }
 
-  commitImport(
-    decisions: CommitDecisions,
+  saveTemplate(name: string): Promise<TrainsData> {
+    return this.#call({ command: 'save_template', payload: { name } });
+  }
+
+  stageDocument(id: string): Promise<TrainsData> {
+    return this.#call({ command: 'stage_document', payload: { id } });
+  }
+
+  commitDocument(
+    decisions: EntityDecisions,
     options?: CallOptions
   ): Promise<TrainsData> {
     return this.#call(
-      { command: 'commit_import', payload: { decisions } },
+      { command: 'commit_document', payload: { decisions } },
       options
     );
   }
@@ -179,6 +192,13 @@ export class TrainsBackend {
     return this.#call({ command: 'remove_partner', payload: { id } });
   }
 
+  saveSettings(settings: TrainsSettings): Promise<TrainsData> {
+    return this.#call({
+      command: 'save_trains_settings',
+      payload: { settings },
+    });
+  }
+
   removeTemplate(id: string): Promise<TrainsData> {
     return this.#call({ command: 'remove_template', payload: { id } });
   }
@@ -187,8 +207,11 @@ export class TrainsBackend {
     return this.#call({ command: 'reset_trains', payload: {} });
   }
 
-  createExport(): Promise<TrainsData> {
-    return this.#call({ command: 'create_trains_export', payload: {} });
+  createExport(options?: CallOptions): Promise<TrainsData> {
+    return this.#call(
+      { command: 'create_trains_export', payload: {} },
+      options
+    );
   }
 
   // The opener is the filler's command and is deliberately reused: opening a

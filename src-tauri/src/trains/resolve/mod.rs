@@ -60,11 +60,12 @@ pub fn wagen(db: &TrainsDb, uic: Option<&str>) -> Resolution {
     let Some(uic) = uic.filter(|value| !value.is_empty()) else {
         return Resolution::Missing;
     };
+    let style = db.settings().wagennummer;
 
     if let Some(found) = db.wagen_by_nummer(uic) {
         return Resolution::Known {
             id: found.id.clone(),
-            name: format::uic_display(&found.nummer),
+            name: format::uic_in(&found.nummer, style),
         };
     }
 
@@ -78,21 +79,21 @@ pub fn wagen(db: &TrainsDb, uic: Option<&str>) -> Resolution {
     match near.as_slice() {
         [only] => Resolution::Likely {
             id: only.id.clone(),
-            name: format::uic_display(&only.nummer),
+            name: format::uic_in(&only.nummer, style),
             hint: format!(
                 "Prüfziffer weicht ab; vermutlich {}.",
-                format::uic_display(&only.nummer)
+                format::uic_in(&only.nummer, style)
             ),
         },
         [] => Resolution::New {
-            proposal: format::uic_display(uic),
+            proposal: format::uic_in(uic, style),
         },
         several => Resolution::Ambiguous {
             candidates: several
                 .iter()
                 .map(|found| MatchCandidate {
                     id: found.id.clone(),
-                    name: format::uic_display(&found.nummer),
+                    name: format::uic_in(&found.nummer, style),
                     score: 90,
                     why: "Stimmt bis auf die Prüfziffer überein.".into(),
                 })
@@ -332,7 +333,7 @@ mod tests {
             wagen(&db, Some("318047401234")),
             Resolution::Known {
                 id: "w1".into(),
-                name: "31 80 4740 123-4".into()
+                name: "318047401234".into()
             }
         );
     }
@@ -356,7 +357,7 @@ mod tests {
         assert_eq!(
             wagen(&db, Some("318047401234")),
             Resolution::New {
-                proposal: "31 80 4740 123-4".into()
+                proposal: "318047401234".into()
             }
         );
     }

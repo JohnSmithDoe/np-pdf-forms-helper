@@ -1,29 +1,24 @@
 // ─── why ────────────────────────────────────────────────────────
-// The guided import's API: scan → pick → clean → review → write → preview →
-// commit → next file. It is the only thing that knows the walk, the cleaning
-// under review and the preview that follows it, which is why it reaches three
-// stores — `IntakeStore` for the walk, `TrainsStore` for the staging every
-// import shares, `ImportStore` for the row choices the preview edits.
+// The cleaning batch's API: scan → pick → clean → review → file → next file →
+// summary. It is a CLOSED cycle and imports nothing: a filed file is a
+// `Dokument`, and taking it into the Schattensystem is `ImportWalkFacade`'s job,
+// started from the summary or the document list whenever the user likes.
 //
 // `startNext` RETURNS where to go instead of navigating: navigation is a page
 // decision, and a facade that routed would be a data layer that knows URLs.
-// A file the user wants imported by hand is STAGED by path
-// (`ImportFacade.stagePath`) and marked done as it is handed over, so the manual
-// page opens on its mapping step. That page knows nothing about the walk and
-// could not report back — the walk resumes from the hub with the file after it.
+// A file that needs a template is STAGED by path (`ImportFacade.stagePath`) and
+// remembered as `handedOver`; when the hub is shown again, `resume` rescans
+// exactly that file, which the template just saved now recognises.
 //
-// A failed `clean_file` or `stage_import_path` marks the file `fehlgeschlagen` and rethrows. Without
+// A failed `clean_file` marks the file `fehlgeschlagen` and rethrows. Without
 // the mark the next „Fortsetzen“ would retry the same file forever; picking a
 // different template for it clears the mark.
 //
-// `write_clean` and `commit_import` are `silent` and their reports PARKED: the
-// result step renders both, and a toast or dialog on top would say the same
-// thing over the page that already says it. The cleaned file's report is the
-// one with the folder, so it is the one that offers "Ordner öffnen".
-//
-// After `write_clean` the staging is a PREVIEW like any other, so the row
-// choices are seeded exactly as the manual import seeds them — and the commit
-// goes through `ImportFacade.decisions`, the one place rows become decisions.
+// `write_clean` is `silent` and its report PARKED on the file's result: the
+// batch summary renders every file's report at once, and a toast per file in
+// between would interrupt a walk the user is in the middle of. The new
+// document's id is found by its OWNED original — the cleaning report names that
+// path, and the backend files the record under it.
 // ────────────────────────────────────────────────────────────────
 
 import { computed, inject, Injectable } from '@angular/core';
@@ -34,17 +29,22 @@ import {
 import type {
   CleanDecisions,
   Confirmation,
+  Dokument,
   ScanFile,
   ScanStatus,
   TrainsData,
 } from '../model/trains.types';
 import { ImportFacade } from './import.facade';
-import { ImportStore } from './import.store';
-import { IntakeStore, type FileOutcome, type FilePick } from './intake.store';
+import {
+  IntakeStore,
+  type FileOutcome,
+  type FilePick,
+  type FileResult,
+} from './intake.store';
 import { TrainsBackend } from './trains.backend';
 import { TrainsStore } from './trains.store';
 
-export type IntakeStep = 'clean' | 'manual' | 'done';
+export type IntakeStep = 'clean' | 'template' | 'summary';
 
 export interface PickOption {
   value: string;
@@ -56,13 +56,24 @@ export interface IntakeRow {
   selectable: boolean;
   options: PickOption[];
   value: string | undefined;
-  outcome: FileOutcome | undefined;
+  result: FileResult | undefined;
   skipped: boolean;
 }
 
-const MANUAL = 'manual';
+export interface SummaryRow {
+  file: ScanFile;
+  outcome: FileOutcome | 'vorhanden' | 'uebersprungen' | 'offen';
+  result: FileResult | undefined;
+  dokument: Dokument | undefined;
+}
+
+const CREATE = 'create';
 const SKIP = 'skip';
-const SKIPPED: readonly ScanStatus[] = ['nichtUnterstuetzt', 'unlesbar'];
+const UNSELECTABLE: readonly ScanStatus[] = [
+  'nichtUnterstuetzt',
+  'unlesbar',
+  'vorhanden',
+];
 
 function optionsOf(file: ScanFile): PickOption[] {
   const named = file.sheets.length > 1;
@@ -73,8 +84,8 @@ function optionsOf(file: ScanFile): PickOption[] {
         ? `${match.templateName} · Blatt „${match.sheet}“`
         : match.templateName,
     })),
-    { value: MANUAL, label: 'Von Hand zuordnen' },
-    { value: SKIP, label: 'Nicht importieren' },
+    { value: CREATE, label: 'Vorlage anlegen' },
+    { value: SKIP, label: 'Nicht bereinigen' },
   ];
 }
 
@@ -83,7 +94,7 @@ function valueOf(
   pick: FilePick | undefined
 ): string | undefined {
   if (!pick) return undefined;
-  if (pick.kind === 'manual') return MANUAL;
+  if (pick.kind === 'create') return CREATE;
   if (pick.kind === 'skip') return SKIP;
   const index = file.matches.findIndex(
     (match) =>
@@ -97,7 +108,6 @@ export class IntakeFacade {
   readonly #backend = inject(TrainsBackend);
   readonly #transport = inject(BackendService);
   readonly #trains = inject(TrainsStore);
-  readonly #imports = inject(ImportStore);
   readonly #import = inject(ImportFacade);
   readonly #store = inject(IntakeStore);
 
@@ -108,20 +118,16 @@ export class IntakeFacade {
   readonly scan = this.#store.scan;
   readonly cleaning = this.#store.cleaning;
   readonly decisions = this.#store.decisions;
-  readonly cleanedReport = this.#store.cleanedReport;
-  readonly cleanedFile = this.#store.cleanedFile;
-  readonly commitReport = this.#store.commitReport;
-  readonly staging = this.#trains.staging;
 
   readonly rows = computed<IntakeRow[]>(() => {
     const picks = this.#store.picks();
-    const outcomes = this.#store.outcomes();
+    const results = this.#store.results();
     return (this.scan() ?? []).map((file) => ({
       file,
-      selectable: !SKIPPED.includes(file.status),
+      selectable: !UNSELECTABLE.includes(file.status),
       options: optionsOf(file),
       value: valueOf(file, picks[file.path]),
-      outcome: outcomes[file.path],
+      result: results[file.path],
       skipped: picks[file.path]?.kind === 'skip',
     }));
   });
@@ -131,7 +137,7 @@ export class IntakeFacade {
       (row) =>
         row.selectable &&
         !row.skipped &&
-        (row.outcome === undefined || row.outcome === 'fehlgeschlagen')
+        (row.result === undefined || row.result.outcome === 'fehlgeschlagen')
     )
   );
 
@@ -140,7 +146,7 @@ export class IntakeFacade {
   );
 
   readonly started = computed(() =>
-    this.rows().some((row) => row.outcome !== undefined)
+    this.rows().some((row) => row.result !== undefined)
   );
 
   readonly canStart = computed(() => {
@@ -153,9 +159,16 @@ export class IntakeFacade {
     return this.scan()?.find((file) => file.path === path);
   });
 
-  readonly inGuidedPreview = computed(
-    () => this.#store.current() !== undefined && this.staging() !== undefined
-  );
+  readonly progress = computed(() => {
+    const walked = this.rows().filter((row) => row.selectable && !row.skipped);
+    const done = walked.filter(
+      (row) => row.result && row.result.outcome !== 'fehlgeschlagen'
+    ).length;
+    return {
+      step: Math.min(done + 1, Math.max(walked.length, 1)),
+      count: Math.max(walked.length, 1),
+    };
+  });
 
   readonly canWrite = computed(() => {
     const summary = this.cleaning()?.summary;
@@ -163,6 +176,33 @@ export class IntakeFacade {
       !!summary && summary.fehlerOffen === 0 && summary.deutungenOffen === 0
     );
   });
+
+  readonly summary = computed<SummaryRow[]>(() => {
+    const byId = this.#trains.dokumentById();
+    return this.rows().map((row) => {
+      const id = row.result?.dokumentId ?? row.file.vorhanden?.dokumentId;
+      return {
+        file: row.file,
+        outcome:
+          row.result?.outcome ??
+          (row.file.status === 'vorhanden'
+            ? 'vorhanden'
+            : row.skipped || !row.selectable
+              ? 'uebersprungen'
+              : 'offen'),
+        result: row.result,
+        dokument: id ? byId.get(id) : undefined,
+      };
+    });
+  });
+
+  readonly importable = computed(() =>
+    this.summary()
+      .filter((row) => row.outcome === 'bereinigt')
+      .map((row) => row.dokument)
+      .filter((dokument): dokument is Dokument => !!dokument)
+      .filter((dokument) => !dokument.importiertAm)
+  );
 
   async pickFolder(): Promise<void> {
     this.#applyScan(await this.#backend.pickImportFolder());
@@ -177,10 +217,18 @@ export class IntakeFacade {
     this.#applyScan(await this.#backend.scanImportPaths(paths));
   }
 
+  async resume(): Promise<void> {
+    const path = this.#store.handedOver();
+    if (!path) return;
+    this.#store.handOver(undefined);
+    const data = await this.#backend.scanImportPaths([path]);
+    if (data.scan) this.#store.merge(data.scan);
+  }
+
   choose(path: string, value: string | undefined): void {
     const file = this.scan()?.find((entry) => entry.path === path);
     if (!file) return;
-    if (value === MANUAL || value === SKIP) {
+    if (value === CREATE || value === SKIP) {
       this.#store.setPick(path, { kind: value });
       return;
     }
@@ -199,16 +247,15 @@ export class IntakeFacade {
 
   async startNext(): Promise<IntakeStep> {
     const row = this.queue()[0];
-    if (!row) return 'done';
+    if (!row) return 'summary';
     const pick = this.#store.picks()[row.file.path];
-    if (!pick || pick.kind === 'skip') return 'done';
+    if (!pick || pick.kind === 'skip') return 'summary';
 
     try {
-      if (pick.kind === 'manual') {
+      if (pick.kind === 'create') {
         await this.#import.stagePath(row.file.path);
-        this.#store.setOutcome(row.file.path, 'manuell');
-        this.#store.endCurrent();
-        return 'manual';
+        this.#store.handOver(row.file.path);
+        return 'template';
       }
       const data = await this.#backend.cleanFile(
         row.file.path,
@@ -219,7 +266,7 @@ export class IntakeFacade {
       return 'clean';
     } catch (cause) {
       if (cause instanceof BackendError) {
-        this.#store.setOutcome(row.file.path, 'fehlgeschlagen');
+        this.#store.setResult(row.file.path, { outcome: 'fehlgeschlagen' });
       }
       throw cause;
     }
@@ -252,41 +299,22 @@ export class IntakeFacade {
   }
 
   async writeClean(): Promise<void> {
+    const owned = this.cleaning()?.file;
     const data = await this.#backend.writeClean(this.decisions(), {
       silent: true,
     });
     this.#trains.applyTrainsData(data);
-    this.#imports.reset();
-    this.#imports.seedChoices(data.staging?.rows ?? []);
-    this.#store.setCleaning(undefined);
-    this.#store.setCleaned(data.message ?? null, data.cleanedFile);
+    const dokument = data.dokumente?.find((entry) => entry.original === owned);
+    this.#endAs({
+      outcome: 'bereinigt',
+      report: data.message,
+      dokumentId: dokument?.id,
+    });
   }
 
   async discardClean(): Promise<void> {
     await this.#backend.discardClean();
-    this.#endAs('verworfen');
-  }
-
-  async commit(): Promise<void> {
-    const decisions = this.#import.decisions();
-    if (!decisions) return;
-    const data = await this.#backend.commitImport(decisions, { silent: true });
-    this.#trains.applyTrainsData(data);
-    await this.#import.discard();
-    const path = this.#store.current();
-    if (path) this.#store.setOutcome(path, 'importiert');
-    this.#store.setCommitReport(
-      data.message ?? { headline: 'Import wurde übernommen', messages: [] }
-    );
-  }
-
-  async discardPreview(): Promise<void> {
-    await this.#import.discard();
-    this.#endAs('verworfen');
-  }
-
-  finish(): void {
-    this.#store.endCurrent();
+    this.#endAs({ outcome: 'verworfen' });
   }
 
   async openOriginal(): Promise<void> {
@@ -294,13 +322,8 @@ export class IntakeFacade {
     if (file) await this.#backend.openFile(file);
   }
 
-  async openCleaned(): Promise<void> {
-    const file = this.cleanedFile();
-    if (file) await this.#backend.openFile(file);
-  }
-
-  async openFolder(folder: string): Promise<void> {
-    await this.#backend.openFolder(folder);
+  async openFile(path: string): Promise<void> {
+    await this.#backend.openFile(path);
   }
 
   async #reclean(decisions: CleanDecisions): Promise<void> {
@@ -313,9 +336,9 @@ export class IntakeFacade {
     if (data.scan) this.#store.applyScan(data.scan);
   }
 
-  #endAs(outcome: FileOutcome): void {
+  #endAs(result: FileResult): void {
     const path = this.#store.current();
-    if (path) this.#store.setOutcome(path, outcome);
+    if (path) this.#store.setResult(path, result);
     this.#store.endCurrent();
   }
 }

@@ -1,0 +1,73 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/trains" text="Zurück" />
+    </ion-buttons>
+    <ion-title>Dokumente</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="onClean()" data-testid="documents-clean">
+        Bereinigen
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  @if (dokumente().length) {
+    <ion-list lines="full" data-testid="documents-list">
+      @for (dokument of dokumente(); track dokument.id) {
+        <ion-item data-testid="documents-row">
+          <ion-label class="ion-text-wrap">
+            <h2>{{ dokument.name }}</h2>
+            <p>
+              Vorlage „{{ dokument.templateName }}“ · bereinigt am
+              {{ dokument.bereinigtAm }}
+              @if (dokument.importiertAm) {
+                · importiert am {{ dokument.importiertAm }}
+              }
+            </p>
+            <p>
+              <ion-button
+                size="small"
+                fill="clear"
+                (click)="onOpen(dokument.original)"
+              >
+                Original
+              </ion-button>
+              <ion-button
+                size="small"
+                fill="clear"
+                (click)="onOpen(dokument.cleaned)"
+              >
+                Bereinigte Datei
+              </ion-button>
+              @if (!dokument.importiertAm) {
+                <ion-button
+                  size="small"
+                  fill="clear"
+                  color="success"
+                  (click)="onImport(dokument.id)"
+                  data-testid="documents-import"
+                >
+                  Importieren
+                </ion-button>
+              }
+            </p>
+          </ion-label>
+          <ion-chip
+            slot="end"
+            [color]="dokument.importiertAm ? 'success' : 'primary'"
+          >
+            {{ dokument.importiertAm ? 'importiert' : 'bereinigt' }}
+          </ion-chip>
+        </ion-item>
+      }
+    </ion-list>
+  } @else {
+    <ion-note data-testid="documents-empty">
+      Noch keine Dokumente. Dateien kommen über „Bereinigen“ herein.
+    </ion-note>
+  }
+</ion-content>
+
+<app-busy-overlay [busy]="trains.busy()" />

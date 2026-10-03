@@ -11,10 +11,13 @@
 // rest — a redirect would have made the import the hub and left seven lists
 // reachable only by URL.
 //
-// `import` is a HUB too: the guided import starts there (drop a folder, check
-// the list), `manual` is the unchanged single-file import that unknown files
-// fall through to, and `guided/*` are the steps of one file's walk, guarded in
-// `intake.guards.ts`. The dashboard tile still points at `import`.
+// The guided import is TWO walks, and the URLs say which one a page belongs to.
+// `clean` is the cleaning hub (drop a folder, check the list), `clean/file`
+// one file's review, `clean/summary` the batch's end and `clean/template` the
+// mapper an unknown file is sent to. `documents` lists what the cleaning
+// filed, and `import/*` walks ONE document into the Schattensystem by type.
+// Partner, Wagen and Radsätze are one page with the kind in route `data`. All
+// steps are guarded in `intake.guards.ts`.
 //
 // The entry load hangs on a PATHLESS parent so every route below it shares one
 // resolver run. Any of the six can be the first one reached, and the alternative
@@ -23,9 +26,10 @@
 
 import { Routes } from '@angular/router';
 import {
+  batchSummaryGuard,
   cleaningGuard,
-  guidedPreviewGuard,
-  guidedResultGuard,
+  importResultGuard,
+  importWalkGuard,
 } from './intake.guards';
 import { trainsDataResolver } from './trains-data.resolver';
 
@@ -40,50 +44,112 @@ const pages: Routes = [
       ),
   },
   {
-    path: 'import',
+    path: 'clean',
     children: [
       {
         path: '',
         pathMatch: 'full',
-        title: 'Import',
+        title: 'Bereinigen',
         loadComponent: () =>
-          import('../feature/import-hub/import-hub.page').then(
-            (m) => m.ImportHubPage
+          import('../feature/clean-hub/clean-hub.page').then(
+            (m) => m.CleanHubPage
           ),
       },
       {
-        path: 'manual',
-        title: 'Import von Hand',
-        loadComponent: () =>
-          import('../feature/import-page/import.page').then(
-            (m) => m.ImportPage
-          ),
-      },
-      {
-        path: 'guided/clean',
+        path: 'file',
         title: 'Datei bereinigen',
         canActivate: [cleaningGuard],
         loadComponent: () =>
-          import('../feature/guided-clean/guided-clean.page').then(
-            (m) => m.GuidedCleanPage
+          import('../feature/clean-file/clean-file.page').then(
+            (m) => m.CleanFilePage
           ),
       },
       {
-        path: 'guided/preview',
-        title: 'Zeilen prüfen',
-        canActivate: [guidedPreviewGuard],
+        path: 'summary',
+        title: 'Bereinigung abgeschlossen',
+        canActivate: [batchSummaryGuard],
         loadComponent: () =>
-          import('../feature/guided-preview/guided-preview.page').then(
-            (m) => m.GuidedPreviewPage
+          import('../feature/clean-batch/clean-batch.page').then(
+            (m) => m.CleanBatchPage
           ),
       },
       {
-        path: 'guided/result',
+        path: 'template',
+        title: 'Vorlage anlegen',
+        loadComponent: () =>
+          import('../feature/template-mapper/template-mapper.page').then(
+            (m) => m.TemplateMapperPage
+          ),
+      },
+    ],
+  },
+  {
+    path: 'documents',
+    title: 'Dokumente',
+    loadComponent: () =>
+      import('../feature/document-list/document-list.page').then(
+        (m) => m.DocumentListPage
+      ),
+  },
+  {
+    path: 'import',
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: '/trains/documents' },
+      {
+        path: 'partners',
+        title: 'Partner prüfen',
+        data: { kind: 'partner' },
+        canActivate: [importWalkGuard],
+        loadComponent: () =>
+          import('../feature/import-entities/import-entities.page').then(
+            (m) => m.ImportEntitiesPage
+          ),
+      },
+      {
+        path: 'wagons',
+        title: 'Wagen prüfen',
+        data: { kind: 'wagen' },
+        canActivate: [importWalkGuard],
+        loadComponent: () =>
+          import('../feature/import-entities/import-entities.page').then(
+            (m) => m.ImportEntitiesPage
+          ),
+      },
+      {
+        path: 'wheelsets',
+        title: 'Radsätze prüfen',
+        data: { kind: 'radsatz' },
+        canActivate: [importWalkGuard],
+        loadComponent: () =>
+          import('../feature/import-entities/import-entities.page').then(
+            (m) => m.ImportEntitiesPage
+          ),
+      },
+      {
+        path: 'entries',
+        title: 'Einträge prüfen',
+        canActivate: [importWalkGuard],
+        loadComponent: () =>
+          import('../feature/import-entries/import-entries.page').then(
+            (m) => m.ImportEntriesPage
+          ),
+      },
+      {
+        path: 'summary',
+        title: 'Zusammenfassung',
+        canActivate: [importWalkGuard],
+        loadComponent: () =>
+          import('../feature/import-summary/import-summary.page').then(
+            (m) => m.ImportSummaryPage
+          ),
+      },
+      {
+        path: 'result',
         title: 'Import abgeschlossen',
-        canActivate: [guidedResultGuard],
+        canActivate: [importResultGuard],
         loadComponent: () =>
-          import('../feature/guided-result/guided-result.page').then(
-            (m) => m.GuidedResultPage
+          import('../feature/import-result/import-result.page').then(
+            (m) => m.ImportResultPage
           ),
       },
     ],
@@ -137,6 +203,14 @@ const pages: Routes = [
     loadComponent: () =>
       import('../feature/event-list/event-list.page').then(
         (m) => m.EventListPage
+      ),
+  },
+  {
+    path: 'settings',
+    title: 'Einstellungen',
+    loadComponent: () =>
+      import('../feature/settings/settings.page').then(
+        (m) => m.TrainsSettingsPage
       ),
   },
   {

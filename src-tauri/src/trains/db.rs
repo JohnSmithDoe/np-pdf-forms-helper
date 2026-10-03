@@ -1,9 +1,9 @@
 // ─── why ────────────────────────────────────────────────────────
-// Four JSON files under `data/trains/`, following `crate::filler::db` — same
+// Seven JSON files under `data/trains/`, following `crate::filler::db` — same
 // `IndexMap`, same atomic temp-and-rename, same "a file the user can open in
 // Notepad is part of the support story".
 //
-// SPLIT INTO FOUR, and that is not cosmetic. Saving one partner must not rewrite
+// SPLIT PER STORE, and that is not cosmetic. Saving one partner must not rewrite
 // the events file, which is the big one; the same asymmetry already splits
 // documents from profiles next door.
 //
@@ -34,6 +34,17 @@
 // thousand events is a hundred million comparisons; with them it is two thousand
 // lookups.
 //
+// The SEVENTH store, `dokumente`, is the load ledger: one record per file the
+// app has taken ownership of, indexed by the ORIGINAL's content hash, which is
+// what makes "the same bytes dropped twice" one document. The files themselves
+// live under `dokumente/<id>/` beside the stores; `reset` removes them too, or a
+// reset would leave records' files behind with no record pointing at them.
+//
+// `einstellungen.json` is not a store of items but ONE settings object, read
+// with defaults (a missing file or key is the default, so an old data folder
+// loads) and written alone, atomically. It sits outside `transaction` because
+// it changes nothing a rollback would have to restore alongside.
+//
 // The SHIPPED templates are never stored. `templates` merges them in at read
 // time, minus any a user copy shadows through its `origin`, so a reset cannot
 // lose them and an update of the program can change them — see `builtin`.
@@ -53,11 +64,12 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use crate::config::AppConfig;
 use crate::error::{AppError, AppResult};
 use crate::trains::model::{
-    Einbau, ImportTemplate, Instandhaltung, Partner, PartnerRolle, Radsatz, RadsatzAlias,
-    TrainsCounts, Wagen,
+    Dokument, Einbau, ImportTemplate, Instandhaltung, Partner, PartnerRolle, Radsatz, RadsatzAlias,
+    TrainsCounts, TrainsSettings, Wagen,
 };
 
 const VERSION: u32 = 1;
+const SETTINGS: &str = "einstellungen.json";
 
 /// Its own key AND every alias key, so a spelling learnt for one sender finds
 /// the radsatz at all — whether it then DECIDES is `resolve::radsatz`'s call.
@@ -90,10 +102,13 @@ pub struct TrainsDb {
     templates: IndexMap<String, ImportTemplate>,
     radsaetze: IndexMap<String, Radsatz>,
     einbauten: IndexMap<String, Einbau>,
+    dokumente: IndexMap<String, Dokument>,
+    settings: TrainsSettings,
     by_wagennummer: HashMap<String, String>,
     by_match_key: HashMap<String, String>,
     by_dedupe: HashSet<String>,
     by_radsatznummer: HashMap<String, Vec<String>>,
+    by_hash: HashMap<String, String>,
 }
 
 #[derive(Default)]
@@ -104,6 +119,7 @@ struct Rollback {
     templates: Option<IndexMap<String, ImportTemplate>>,
     radsaetze: Option<IndexMap<String, Radsatz>>,
     einbauten: Option<IndexMap<String, Einbau>>,
+    dokumente: Option<IndexMap<String, Dokument>>,
 }
 
 pub struct Tx<'a> {
@@ -123,11 +139,14 @@ impl TrainsDb {
             templates: read(&folder.join("templates.db"))?,
             radsaetze: read(&folder.join("radsaetze.db"))?,
             einbauten: read(&folder.join("einbauten.db"))?,
+            dokumente: read(&folder.join("dokumente.db"))?,
+            settings: read_settings(&folder.join(SETTINGS))?,
             folder,
             by_wagennummer: HashMap::new(),
             by_match_key: HashMap::new(),
             by_dedupe: HashSet::new(),
             by_radsatznummer: HashMap::new(),
+            by_hash: HashMap::new(),
         };
         db.reindex();
         Ok(db)
@@ -152,6 +171,11 @@ impl TrainsDb {
             .instandhaltungen
             .values()
             .map(|event| event.dedupe_key.clone())
+            .collect();
+        self.by_hash = self
+            .dokumente
+            .values()
+            .map(|dokument| (dokument.original_hash.clone(), dokument.id.clone()))
             .collect();
         self.reindex_radsaetze();
     }
@@ -240,7 +264,38 @@ impl TrainsDb {
             partner: self.partner.len() as u32,
             instandhaltungen: self.instandhaltungen.len() as u32,
             radsaetze: self.radsaetze.len() as u32,
+            dokumente: self.dokumente.len() as u32,
         }
+    }
+
+    pub fn settings(&self) -> TrainsSettings {
+        self.settings
+    }
+
+    pub fn save_settings(&mut self, settings: TrainsSettings) -> AppResult<()> {
+        let path = self.folder.join(SETTINGS);
+        let json = serde_json::to_vec(&settings).map_err(|error| AppError::json(&path, error))?;
+        let temp = path.with_extension("tmp");
+        std::fs::write(&temp, &json).map_err(|error| AppError::io(&temp, error))?;
+        std::fs::rename(&temp, &path).map_err(|error| AppError::io(&path, error))?;
+        self.settings = settings;
+        Ok(())
+    }
+
+    pub fn dokumente(&self) -> Vec<Dokument> {
+        self.dokumente.values().cloned().collect()
+    }
+
+    pub fn dokument(&self, id: &str) -> Option<&Dokument> {
+        self.dokumente.get(id)
+    }
+
+    pub fn dokument_by_hash(&self, hash: &str) -> Option<&Dokument> {
+        self.by_hash.get(hash).and_then(|id| self.dokumente.get(id))
+    }
+
+    pub fn dokumente_folder(&self) -> PathBuf {
+        self.folder.join("dokumente")
     }
 
     pub fn wagen_by_id(&self, id: &str) -> Option<&Wagen> {
@@ -361,6 +416,9 @@ impl TrainsDb {
                 if let Some(items) = rollback.einbauten {
                     self.einbauten = items;
                 }
+                if let Some(items) = rollback.dokumente {
+                    self.dokumente = items;
+                }
                 self.reindex();
                 Err(error)
             }
@@ -375,8 +433,15 @@ impl TrainsDb {
             tx.templates_mut().clear();
             tx.radsaetze_mut().clear();
             tx.einbauten_mut().clear();
+            tx.dokumente_mut().clear();
             Ok(())
-        })
+        })?;
+        let folder = self.dokumente_folder();
+        match std::fs::remove_dir_all(&folder) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(AppError::io(&folder, error)),
+        }
     }
 }
 
@@ -423,6 +488,27 @@ impl Tx<'_> {
             .einbauten
             .get_or_insert_with(|| db.einbauten.clone());
         &mut db.einbauten
+    }
+
+    fn dokumente_mut(&mut self) -> &mut IndexMap<String, Dokument> {
+        let Tx { db, rollback } = self;
+        rollback
+            .dokumente
+            .get_or_insert_with(|| db.dokumente.clone());
+        &mut db.dokumente
+    }
+
+    pub fn put_dokument(&mut self, dokument: Dokument) {
+        self.db
+            .by_hash
+            .insert(dokument.original_hash.clone(), dokument.id.clone());
+        self.dokumente_mut().insert(dokument.id.clone(), dokument);
+    }
+
+    pub fn mark_imported(&mut self, id: &str, stamp: &str) {
+        if let Some(dokument) = self.dokumente_mut().get_mut(id) {
+            dokument.importiert_am = Some(stamp.to_string());
+        }
     }
 
     pub fn put_wagen(&mut self, wagen: Wagen) {
@@ -641,6 +727,9 @@ impl Tx<'_> {
         if self.rollback.einbauten.is_some() {
             write(&folder.join("einbauten.db"), &self.db.einbauten)?;
         }
+        if self.rollback.dokumente.is_some() {
+            write(&folder.join("dokumente.db"), &self.db.dokumente)?;
+        }
         Ok(())
     }
 }
@@ -654,6 +743,14 @@ fn read<T: DeserializeOwned>(path: &Path) -> AppResult<IndexMap<String, T>> {
     let store: Store<T> =
         serde_json::from_str(&text).map_err(|error| AppError::json(path, error))?;
     Ok(store.items)
+}
+
+fn read_settings(path: &Path) -> AppResult<TrainsSettings> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => serde_json::from_str(&text).map_err(|error| AppError::json(path, error)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(TrainsSettings::default()),
+        Err(error) => Err(AppError::io(path, error)),
+    }
 }
 
 fn write<T: Serialize>(path: &Path, items: &IndexMap<String, T>) -> AppResult<()> {
@@ -919,6 +1016,24 @@ mod tests {
 
         let (rows, _) = store.instandhaltungen_page(None, 2, 10);
         assert_eq!(rows.len(), 1);
+    }
+
+    /// Compact is the default, a missing file is the default, and a saved
+    /// choice survives a restart.
+    #[test]
+    fn the_settings_default_to_compact_and_survive_a_reload() {
+        use crate::trains::model::UicStyle;
+        let folder = TempDir::new("trains-settings");
+        let mut store = TrainsDb::load(&folder.config()).unwrap();
+        assert_eq!(store.settings().wagennummer, UicStyle::Compact);
+
+        store
+            .save_settings(TrainsSettings {
+                wagennummer: UicStyle::Grouped,
+            })
+            .unwrap();
+        let reloaded = TrainsDb::load(&folder.config()).unwrap();
+        assert_eq!(reloaded.settings().wagennummer, UicStyle::Grouped);
     }
 
     #[test]

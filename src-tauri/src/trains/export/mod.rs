@@ -58,7 +58,7 @@ pub fn instandhaltung_row(db: &TrainsDb, event: &Instandhaltung) -> [String; 7] 
     [
         event.id.clone(),
         db.wagen_by_id(&event.wagen_id)
-            .map(|wagen| format::uic_display(&wagen.nummer))
+            .map(|wagen| format::uic_in(&wagen.nummer, db.settings().wagennummer))
             .unwrap_or_default(),
         event
             .datum

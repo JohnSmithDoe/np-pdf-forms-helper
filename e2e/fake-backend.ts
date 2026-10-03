@@ -28,12 +28,19 @@
 // cancelled. `seed.scan` is the same for the guided import's two pickers and
 // for a drop, and `seed.clean` is what `clean_file` answers with.
 //
-// The guided import fakes the CLEANING REPORT for the reason it fakes the staged
+// The cleaning fakes the CLEANING REPORT for the reason it fakes the staged
 // preview. `reclean_file` only ECHOES decisions — a correction closes its cell,
 // a confirmation sets its card and the counts follow — and never re-parses a
-// value: whether `31.13.2025` reads is Rust's question. `write_clean` stages
-// `seed.cleaned` (else `seed.staging`) and applies none of `clean::ready`'s gate,
-// which is proved by `cargo test`.
+// value: whether `31.13.2025` reads is Rust's question. `write_clean` files a
+// `Dokument` for the cleaning and applies none of `clean::ready`'s gate, which
+// is proved by `cargo test`.
+//
+// The import walk is faked the same way. `stage_document` serves
+// `seed.document` (else `seed.staging`) — entity groups included, because
+// grouping is `entities::group`'s and not something to re-implement here — and
+// `commit_document` only records the rows it was sent and marks the document
+// imported. An imported document is refused exactly as Rust refuses it, since
+// that is a rule the UI is built around, not a property of bytes.
 // ────────────────────────────────────────────────────────────────
 
 import type { Page } from '@playwright/test';
@@ -77,7 +84,7 @@ export interface FakeStagedCell {
 
 /** The five resolutions are the five `trains::model::StagedRow` carries, and
  *  Halter and Eigentümer are separate parties — one `owner` for both was drift
- *  from the wire, and `row-preview` skips a key it does not find. */
+ *  from the wire. */
 export interface FakeStagedRow {
   row: number;
   status: 'ready' | 'needsInput' | 'duplicate' | 'rejected';
@@ -116,6 +123,12 @@ export interface FakeStaging {
     hint: { headerRow?: number; firstDataRow: number; lastDataRow?: number };
   }[];
   rows: FakeStagedRow[];
+  dokumentId?: string;
+  entities?: {
+    partner: FakeEntityGroup[];
+    wagen: FakeEntityGroup[];
+    radsaetze: FakeEntityGroup[];
+  };
   summary: {
     total: number;
     ready: number;
@@ -126,6 +139,45 @@ export interface FakeStaging {
     neuePartner: number;
     neueRadsaetze: number;
   };
+}
+
+export interface FakeEntityGroup {
+  key: string;
+  kind: 'partner' | 'wagen' | 'radsatz';
+  rolle?: string;
+  spellings: string[];
+  resolution: Record<string, unknown>;
+  rows: number[];
+  changes: {
+    row: number;
+    column: number;
+    header: string;
+    raw: string;
+    clean: string;
+    tier: string;
+    rule: string;
+  }[];
+}
+
+export interface FakeDokument {
+  id: string;
+  name: string;
+  sheet: string;
+  templateId: string;
+  templateName: string;
+  plan: FakeStaging['plan'];
+  originalHash: string;
+  cleanedHash: string;
+  original: string;
+  cleaned: string;
+  summary: {
+    fehlerOffen: number;
+    deutungenOffen: number;
+    formatierungen: number;
+    korrigiert: number;
+  };
+  bereinigtAm: string;
+  importiertAm?: string;
 }
 
 export interface FakeWaggon {
@@ -208,10 +260,20 @@ export interface FakeScanFile {
   path: string;
   name: string;
   status:
-    'erkannt' | 'mehrdeutig' | 'unbekannt' | 'nichtUnterstuetzt' | 'unlesbar';
+    | 'erkannt'
+    | 'mehrdeutig'
+    | 'unbekannt'
+    | 'nichtUnterstuetzt'
+    | 'unlesbar'
+    | 'vorhanden';
   matches: { templateId: string; templateName: string; sheet: string }[];
   sheets: string[];
   message?: string;
+  vorhanden?: {
+    dokumentId: string;
+    bereinigtAm: string;
+    importiertAm?: string;
+  };
 }
 
 export type FakeReading =
@@ -293,8 +355,12 @@ export interface FakeSeed {
   scan?: FakeScanFile[] | null;
   /** What `clean_file` answers with, whatever file and template it is sent. */
   clean?: FakeCleanReport | null;
-  /** What `write_clean` stages; falls back to `staging`. */
-  cleaned?: FakeStaging | null;
+  /** The Schattensystem settings; compact Wagennummern when absent. */
+  settings?: { wagennummer: string };
+  /** The documents the app already owns. */
+  dokumente?: FakeDokument[];
+  /** What `stage_document` stages, whatever id it is sent; falls back to `staging`. */
+  document?: FakeStaging | null;
   /** What the native picker hands back on the next add. `null` = cancelled. */
   picker?: FakeDocument | null;
   /** Command name → the German lines it should reject with. */
@@ -348,7 +414,9 @@ export function install(seed: FakeSeed): void {
     scan: FakeScanFile[] | null;
     clean: FakeCleanReport | null;
     cleaning: FakeCleanReport | null;
-    cleaned: FakeStaging | null;
+    dokumente: FakeDokument[];
+    document: FakeStaging | null;
+    settings: { wagennummer: string };
     committed: number[];
     failures: Record<string, string[]>;
     calls: RecordedCall[];
@@ -368,7 +436,9 @@ export function install(seed: FakeSeed): void {
     scan: seed.scan ?? null,
     clean: seed.clean ?? null,
     cleaning: null,
-    cleaned: seed.cleaned ?? null,
+    dokumente: seed.dokumente ?? [],
+    document: seed.document ?? null,
+    settings: seed.settings ?? { wagennummer: 'compact' },
     committed: [],
     failures: seed.failures ?? {},
     calls: [],
@@ -396,6 +466,7 @@ export function install(seed: FakeSeed): void {
     partners: state.partners.length,
     events: state.events.length,
     radsaetze: state.radsaetze.length,
+    dokumente: state.dokumente.length,
   });
 
   const trainsLists = () => ({
@@ -404,6 +475,8 @@ export function install(seed: FakeSeed): void {
     radsaetze: copy(state.radsaetze),
     einbauten: copy(state.einbauten),
     templates: copy(state.templates),
+    dokumente: copy(state.dokumente),
+    settings: copy(state.settings),
     counts: counts(),
   });
 
@@ -573,25 +646,60 @@ export function install(seed: FakeSeed): void {
       return { counts: counts() };
     },
 
-    commit_import: (args) => {
-      const decisions = args['decisions'] as unknown as {
-        rows: { row: number }[];
-        saveTemplateAs?: string;
-      };
-      state.committed = decisions.rows.map((row) => row.row);
-      if (decisions.saveTemplateAs && state.staging) {
-        state.templates.push({
-          id: `t${state.templates.length + 1}`,
-          name: decisions.saveTemplateAs,
-          plan: copy(state.staging.plan),
-          builtin: false,
-          createdAt: '2026-08-16',
+    save_template: (args) => {
+      const name = String(args['name'] ?? '').trim();
+      if (!name || !state.staging) {
+        return Promise.reject({
+          messages: ['Die Vorlage braucht einen Namen.'],
         });
       }
+      state.templates.push({
+        id: `t${state.templates.length + 1}`,
+        name,
+        plan: copy(state.staging.plan),
+        builtin: false,
+        createdAt: '2026-10-03',
+      });
+      state.staging = null;
+      return {
+        templates: copy(state.templates),
+        message: report(`Vorlage „${name}“ wurde gespeichert`),
+      };
+    },
+
+    stage_document: (args) => {
+      const id = String(args['id']);
+      const dokument = state.dokumente.find((entry) => entry.id === id);
+      if (!dokument) {
+        return Promise.reject({
+          messages: ['Das Dokument gibt es nicht mehr.'],
+        });
+      }
+      if (dokument.importiertAm) {
+        return Promise.reject({
+          messages: [
+            `„${dokument.name}“ wurde bereits am ${dokument.importiertAm} importiert.`,
+          ],
+        });
+      }
+      const staged = state.document ?? state.staging;
+      if (!staged) return {};
+      state.staging = { ...copy(staged), dokumentId: id };
+      return { staging: copy(state.staging), counts: counts() };
+    },
+
+    commit_document: (args) => {
+      const decisions = args['decisions'] as unknown as { rows: number[] };
+      const id = state.staging?.dokumentId;
+      state.committed = [...decisions.rows];
+      state.dokumente = state.dokumente.map((entry) =>
+        entry.id === id ? { ...entry, importiertAm: '2026-10-03' } : entry
+      );
+      state.staging = null;
       return {
         ...trainsLists(),
         message: report('Import wurde erfolgreich übernommen', [
-          `${decisions.rows.length} Wartung(en) übernommen.`,
+          `${decisions.rows.length} Zeile(n) übernommen.`,
         ]),
       };
     },
@@ -626,6 +734,16 @@ export function install(seed: FakeSeed): void {
       return { ...trainsLists(), message: report('Partner wurde entfernt') };
     },
 
+    save_trains_settings: (args) => {
+      state.settings = copy(
+        args['settings'] as unknown as { wagennummer: string }
+      );
+      return {
+        settings: copy(state.settings),
+        message: report('Einstellungen wurden gespeichert'),
+      };
+    },
+
     remove_template: (args) => {
       const id = String(args['id']);
       state.templates = state.templates.filter((entry) => entry.id !== id);
@@ -642,7 +760,9 @@ export function install(seed: FakeSeed): void {
       state.einbauten = [];
       state.events = [];
       state.templates = [];
+      state.dokumente = [];
       state.staging = null;
+      state.cleaning = null;
       return {
         ...trainsLists(),
         message: report('Zugdaten wurden zurückgesetzt'),
@@ -667,20 +787,32 @@ export function install(seed: FakeSeed): void {
     },
 
     write_clean: () => {
+      const cleaning = state.cleaning;
+      if (!cleaning) return {};
+      const id = `d${state.dokumente.length + 1}`;
+      const name = cleaning.file.split(/[\\/]/).pop() ?? cleaning.file;
+      state.dokumente.push({
+        id,
+        name,
+        sheet: cleaning.sheet,
+        templateId: cleaning.templateId,
+        templateName: cleaning.templateName,
+        plan: copy(cleaning.plan),
+        originalHash: id,
+        cleanedHash: id,
+        original: cleaning.file,
+        cleaned: `data/trains/dokumente/${id}/bereinigt.xlsx`,
+        summary: copy(cleaning.summary),
+        bereinigtAm: '2026-10-03',
+      });
       state.cleaning = null;
-      state.staging = copy(state.cleaned ?? state.staging);
       return {
-        ...(state.staging ? { staging: copy(state.staging) } : {}),
+        dokumente: copy(state.dokumente),
+        templates: copy(state.templates),
         counts: counts(),
-        cleanedFile: 'data/out/bereinigt-2026-10-03/bereinigt.xlsx',
-        message: report(
-          'Bereinigte Datei wurde geschrieben',
-          [
-            'Datei wurde erstellt: bereinigt.xlsx',
-            '3 Änderung(en) im Blatt „Änderungsprotokoll“ protokolliert.',
-          ],
-          'data/out/bereinigt-2026-10-03'
-        ),
+        message: report(`„${name}“ wurde bereinigt`, [
+          '3 Änderung(en) im Blatt „Änderungsprotokoll“ der bereinigten Datei protokolliert.',
+        ]),
       };
     },
 

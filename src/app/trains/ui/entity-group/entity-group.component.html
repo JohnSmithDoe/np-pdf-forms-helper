@@ -1,0 +1,70 @@
+<ion-card data-testid="entity-group">
+  <ion-card-header>
+    <ion-card-subtitle>{{ subtitle() }}</ion-card-subtitle>
+    <ion-card-title data-testid="entity-group-title">{{
+      title()
+    }}</ion-card-title>
+  </ion-card-header>
+  <ion-card-content>
+    @if (dropped()) {
+      <ion-note data-testid="entity-group-dropped">
+        Entfällt — alle Zeilen gehören zu einem Wagen, der nicht übernommen
+        wird.
+      </ion-note>
+    } @else {
+      <ion-note class="entity-group__status">{{ status() }}</ion-note>
+      <ion-radio-group
+        [value]="value()"
+        (ionChange)="onChoose($event)"
+        data-testid="entity-group-choice"
+      >
+        @for (choice of choices(); track choice.value) {
+          <ion-item lines="none">
+            <ion-radio
+              [value]="choice.value"
+              justify="start"
+              labelPlacement="end"
+            >
+              <ion-label class="ion-text-wrap">
+                {{ choice.label }}
+                @if (choice.hint) {
+                  <p>{{ choice.hint }}</p>
+                }
+              </ion-label>
+            </ion-radio>
+          </ion-item>
+        }
+      </ion-radio-group>
+      @if (!value()) {
+        <ion-note color="warning" data-testid="entity-group-open">
+          Noch nicht entschieden.
+        </ion-note>
+      }
+    }
+
+    @if (group().changes.length) {
+      <ion-button
+        class="entity-group__toggle"
+        fill="clear"
+        size="small"
+        (click)="toggleChanges()"
+      >
+        Beim Bereinigen geändert ({{ group().changes.length }})
+      </ion-button>
+      @if (showChanges()) {
+        <ion-list lines="none">
+          @for (change of group().changes; track $index) {
+            <ion-item>
+              <ion-label class="ion-text-wrap">
+                <p>
+                  Zeile {{ change.row }} · {{ change.rule }}: „{{ change.raw }}“
+                  → „{{ change.clean }}“
+                </p>
+              </ion-label>
+            </ion-item>
+          }
+        </ion-list>
+      }
+    }
+  </ion-card-content>
+</ion-card>

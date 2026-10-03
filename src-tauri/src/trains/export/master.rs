@@ -272,7 +272,7 @@ mod tests {
 
         let source = grid::read(&path, Some(SHEET)).unwrap();
         assert_eq!(source.grid.text(1, 2), "e1");
-        assert_eq!(source.grid.text(2, 2), "21 81 2471 217-3");
+        assert_eq!(source.grid.text(2, 2), "218124712173");
         assert_eq!(source.grid.text(3, 2), "31.12.2025");
     }
 
@@ -288,11 +288,7 @@ mod tests {
 
         let source = grid::read(&path, Some(SHEET)).unwrap();
         assert_eq!(source.grid.rows, 2, "no row was added");
-        assert_eq!(
-            source.grid.text(2, 2),
-            "21 81 2471 217-3",
-            "ours is updated"
-        );
+        assert_eq!(source.grid.text(2, 2), "218124712173", "ours is updated");
         assert_eq!(source.grid.text(4, 2), "von Hand", "theirs is untouched");
     }
 

@@ -153,6 +153,8 @@ pub fn stage(input: StageInput<'_>) -> AppResult<Staged> {
             candidates: input.candidates,
             rows,
             summary,
+            dokument_id: None,
+            entities: None,
         },
         values,
     })
@@ -225,7 +227,7 @@ fn stage_row(
                     column: binding.index,
                     field: binding.field,
                     raw,
-                    parsed: format::value(&value),
+                    parsed: format::styled(&value, input.db.settings().wagennummer),
                     ok: true,
                 });
                 values.push((binding.field, value));
@@ -312,6 +314,7 @@ fn stage_row(
             eigentuemer,
             radsatz,
             issues,
+            sender,
         },
         RowValues {
             row,
@@ -607,7 +610,7 @@ mod tests {
                 .parsed
                 .as_str()
         };
-        assert_eq!(parsed(FieldKind::Wagennummer), "31 80 4740 123-4");
+        assert_eq!(parsed(FieldKind::Wagennummer), "318047401234");
         assert_eq!(parsed(FieldKind::Datum), "31.12.2025");
         assert_eq!(parsed(FieldKind::Betrag), "1234,56");
     }
@@ -623,7 +626,7 @@ mod tests {
             .find(|c| c.field == FieldKind::Wagennummer)
             .unwrap();
         assert_eq!(cell.raw, "31 80 4740 123-4");
-        assert_eq!(cell.parsed, "31 80 4740 123-4");
+        assert_eq!(cell.parsed, "318047401234");
         assert!(cell.ok);
     }
 

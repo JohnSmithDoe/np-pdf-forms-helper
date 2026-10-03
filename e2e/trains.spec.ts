@@ -121,7 +121,7 @@ const STAGING: FakeStaging = {
 
 async function start(page: Page, seed: FakeSeed = {}): Promise<void> {
   await installFakeBackend(page, seed);
-  await page.goto('/#/trains/import/manual');
+  await page.goto('/#/trains/clean/template');
 }
 
 test.describe('Zug-Import', () => {
@@ -130,7 +130,7 @@ test.describe('Zug-Import', () => {
   }) => {
     await start(page);
     await expect(page.getByTestId('import-pick')).toBeVisible();
-    await expect(page.getByTestId('import-commit')).toHaveCount(0);
+    await expect(page.getByTestId('template-save')).toHaveCount(0);
   });
 
   test('ein abgebrochener Datei-Dialog ist kein Fehler', async ({ page }) => {
@@ -153,32 +153,21 @@ test.describe('Zug-Import', () => {
     );
   });
 
-  test('die Prüfung zeigt jede Zeile mit Status und Hinweis', async ({
+  // The mapper's only exit is a template: nothing here commits rows.
+  test('die Zuordnung endet in einer Vorlage, nicht in einem Import', async ({
     page,
   }) => {
     await start(page, { staging: STAGING });
     await page.getByTestId('import-pick').click();
-    await page.getByTestId('import-to-review').click();
 
-    await expect(page.getByTestId('preview-row')).toHaveCount(2);
-    await expect(page.getByTestId('preview-issue').first()).toContainText(
-      'keine gültige Wagennummer'
-    );
-  });
-
-  test('nur fehlerfreie Zeilen sind vorausgewählt', async ({ page }) => {
-    await start(page, { staging: STAGING });
-    await page.getByTestId('import-pick').click();
-    await page.getByTestId('import-to-review').click();
-
-    await expect(page.getByTestId('import-commit')).toContainText(
-      '1 Zeile(n) übernehmen'
-    );
+    await expect(page.getByTestId('template-save')).toBeEnabled();
+    await expect(page.getByTestId('import-commit')).toHaveCount(0);
   });
 
   test('ein Export meldet sich mit seinem Ordner', async ({ page }) => {
-    await start(page, { staging: null });
-    await page.getByTestId('import-export').click();
+    await installFakeBackend(page);
+    await page.goto('/#/trains');
+    await page.getByTestId('trains-export').click();
     await expect(
       page.getByText('Export wurde erfolgreich erstellt')
     ).toBeVisible();
@@ -206,10 +195,25 @@ test.describe('Zug-Listen', () => {
     },
   ];
 
-  test('die Wagenliste zeigt die Nummer in ihrer Gruppierung', async ({
+  // The Schattensystem setting decides the spelling; compact is the default.
+  test('die Wagenliste zeigt die Nummer in der eingestellten Schreibweise', async ({
     page,
   }) => {
     await installFakeBackend(page, { wagen, partners });
+    await page.goto('/#/trains/wagen');
+    await expect(page.getByTestId('list-row-title').first()).toHaveText(
+      '218124712173'
+    );
+  });
+
+  test('gruppiert eingestellt, zeigt die Liste die Gruppierung', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      wagen,
+      partners,
+      settings: { wagennummer: 'grouped' },
+    });
     await page.goto('/#/trains/wagen');
     await expect(page.getByTestId('list-row-title').first()).toHaveText(
       '21 81 2471 217-3'
