@@ -367,3 +367,34 @@ the file said, and matching still ignores dashes and spaces.
 near-global identifier a wheelset has, so the field and its `FieldKind` exist and a column maps onto
 them — but it fills a blank only, and no rule leans on it until a real sender file proves the format.
 Shipping an untested rule on the one identifier users would trust most is the wrong trade.
+
+## Workshop orders are a feed, not an entity (appended 2026-10-03)
+
+**The first real order export is read as a source of Instandhaltungen, not as orders.** It is the
+Halter's ERP list of workshop orders: one row per order, an order number, the wagen, the Werkstatt,
+an order date, a planned and an actual intake, a workshop exit, and a status that moves
+`erfasst → zugestellt → ausgeführt`. It is a SNAPSHOT that is sent again as statuses move, whereas
+everything `trains` stores is an EVENT that does not change once it happened.
+
+**So only finished orders are imported, dated by the workshop exit.** Map the exit date onto
+`Datum`, the Werkstatt column onto `Werkstatt`, the note onto `Bemerkung`, and untick the rows with no
+exit date. That needs no model change and dedupes correctly on re-import: an exit date does not move
+once set, so the dedupe key (wagen, Datum, Werkstatt, Leistung, Betrag) stays stable. The order date
+was the obvious alternative and is wrong: it would record work that has not happened, and every
+later status change would be skipped as a duplicate.
+
+**The cost is bad, and accepted only as a stopgap.** Every import of this file means unticking the
+unfinished orders by hand — 33 of 42 on the first file, every time it is sent again — and a row
+missed is an Instandhaltung that did not happen, committed without complaint. It cannot be fixed
+by a default: rows without a date are legitimate in other files (see `fachdomaene.md` §8), so
+"no date → unticked" is wrong globally. The fix is per TEMPLATE — a stored row filter such as
+"only rows where <column> is filled" on `ImportPlan`, applied at staging — and it is the first thing
+to build if this file stays in use, or if a second sender file shows the same snapshot shape.
+
+**Deferred: an `Auftrag` entity keyed on the order number.** The order number is the column this
+reading throws away, and probably the most valuable one: in the same Halter's own tracking workbook
+an invoice line sits next to the order number it settles, which makes it the join from an order to
+its later invoice. Modelling it means a mutable record (status, intake, exit) that a re-import
+UPDATES rather than appends, and that an Instandhaltung or an invoice line points at. Not built until
+a real invoice file shows that the join actually holds: designing the link from one side of it is
+guessing.

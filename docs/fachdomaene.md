@@ -348,3 +348,9 @@ gehört nach [decisions.md](./decisions.md):
 - **Schadensregulierung nach AVV** — Schadensursache, Kostenzuordnung, Haftung.
 - **ECM-Nachweisführung** — das Modul verwaltet Daten, es ist kein zertifiziertes
   Instandhaltungssystem.
+- **Werkstattaufträge (Bestellungen)** — Bestellnummer, Status (`erfasst → zugestellt →
+  ausgeführt`), Eingang und Ausgang. Ein Auftrag ändert sich, eine Instandhaltung nicht. Bis auf
+  Weiteres wird eine Auftragsliste nur als Quelle **abgeschlossener** Instandhaltungen gelesen
+  (Datum = Werkstattausgang); ein eigenes `Auftrag` mit der Bestellnummer als Schlüssel ist
+  zurückgestellt, bis eine echte Rechnungsdatei zeigt, dass Rechnung und Auftrag über sie
+  zusammenfinden. Siehe [decisions.md](./decisions.md).
