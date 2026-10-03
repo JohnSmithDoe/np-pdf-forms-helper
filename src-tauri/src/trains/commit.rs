@@ -45,6 +45,17 @@
 // the template's own columns and headers are kept, because the plan the user
 // confirmed belongs to one file and the template describes them all.
 //
+// "CREATE" MEANS "CREATE UNLESS AN EARLIER ROW OF THIS COMMIT ALREADY DID".
+// Staging resolves every row against the store as it was BEFORE the file, so
+// all forty rows naming one new workshop stage as `New`, and minting one per
+// row stored the workshop forty times — and a wheelset snapshot, four rows per
+// wagen, every new wagen four times. The transaction's indexes are current
+// after every write, so a create first looks its natural key up THERE: the
+// Wagennummer, the partner's match key. A hit can only be this commit's own
+// creation — anything stored before would have staged `Known` — so it never
+// overrides a choice the user made. A partner met again in another role gains
+// that role rather than a twin: one `Partner` with a `rollen` list.
+//
 // A wagen's `Likely` does NOT rewrite the stored number. The stored one is
 // presumed right and the incoming one is presumed to be the typo — the opposite
 // would let one bad file rewrite the fleet.
@@ -325,21 +336,24 @@ fn commit_row(
     let wagen_id = match resolve_entity(tx, &decision.wagen, &row.wagen)? {
         Slot::Existing(id) => id,
         Slot::Skip => return Ok(None),
-        Slot::Create => {
-            let id = Uuid::new_v4().to_string();
-            tx.put_wagen(Wagen {
-                id: id.clone(),
-                nummer: uic.clone(),
-                halter_id: None,
-                eigentuemer_id: None,
-                bauart: None,
-                bemerkung: None,
-                created_at: stamp.to_string(),
-                source: Some(provenance(file, sheet, row.row, stamp)),
-            });
-            created.wagen = true;
-            id
-        }
+        Slot::Create => match tx.db().wagen_by_nummer(&uic).map(|wagen| wagen.id.clone()) {
+            Some(id) => id,
+            None => {
+                let id = Uuid::new_v4().to_string();
+                tx.put_wagen(Wagen {
+                    id: id.clone(),
+                    nummer: uic.clone(),
+                    halter_id: None,
+                    eigentuemer_id: None,
+                    bauart: None,
+                    bemerkung: None,
+                    created_at: stamp.to_string(),
+                    source: Some(provenance(file, sheet, row.row, stamp)),
+                });
+                created.wagen = true;
+                id
+            }
+        },
     };
 
     let werkstatt_id = commit_partner(
@@ -534,6 +548,14 @@ fn commit_partner(
             let name = raw.unwrap_or_default().trim().to_string();
             if name.is_empty() {
                 return Ok(None);
+            }
+            if let Some(id) = tx
+                .db()
+                .partner_by_key(&key)
+                .map(|partner| partner.id.clone())
+            {
+                tx.add_rolle(&id, role);
+                return Ok(Some(id));
             }
             let id = Uuid::new_v4().to_string();
             tx.put_partner(Partner {
@@ -1078,6 +1100,105 @@ pub(super) mod tests {
             Some(DateOrder::MonthFirst)
         );
         assert_eq!(db.templates().iter().filter(|t| !t.builtin).count(), 1);
+    }
+
+    /// One file, three rows: the same new wagen twice, the same new workshop
+    /// three times — once of them as the Halter too. Staging calls every one of
+    /// them `New`, because the store knew none of them before the file.
+    fn repeated() -> Staged {
+        let grid = Grid::from_text(
+            "Tabelle1",
+            &[
+                &["Wagennummer", "Datum", "Werkstatt", "Halter", "Leistung"],
+                &[
+                    "21 81 2471 217-3",
+                    "01.12.2025",
+                    "ULA Bebra",
+                    "",
+                    "Bremsprobe",
+                ],
+                &["21 81 2471 217-3", "02.12.2025", "ULA Bebra", "", "Radsatz"],
+                &[
+                    "33 85 0659 002-9",
+                    "03.12.2025",
+                    "ULA Bebra",
+                    "ULA Bebra",
+                    "Revision",
+                ],
+            ],
+        );
+        let plan = super::super::model::ImportPlan {
+            columns: [
+                (1, "Wagennummer", FieldKind::Wagennummer),
+                (2, "Datum", FieldKind::Datum),
+                (3, "Werkstatt", FieldKind::Werkstatt),
+                (4, "Halter", FieldKind::Halter),
+                (5, "Leistung", FieldKind::Leistung),
+            ]
+            .into_iter()
+            .map(|(index, header, field)| ColumnBinding {
+                header: header.into(),
+                index,
+                field,
+                decimal: None,
+                date_order: None,
+            })
+            .collect(),
+            ..plan()
+        };
+        let folder = TempDir::new("commit-repeated-stage");
+        let empty = TrainsDb::load(&folder.config()).unwrap();
+        stage(StageInput {
+            id: "s1".into(),
+            file: "monat.xlsx".into(),
+            sheets: vec!["Tabelle1".into()],
+            candidates: Vec::new(),
+            grid: &grid,
+            plan: &plan,
+            db: &empty,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn rows_naming_the_same_new_entity_create_it_once() {
+        let staging = repeated();
+        let (_f, mut db) = fresh("commit-repeated");
+        commit(
+            &mut db,
+            &staging.wire,
+            &staging.values,
+            &decisions(vec![create_all(2), create_all(3), create_all(4)]),
+        )
+        .unwrap();
+
+        assert_eq!(db.wagen().len(), 2, "two distinct Wagennummern");
+        assert_eq!(db.partner().len(), 1, "one workshop, however often named");
+        assert_eq!(db.instandhaltungen().count(), 3, "every row's work is kept");
+    }
+
+    /// One partner, several roles — not a Werkstatt and a Halter twin.
+    #[test]
+    fn a_partner_met_again_in_another_role_gains_the_role() {
+        let staging = repeated();
+        let (_f, mut db) = fresh("commit-roles");
+        commit(
+            &mut db,
+            &staging.wire,
+            &staging.values,
+            &decisions(vec![create_all(2), create_all(3), create_all(4)]),
+        )
+        .unwrap();
+
+        let partner = &db.partner()[0];
+        assert!(partner.has_rolle(PartnerRolle::Werkstatt));
+        assert!(partner.has_rolle(PartnerRolle::Halter));
+        let halter_of_second = db
+            .wagen()
+            .into_iter()
+            .find(|wagen| wagen.nummer == "338506590029")
+            .and_then(|wagen| wagen.halter_id);
+        assert_eq!(halter_of_second.as_deref(), Some(partner.id.as_str()));
     }
 }
 

@@ -471,6 +471,20 @@ impl Tx<'_> {
 
     /// Records a raw source spelling against a partner, so the next file from
     /// that sender resolves without asking. This is the learning loop.
+    pub fn add_rolle(&mut self, partner_id: &str, role: PartnerRolle) {
+        if self
+            .db
+            .partner
+            .get(partner_id)
+            .is_none_or(|partner| partner.has_rolle(role))
+        {
+            return;
+        }
+        if let Some(partner) = self.partner_mut().get_mut(partner_id) {
+            partner.rollen.push(role);
+        }
+    }
+
     pub fn learn_alias(&mut self, partner_id: &str, alias: &str) {
         let Some(partner) = self.db.partner.get(partner_id) else {
             return;
