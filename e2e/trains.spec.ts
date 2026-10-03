@@ -284,7 +284,12 @@ test.describe('Radsätze', () => {
   test('zeigt, in welchem Wagen ein Radsatz gerade steckt', async ({
     page,
   }) => {
-    await installFakeBackend(page, { wagen, radsaetze, einbauten });
+    await installFakeBackend(page, {
+      wagen,
+      radsaetze,
+      einbauten,
+      settings: { wagennummer: 'grouped' },
+    });
     await page.goto('/#/trains/radsaetze');
     await expect(page.getByTestId('list-row-title')).toHaveText([
       'RS0815',
