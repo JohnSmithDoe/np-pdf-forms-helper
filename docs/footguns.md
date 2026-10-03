@@ -98,3 +98,15 @@ Measured 2026-08-22 in Chrome against `@ionic/angular@8`, while reworking the ex
   fixing it means either an upstream `umya` change or reading the sheet XML directly, the same escape
   hatch `workbookPr/@date1904` already needs.
 
+- **umya 3.0.1 PANICS while reading shared formulas with whole-column ranges.** A real 28-sheet
+  customer workbook full of `VLOOKUP(A:A,Blatt!A:D,4,0)` died in
+  `helper::formula::adjustment_formula_coordinate` — an `unwrap()` on the missing row of `A:A` — on
+  every sheet and on both `read` and `lazy_read`. A panic is not an `AppError`: the command never
+  answers and the window keeps spinning. 3.1.0 reads all 28 sheets (measured 2026-10-03, macOS). Every
+  umya and lopdf read now runs inside `AppError::reading`, so the next parser bug is a German dialog.
+
+- **A full `read` deserialises every sheet, whichever one you wanted.** The same workbook had two
+  sheets filled with `0` down to row 1,048,576: 6.5 s and 2.6 GB for a full read, 0.4 s and 300 MB for
+  `lazy_read` plus the one sheet. `grid::read` therefore reads one sheet; the master export and the
+  filler keep the full read, because they write the workbook back out.
+

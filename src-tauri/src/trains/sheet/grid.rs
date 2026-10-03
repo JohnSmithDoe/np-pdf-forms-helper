@@ -35,6 +35,15 @@
 // a German-formatted text cell look like a stored number — the exact confusion
 // the real `number` field exists to prevent, faked into the fixtures.
 //
+// `read` parses ONE sheet: `lazy_read` loads the sheet list and the shared
+// strings, and only the chosen sheet is deserialised. A full `read` builds every
+// sheet the sender's file holds, and those files are not tidy — measured on a
+// real 28-sheet workbook with two sheets filled down to row 1,048,576: 6.5 s and
+// 2.6 GB for the full read against 0.4 s and 300 MB for one sheet. The index is
+// resolved here rather than by `read_sheet_by_name`, which unwraps an unknown
+// name. Both umya calls run inside `AppError::reading`, because umya's parser
+// has panicked on real files before.
+//
 // `read` takes a PATH and `from_worksheet` takes a workbook already open. The
 // master exporter has to hold a writable `Workbook` anyway, and going back to
 // the path for the grid parsed the same file a second time — double the parse
@@ -146,14 +155,14 @@ pub struct Source {
 }
 
 pub fn read(path: &Path, sheet: Option<&str>) -> AppResult<Source> {
-    let book = umya_spreadsheet::reader::xlsx::read(path).map_err(|error| {
-        AppError::detail(
-            format!(
-                "Die Excel-Datei {} konnte nicht gelesen werden.",
-                crate::doc::file_name(path)
-            ),
-            error,
+    let headline = || {
+        format!(
+            "Die Excel-Datei {} konnte nicht gelesen werden.",
+            crate::doc::file_name(path)
         )
+    };
+    let mut book = AppError::reading(headline(), || {
+        umya_spreadsheet::reader::xlsx::lazy_read(path)
     })?;
 
     let sheets: Vec<String> = book
@@ -167,22 +176,26 @@ pub fn read(path: &Path, sheet: Option<&str>) -> AppResult<Source> {
         ]));
     }
 
-    let worksheet = match sheet {
-        Some(wanted) => book
-            .sheet_collection_no_check()
+    let index = match sheet {
+        Some(wanted) => sheets
             .iter()
-            .find(|sheet| sheet.name() == wanted)
+            .position(|name| name == wanted)
             .ok_or_else(|| {
                 AppError::Report(vec![
                     format!("Die Arbeitsmappe „{wanted}“ gibt es in dieser Datei nicht."),
                     format!("Vorhanden sind: {}.", sheets.join(", ")),
                 ])
             })?,
-        None => &book.sheet_collection_no_check()[0],
+        None => 0,
     };
 
+    AppError::reading(headline(), || {
+        book.read_sheet(index);
+        Ok::<_, std::convert::Infallible>(())
+    })?;
+
     Ok(Source {
-        grid: from_worksheet(worksheet)?,
+        grid: from_worksheet(&book.sheet_collection_no_check()[index])?,
         sheets,
     })
 }

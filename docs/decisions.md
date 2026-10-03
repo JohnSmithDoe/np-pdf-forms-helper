@@ -26,7 +26,7 @@ belongs in the file that can be wrong; this list exists so nobody re-opens the q
   vendored.** It is short enough to read in full, which is exactly what makes taking it as a dependency
   the wrong trade: it would hide the 500 lines this port exists to write. Reading it to check an
   assumption about a field-flag bit is correct; `cargo add acroform` is not.
-- **XLSX is `umya-spreadsheet` 3.0.1** — the only crate that credibly round-trips. The requirement is not
+- **XLSX is `umya-spreadsheet` 3.1.0** — the only crate that credibly round-trips. The requirement is not
   "write a spreadsheet", it is "open a file somebody else authored, change one cell, and give back a file
   in which everything this program did not understand is still intact". Write-only crates cannot do that
   at any level of effort.

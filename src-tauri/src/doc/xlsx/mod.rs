@@ -80,15 +80,13 @@ pub fn remap() -> AppResult<()> {
 }
 
 fn read(path: &Path) -> AppResult<Workbook> {
-    umya_spreadsheet::reader::xlsx::read(path).map_err(|error| {
-        AppError::detail(
-            format!(
-                "Die Excel-Datei {} konnte nicht gelesen werden.",
-                super::file_name(path)
-            ),
-            error,
-        )
-    })
+    AppError::reading(
+        format!(
+            "Die Excel-Datei {} konnte nicht gelesen werden.",
+            super::file_name(path)
+        ),
+        || umya_spreadsheet::reader::xlsx::read(path),
+    )
 }
 
 #[cfg(test)]

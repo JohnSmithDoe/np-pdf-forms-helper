@@ -64,15 +64,13 @@ pub fn upsert(db: &TrainsDb, path: &Path) -> AppResult<String> {
 
     backup(path)?;
 
-    let mut book = umya_spreadsheet::reader::xlsx::read(path).map_err(|error| {
-        AppError::detail(
-            format!(
-                "Die Master-Datei {} konnte nicht gelesen werden.",
-                crate::doc::file_name(path)
-            ),
-            error,
-        )
-    })?;
+    let mut book = AppError::reading(
+        format!(
+            "Die Master-Datei {} konnte nicht gelesen werden.",
+            crate::doc::file_name(path)
+        ),
+        || umya_spreadsheet::reader::xlsx::read(path),
+    )?;
 
     let master_grid = {
         let worksheet = book

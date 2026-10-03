@@ -191,15 +191,13 @@ fn pdf_fields(document: &MappedDocument) -> &[PdfField] {
 }
 
 fn load(filename: &Path) -> AppResult<Document> {
-    Document::load(filename).map_err(|error| {
-        AppError::detail(
-            format!(
-                "Die PDF-Datei {} konnte nicht gelesen werden.",
-                super::file_name(filename)
-            ),
-            error,
-        )
-    })
+    AppError::reading(
+        format!(
+            "Die PDF-Datei {} konnte nicht gelesen werden.",
+            super::file_name(filename)
+        ),
+        || Document::load(filename),
+    )
 }
 
 // ─── what the user is told ────────────────────────────────────────

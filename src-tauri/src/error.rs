@@ -6,8 +6,22 @@
 //
 // Nothing swallows an `io::Error`: `?` makes a failed save loud, because a save
 // that reports success and loses the data is the worse failure.
+//
+// `AppError::reading` is the boundary around a PARSER this app does not own.
+// umya 3.0.1 panicked on shared formulas with whole-column ranges (`A:A`) — a
+// real customer workbook, every sheet — and a panic is not an `AppError`: the
+// command never answers and the window keeps spinning. So every umya and lopdf
+// read runs inside `catch_unwind`, and a panic becomes the same German headline
+// a parse error gets, with the panic text as the cause line.
+//
+// `AssertUnwindSafe` is honest here: the closure only builds a value from a file,
+// and on a panic that value is dropped, so no half-mutated state escapes. It
+// relies on the default `panic = "unwind"` — a `panic = "abort"` in a Cargo
+// profile would silently turn this boundary back into a crash.
 // ────────────────────────────────────────────────────────────────
 
+use std::fmt::Display;
+use std::panic::{self, AssertUnwindSafe};
 use std::path::PathBuf;
 
 use serde::{ser::SerializeStruct, Serialize, Serializer};
@@ -64,6 +78,27 @@ impl AppError {
     /// are separate lines because the dialog renders one entry per line.
     pub fn detail(headline: String, cause: impl std::fmt::Display) -> Self {
         Self::Report(vec![headline, cause.to_string()])
+    }
+
+    pub fn reading<T, E: Display>(
+        headline: String,
+        read: impl FnOnce() -> Result<T, E>,
+    ) -> AppResult<T> {
+        match panic::catch_unwind(AssertUnwindSafe(read)) {
+            Ok(Ok(value)) => Ok(value),
+            Ok(Err(error)) => Err(Self::detail(headline, error)),
+            Err(payload) => {
+                let cause = payload
+                    .downcast_ref::<&str>()
+                    .map(|text| text.to_string())
+                    .or_else(|| payload.downcast_ref::<String>().cloned())
+                    .unwrap_or_default();
+                Err(Self::detail(
+                    headline,
+                    format!("Interner Fehler beim Lesen der Datei. {cause}"),
+                ))
+            }
+        }
     }
 
     fn messages(&self) -> Vec<String> {
@@ -152,6 +187,34 @@ mod tests {
         assert_eq!(messages.len(), 1);
         assert!(messages[0].contains("/tmp/data.db"), "{}", messages[0]);
         assert!(messages[0].contains("beschädigt"), "{}", messages[0]);
+    }
+
+    // The panic is the case the guard exists for: umya 3.0.1 unwrapped a `None`
+    // inside its formula parser. The default hook still prints the panic to
+    // stderr — installing a quiet one would be process-wide, and tests share a
+    // process.
+    #[test]
+    fn a_panicking_reader_becomes_the_headline_plus_the_panic_text() {
+        let error = AppError::reading("Die Datei konnte nicht gelesen werden.".into(), || {
+            panic!("Formel ohne Zeile");
+            #[allow(unreachable_code)]
+            Ok::<u32, std::io::Error>(0)
+        })
+        .unwrap_err();
+        let messages = error.into_messages();
+        assert_eq!(messages[0], "Die Datei konnte nicht gelesen werden.");
+        assert!(messages[1].contains("Formel ohne Zeile"), "{}", messages[1]);
+    }
+
+    #[test]
+    fn a_reader_error_reads_like_detail_and_a_value_passes_through() {
+        let error = AppError::reading("Kopfzeile".into(), || Err::<(), _>(io_error())).unwrap_err();
+        assert_eq!(
+            error.into_messages(),
+            vec!["Kopfzeile".to_string(), "Zugriff verweigert".to_string()]
+        );
+        let value = AppError::reading("Kopfzeile".into(), || Ok::<_, std::io::Error>(7));
+        assert_eq!(value.unwrap(), 7);
     }
 
     // Every message is user-facing GERMAN and shown verbatim, so an empty one
