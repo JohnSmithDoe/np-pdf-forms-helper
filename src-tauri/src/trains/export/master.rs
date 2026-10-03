@@ -175,17 +175,14 @@ fn backup(path: &Path) -> AppResult<()> {
 }
 
 fn write_atomically(book: &Workbook, path: &Path) -> AppResult<()> {
-    let temp = path.with_extension("tmp.xlsx");
-    umya_spreadsheet::writer::xlsx::write(book, &temp).map_err(|error| {
-        AppError::detail(
-            format!(
-                "Die Master-Datei {} konnte nicht geschrieben werden.",
-                crate::doc::file_name(path)
-            ),
-            error,
-        )
-    })?;
-    std::fs::rename(&temp, path).map_err(|error| AppError::io(path, error))
+    crate::doc::write_book(
+        book,
+        path,
+        format!(
+            "Die Master-Datei {} konnte nicht geschrieben werden.",
+            crate::doc::file_name(path)
+        ),
+    )
 }
 
 #[cfg(test)]

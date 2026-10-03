@@ -54,16 +54,7 @@ pub fn many(files: &[PathBuf], auto_map_fields: bool, state: &AppState) -> AppRe
 
 /// The report lines for a whole folder. Errors only when nothing linked at all.
 pub fn folder(folder: &Path, auto_map_fields: bool, state: &AppState) -> AppResult<Vec<String>> {
-    let entries = std::fs::read_dir(folder).map_err(|error| AppError::io(folder, error))?;
-    // Filtered and sorted: a sub-DIRECTORY would link as a resource document
-    // whose export copy can never succeed, and the order the OS hands back is
-    // arbitrary while insertion order IS the order the UI lists documents in.
-    let mut files: Vec<PathBuf> = entries
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| path.is_file())
-        .collect();
-    files.sort();
-
+    let files = crate::doc::list_files(folder)?;
     many(&files, auto_map_fields, state)
 }
 

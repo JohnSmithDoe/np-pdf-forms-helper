@@ -17,7 +17,8 @@
 // document is the report shape that earns a dialog and the fake's single
 // `picker` cannot produce it.
 //
-// `stage_import` — the picker again, and one thing more: the trains import
+// `stage_import` (and `stage_import_path`, the guided import's hand-over of an
+// unrecognised file) — the picker again, and one thing more: the trains import
 // DISCARDS its staging when it is committed or cancelled, so a fake with one
 // seeded staging would serve the first file of a session and nothing after it.
 // Re-arming on every pick is what makes the screen usable by hand.
@@ -27,17 +28,27 @@
 // commit that visibly changes nothing reads as a broken button, so the dev shell
 // invents one Instandhaltung per taken row and lets the fake answer with the
 // updated lists and counts.
+//
+// `pick_import_folder` / `pick_import_files` / `scan_import_paths` — the guided
+// import's pickers, answered with a fresh `demoScan()` each time. `clean_file`
+// re-arms `demoClean()` and `write_clean` re-arms `demoStaging()`, for the same
+// reason `stage_import` does: the walk discards both slots per file, so one
+// seeded copy would serve the first file of a session and nothing after it.
 // ────────────────────────────────────────────────────────────────
 
 import {
   install,
+  type FakeCleanReport,
   type FakeDocument,
   type FakeInstandhaltung,
+  type FakeScanFile,
   type FakeStaging,
 } from '../e2e/fake-backend';
 import {
   committedEvent,
   DEMO_SEED,
+  demoClean,
+  demoScan,
   demoStaging,
   nextPickedDocument,
 } from './demo-seed';
@@ -46,8 +57,13 @@ interface FakeState {
   documents: FakeDocument[];
   picker: FakeDocument | null;
   staging: FakeStaging | null;
+  scan: FakeScanFile[] | null;
+  clean: FakeCleanReport | null;
+  cleaned: FakeStaging | null;
   events: FakeInstandhaltung[];
 }
+
+const SCANS = ['pick_import_folder', 'pick_import_files', 'scan_import_paths'];
 
 type Invoke = (
   command: string,
@@ -79,7 +95,22 @@ function addedFolder(): Promise<unknown> {
 }
 
 internals.invoke = (command, args = {}) => {
-  if (command === 'stage_import') {
+  if (SCANS.includes(command)) {
+    state.scan = demoScan();
+    return forward(command, args);
+  }
+
+  if (command === 'clean_file') {
+    state.clean = demoClean();
+    return forward(command, args);
+  }
+
+  if (command === 'write_clean') {
+    state.cleaned = demoStaging();
+    return forward(command, args);
+  }
+
+  if (command === 'stage_import' || command === 'stage_import_path') {
     state.staging = demoStaging();
     return forward(command, args);
   }

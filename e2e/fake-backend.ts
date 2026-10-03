@@ -25,7 +25,15 @@
 //
 // The native file picker cannot be driven by any browser, so `seed.picker` is
 // what the picker "returns" on the next `add_documents`; `null` means the user
-// cancelled.
+// cancelled. `seed.scan` is the same for the guided import's two pickers and
+// for a drop, and `seed.clean` is what `clean_file` answers with.
+//
+// The guided import fakes the CLEANING REPORT for the reason it fakes the staged
+// preview. `reclean_file` only ECHOES decisions — a correction closes its cell,
+// a confirmation sets its card and the counts follow — and never re-parses a
+// value: whether `31.13.2025` reads is Rust's question. `write_clean` stages
+// `seed.cleaned` (else `seed.staging`) and applies none of `clean::ready`'s gate,
+// which is proved by `cargo test`.
 // ────────────────────────────────────────────────────────────────
 
 import type { Page } from '@playwright/test';
@@ -189,10 +197,85 @@ export interface FakeInstandhaltung {
 export interface FakeTemplate {
   id: string;
   name: string;
-  fingerprint: string;
   plan: FakeStaging['plan'];
   partnerId?: string;
+  origin?: string;
+  builtin: boolean;
   createdAt: string;
+}
+
+export interface FakeScanFile {
+  path: string;
+  name: string;
+  status:
+    'erkannt' | 'mehrdeutig' | 'unbekannt' | 'nichtUnterstuetzt' | 'unlesbar';
+  matches: { templateId: string; templateName: string; sheet: string }[];
+  sheets: string[];
+  message?: string;
+}
+
+export type FakeReading =
+  | { kind: 'decimal'; chosen: string; alternative: string }
+  | { kind: 'dateOrder'; chosen: string; alternative: string }
+  | { kind: 'hinweis' };
+
+export interface FakeDeutungCard {
+  column: number;
+  header: string;
+  field: string;
+  reading: FakeReading;
+  reason: string;
+  count: number;
+  examples: {
+    row: number;
+    raw: string;
+    chosen: string;
+    alternative?: string;
+    message?: string;
+  }[];
+  confirmed: boolean;
+}
+
+export interface FakeFehlerCell {
+  row: number;
+  column: number;
+  header: string;
+  raw: string;
+  message: string;
+  correction?: string;
+  open: boolean;
+}
+
+export interface FakeCleanReport {
+  file: string;
+  sheet: string;
+  templateId: string;
+  templateName: string;
+  plan: FakeStaging['plan'];
+  fehler: FakeFehlerCell[];
+  cards: FakeDeutungCard[];
+  formats: {
+    column: number;
+    header: string;
+    rule: string;
+    count: number;
+    samples: { row: number; raw: string; clean: string }[];
+  }[];
+  summary: {
+    fehlerOffen: number;
+    deutungenOffen: number;
+    formatierungen: number;
+    korrigiert: number;
+  };
+}
+
+export interface FakeCleanDecisions {
+  corrections: { row: number; column: number; value: string }[];
+  confirmations: (
+    | { kind: 'decimal'; column: number; style: string }
+    | { kind: 'dateOrder'; column: number; order: string }
+    | { kind: 'hinweis'; column: number }
+  )[];
 }
 
 export interface FakeSeed {
@@ -204,8 +287,14 @@ export interface FakeSeed {
   einbauten?: FakeEinbau[];
   events?: FakeInstandhaltung[];
   templates?: FakeTemplate[];
-  /** What `stage_import` hands back. `null` = the picker was cancelled. */
+  /** What `stage_import` and `stage_import_path` hand back. `null` = the picker was cancelled. */
   staging?: FakeStaging | null;
+  /** What the guided pickers and a drop scan. `null` = the picker was cancelled. */
+  scan?: FakeScanFile[] | null;
+  /** What `clean_file` answers with, whatever file and template it is sent. */
+  clean?: FakeCleanReport | null;
+  /** What `write_clean` stages; falls back to `staging`. */
+  cleaned?: FakeStaging | null;
   /** What the native picker hands back on the next add. `null` = cancelled. */
   picker?: FakeDocument | null;
   /** Command name → the German lines it should reject with. */
@@ -256,6 +345,10 @@ export function install(seed: FakeSeed): void {
     events: FakeInstandhaltung[];
     templates: FakeTemplate[];
     staging: FakeStaging | null;
+    scan: FakeScanFile[] | null;
+    clean: FakeCleanReport | null;
+    cleaning: FakeCleanReport | null;
+    cleaned: FakeStaging | null;
     committed: number[];
     failures: Record<string, string[]>;
     calls: RecordedCall[];
@@ -272,6 +365,10 @@ export function install(seed: FakeSeed): void {
     events: seed.events ?? [],
     templates: seed.templates ?? [],
     staging: seed.staging ?? null,
+    scan: seed.scan ?? null,
+    clean: seed.clean ?? null,
+    cleaning: null,
+    cleaned: seed.cleaned ?? null,
     committed: [],
     failures: seed.failures ?? {},
     calls: [],
@@ -309,6 +406,57 @@ export function install(seed: FakeSeed): void {
     templates: copy(state.templates),
     counts: counts(),
   });
+
+  const scanned = () => (state.scan ? { scan: copy(state.scan) } : {});
+
+  const recleaned = (decisions: FakeCleanDecisions): FakeCleanReport | null => {
+    if (!state.cleaning) return null;
+    const report = copy(state.cleaning);
+    for (const cell of report.fehler) {
+      const fix = decisions.corrections.find(
+        (entry) => entry.row === cell.row && entry.column === cell.column
+      );
+      if (fix) {
+        cell.correction = fix.value;
+        cell.open = false;
+      }
+    }
+    for (const card of report.cards) {
+      const confirmation = decisions.confirmations.find(
+        (entry) => entry.column === card.column
+      );
+      if (!confirmation) continue;
+      card.confirmed = true;
+      if (confirmation.kind === 'decimal' && card.reading.kind === 'decimal') {
+        if (confirmation.style !== card.reading.chosen) {
+          card.reading = {
+            kind: 'decimal',
+            chosen: card.reading.alternative,
+            alternative: card.reading.chosen,
+          };
+        }
+      }
+      if (
+        confirmation.kind === 'dateOrder' &&
+        card.reading.kind === 'dateOrder'
+      ) {
+        if (confirmation.order !== card.reading.chosen) {
+          card.reading = {
+            kind: 'dateOrder',
+            chosen: card.reading.alternative,
+            alternative: card.reading.chosen,
+          };
+        }
+      }
+    }
+    report.summary = {
+      ...report.summary,
+      fehlerOffen: report.fehler.filter((cell) => cell.open).length,
+      deutungenOffen: report.cards.filter((card) => !card.confirmed).length,
+      korrigiert: report.fehler.filter((cell) => !cell.open).length,
+    };
+    return report;
+  };
 
   const commands: Record<string, (args: Record<string, never>) => unknown> = {
     // No report: the welcome text was retired when the load moved into a route
@@ -400,6 +548,11 @@ export function install(seed: FakeSeed): void {
 
     stage_import: () => (state.staging ? { staging: copy(state.staging) } : {}),
 
+    // The real command reads the file at `path` instead of asking the picker;
+    // the fake serves the same seeded staging.
+    stage_import_path: () =>
+      state.staging ? { staging: copy(state.staging), counts: counts() } : {},
+
     // The plan comes back applied, so the app sees what it asked for — the real
     // command re-parses the held grid and answers with the result.
     restage_import: (args) => {
@@ -430,8 +583,8 @@ export function install(seed: FakeSeed): void {
         state.templates.push({
           id: `t${state.templates.length + 1}`,
           name: decisions.saveTemplateAs,
-          fingerprint: 'fp',
           plan: copy(state.staging.plan),
+          builtin: false,
           createdAt: '2026-08-16',
         });
       }
@@ -494,6 +647,45 @@ export function install(seed: FakeSeed): void {
         ...trainsLists(),
         message: report('Zugdaten wurden zurückgesetzt'),
       };
+    },
+
+    pick_import_folder: () => scanned(),
+    pick_import_files: () => scanned(),
+    scan_import_paths: () => scanned(),
+
+    clean_file: () => {
+      if (!state.clean) return {};
+      state.cleaning = copy(state.clean);
+      return { cleaning: copy(state.cleaning) };
+    },
+
+    reclean_file: (args) => {
+      const report = recleaned(
+        args['decisions'] as unknown as FakeCleanDecisions
+      );
+      return report ? { cleaning: report } : {};
+    },
+
+    write_clean: () => {
+      state.cleaning = null;
+      state.staging = copy(state.cleaned ?? state.staging);
+      return {
+        ...(state.staging ? { staging: copy(state.staging) } : {}),
+        counts: counts(),
+        message: report(
+          'Bereinigte Datei wurde geschrieben',
+          [
+            'Datei wurde erstellt: bereinigt.xlsx',
+            '3 Änderung(en) im Blatt „Änderungsprotokoll“ protokolliert.',
+          ],
+          'data/out/bereinigt-2026-10-03'
+        ),
+      };
+    },
+
+    discard_clean: () => {
+      state.cleaning = null;
+      return {};
     },
 
     create_trains_export: () => ({

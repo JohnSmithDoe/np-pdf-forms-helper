@@ -56,6 +56,11 @@
 // convention removes a guess and is affordable only while the list fits in a
 // message, and a full list would make the convention the performance problem.
 // `counts` carries the total.
+//
+// Three fields go out RENAMED, because the frontend reads those keys: the
+// partner list as `partners`, and the counts as `partners` and `events`. They had
+// drifted apart unnoticed — the e2e fake speaks the frontend's names — so a test
+// now pins the serialised keys.
 // ────────────────────────────────────────────────────────────────
 
 use serde::{Deserialize, Serialize};
@@ -301,10 +306,13 @@ impl ImportPlan {
 pub struct ImportTemplate {
     pub id: String,
     pub name: String,
-    pub fingerprint: String,
     pub plan: ImportPlan,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub partner_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
+    #[serde(default)]
+    pub builtin: bool,
     pub created_at: String,
 }
 
@@ -455,11 +463,169 @@ pub struct CommitDecisions {
     pub save_template_as: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ScanStatus {
+    Erkannt,
+    Mehrdeutig,
+    Unbekannt,
+    NichtUnterstuetzt,
+    Unlesbar,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanMatch {
+    pub template_id: String,
+    pub template_name: String,
+    pub sheet: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanFile {
+    pub path: String,
+    pub name: String,
+    pub status: ScanStatus,
+    pub matches: Vec<ScanMatch>,
+    pub sheets: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Tier {
+    Fehler,
+    Deutung,
+    Format,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum Reading {
+    Decimal {
+        chosen: DecimalStyle,
+        alternative: DecimalStyle,
+    },
+    DateOrder {
+        chosen: DateOrder,
+        alternative: DateOrder,
+    },
+    Hinweis,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CardExample {
+    pub row: u32,
+    pub raw: String,
+    pub chosen: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alternative: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeutungCard {
+    pub column: u32,
+    pub header: String,
+    pub field: FieldKind,
+    pub reading: Reading,
+    pub reason: String,
+    pub count: u32,
+    pub examples: Vec<CardExample>,
+    pub confirmed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FehlerCell {
+    pub row: u32,
+    pub column: u32,
+    pub header: String,
+    pub raw: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub correction: Option<String>,
+    pub open: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatSample {
+    pub row: u32,
+    pub raw: String,
+    pub clean: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormatGroup {
+    pub column: u32,
+    pub header: String,
+    pub rule: String,
+    pub count: u32,
+    pub samples: Vec<FormatSample>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanSummary {
+    pub fehler_offen: u32,
+    pub deutungen_offen: u32,
+    pub formatierungen: u32,
+    pub korrigiert: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanReport {
+    pub file: String,
+    pub sheet: String,
+    pub template_id: String,
+    pub template_name: String,
+    pub plan: ImportPlan,
+    pub fehler: Vec<FehlerCell>,
+    pub cards: Vec<DeutungCard>,
+    pub formats: Vec<FormatGroup>,
+    pub summary: CleanSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Correction {
+    pub row: u32,
+    pub column: u32,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum Confirmation {
+    Decimal { column: u32, style: DecimalStyle },
+    DateOrder { column: u32, order: DateOrder },
+    Hinweis { column: u32 },
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanDecisions {
+    #[serde(default)]
+    pub corrections: Vec<Correction>,
+    #[serde(default)]
+    pub confirmations: Vec<Confirmation>,
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrainsCounts {
     pub wagen: u32,
+    #[serde(rename = "partners")]
     pub partner: u32,
+    #[serde(rename = "events")]
     pub instandhaltungen: u32,
     pub radsaetze: u32,
 }
@@ -477,7 +643,7 @@ pub struct InstandhaltungPage {
 pub struct TrainsData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wagen: Option<Vec<Wagen>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "partners", skip_serializing_if = "Option::is_none")]
     pub partner: Option<Vec<Partner>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub radsaetze: Option<Vec<Radsatz>>,
@@ -491,6 +657,10 @@ pub struct TrainsData {
     pub staging: Option<StagedImport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub instandhaltung_page: Option<InstandhaltungPage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scan: Option<Vec<ScanFile>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleaning: Option<CleanReport>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<crate::model::ClientReport>,
 }
@@ -540,6 +710,16 @@ impl TrainsData {
         self
     }
 
+    pub fn cleaning(mut self, cleaning: CleanReport) -> Self {
+        self.cleaning = Some(cleaning);
+        self
+    }
+
+    pub fn scan(mut self, scan: Vec<ScanFile>) -> Self {
+        self.scan = Some(scan);
+        self
+    }
+
     pub fn report(mut self, report: crate::model::ClientReport) -> Self {
         self.message = Some(report);
         self
@@ -550,6 +730,22 @@ impl TrainsData {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// The keys `trains.types.ts` and the e2e fake read. These had drifted —
+    /// `partner` went out where `partners` was read — and the fake, speaking the
+    /// frontend's names, hid it: partner lists never reached the real app.
+    #[test]
+    fn trains_data_goes_out_under_the_keys_the_frontend_reads() {
+        let data = TrainsData::nothing()
+            .partner(vec![])
+            .counts(TrainsCounts::default());
+        let value = serde_json::to_value(&data).unwrap();
+        assert!(value.get("partners").is_some(), "{value}");
+        assert_eq!(
+            value["counts"],
+            json!({ "wagen": 0, "partners": 0, "events": 0, "radsaetze": 0 })
+        );
+    }
 
     #[test]
     fn an_absent_list_is_absent_from_the_json_rather_than_null() {

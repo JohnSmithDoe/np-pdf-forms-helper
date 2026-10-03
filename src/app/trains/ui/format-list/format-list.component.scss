@@ -1,0 +1,19 @@
+:host {
+  display: block;
+}
+
+.format-list__content {
+  padding: 0.5rem 1rem 1rem;
+}
+
+.format-list__samples {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.format-list__samples th,
+.format-list__samples td {
+  padding: 0.25rem 0.5rem 0.25rem 0;
+  text-align: start;
+  vertical-align: top;
+}

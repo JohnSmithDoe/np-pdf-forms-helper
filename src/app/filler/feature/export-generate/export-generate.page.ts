@@ -23,7 +23,7 @@ import { ReportPresenterService } from '../../../@shared/feature/report/report-p
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { FillerFacade } from '../../data';
 import { RunSummaryComponent } from '../../smart-ui/run-summary/run-summary.component';
-import { WizardShellComponent } from '../../ui/wizard-shell/wizard-shell.component';
+import { WizardShellComponent } from '../../../@shared/ui/wizard-shell/wizard-shell.component';
 
 @Component({
   selector: 'app-page-export-generate',

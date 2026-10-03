@@ -1,7 +1,9 @@
 // ─── why ────────────────────────────────────────────────────────
 // The chrome every wizard step wears: the toolbar, the "Schritt 2 von 4"
-// progress, the body, and the Zurück/Weiter pair. Eight step pages share it, so
-// what a step actually owns is its content and its two handlers.
+// progress, the body, and the Zurück/Weiter pair. Every step page of both
+// filler wizards and of the trains guided import shares it, so what a step
+// actually owns is its content and its two handlers. It sits in `@shared`
+// because domains are sealed from each other: two of them need it.
 //
 // Ionic ships no stepper, so this is hand-built — and deliberately built out of
 // `ion-progress-bar` plus a counted line rather than a row of numbered circles.

@@ -38,7 +38,7 @@ import { FillerFacade } from '../../data';
 import { ProfileBarComponent } from '../../smart-ui/profile-bar/profile-bar.component';
 import { ProfileDialog } from '../../smart-ui/profile-dialog/profile.dialog';
 import { SelectionListComponent } from '../../smart-ui/selection-list/selection-list.component';
-import { WizardShellComponent } from '../../ui/wizard-shell/wizard-shell.component';
+import { WizardShellComponent } from '../../../@shared/ui/wizard-shell/wizard-shell.component';
 
 @Component({
   selector: 'app-page-export-selection',

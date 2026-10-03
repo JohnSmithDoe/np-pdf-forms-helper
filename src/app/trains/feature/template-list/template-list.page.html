@@ -12,6 +12,7 @@
     [title]="row.name"
     [note]="row.fields"
     leadingIcon="albums-outline"
+    [canDelete]="!row.builtin"
     (deleteItem)="onRemove(row)"
   />
 </ng-template>

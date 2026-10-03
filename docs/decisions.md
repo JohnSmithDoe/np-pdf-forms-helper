@@ -423,3 +423,55 @@ sender's system. It is stored and fills a blank exactly like the Wellennummer, a
 matching on it would need it scoped by sender the way aliases are, and one file from one sender is
 not the evidence to design that on. It is searchable in the Radsätze list, not shown. Named
 `systemId` because `radsatzId` is already the foreign key on `Einbau` and `Instandhaltung`.
+
+## Typed import: recognise, clean to a file, then import (appended 2026-10-03)
+
+**While the big workbook is parked, the small sender files get a guided path.** A folder is dropped
+(or picked) on the import page, each file is matched to a template, and each matched file is
+CLEANED into a copy before anything is imported. The rule over all of it, Martin's: **never
+auto-resolve when another reading is possible — the user has to know.**
+
+- **A file's "type" is its import template**, not a new concept. Three ship with the program
+  (`trains/builtin.rs`: Werkstattaufträge, Radsatz-Monitoring, Telematikdaten), written in Rust so a
+  typo is a compile error. They name the file's SHAPE, never a firm, and carry no partner — safe,
+  because an alias learned without a sender matches without one (`Radsatz::known_to`).
+- **Recognition is "every MAPPED header of the template is present"** (`trains/recognise.rs`). It
+  replaced an exact hash of sheet name plus all headers in order, which failed the first time a
+  portal export grew a column. Several matches are a question in the scan list, never a pick by
+  "most columns". Bindings are carried over BY HEADER (`rebind`), because a binding's index is
+  positional and a column inserted in front would shift every one of them.
+- **Built-ins are read-only; editing makes a user copy.** Confirmed readings go onto a copy whose
+  `origin` names the built-in, and the copy shadows it from then on. A program update can improve
+  the shipped template without overwriting what the user made of it; a reset brings it back.
+- **The original is sanitised 1:1 into a copy, and the COPY is imported.** Every sheet survives, only
+  changed cells are replaced, and an `Änderungsprotokoll` sheet lists every change. It is the
+  landing-zone pattern: raw → cleaned file → load, so an import gone wrong can be traced to the
+  cleaning or to the load, because the step between is a file. Copies go to
+  `<output>/bereinigt-YYYY-MM-DD/`, never over the original.
+- **Changes are sorted by whether they could alter meaning.** Fehler (no clean value — blocks),
+  Deutung (another reading was possible — one card per COLUMN, confirmed explicitly), Format
+  (lossless — counted). The screen shows decisions; the protocol sheet carries the evidence.
+- **A card is raised only when a cell actually reads differently under the alternative.** An
+  undecided column whose values come out the same either way offers no choice, and a card for it
+  would train users to click cards away.
+- **A confirmed reading is saved on the template**, so the sender's next file asks nothing — but
+  conclusive evidence in a new file against the saved reading makes it a card again.
+- **Found on the way:** `infer_date_order` counted an ISO date's leading year as a day over twelve,
+  so a column holding one `2025-05-06` was silently settled as day-first. Year-first values are no
+  longer evidence.
+
+**One column reader for both paths** (`trains/reading.rs`). The cleaner first grew its own rules —
+doubt a saved reading the file contradicts, ask only when a cell reads differently, take evidence
+from text cells only — while staging kept the old ones, so "never auto-resolve" held on the guided
+path and not on the manual one. Both now call `read_column`. Staging warns on the rows that read
+differently instead of on every row of an undecided column, and the cleaned file needs no pinned
+plan: its canonical values read the same under any reading.
+
+**Found on the way: the partner list and two counts never reached the real app.** Rust sent
+`partner` and counts `partner`/`instandhaltungen`; the frontend reads `partners` and
+`partners`/`events`. The e2e fake speaks the frontend's names and hid it. Fixed with serde renames
+on the Rust side and pinned by a serialisation test.
+
+Deliberately not done here: telematics entities (the telematics template maps only the Wagennummer
+until telematics has a model), the per-template row filter the order feed needs ("Workshop orders
+are a feed…" above), and subfolders — a scan reads one level deep.

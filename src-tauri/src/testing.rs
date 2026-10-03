@@ -78,6 +78,7 @@ impl TempDir {
             db: Mutex::new(db),
             trains: Mutex::new(trains),
             staging: Mutex::new(None),
+            cleaning: Mutex::new(None),
         }
     }
 }
@@ -105,6 +106,39 @@ pub fn fixture_xlsx() -> PathBuf {
         env!("CARGO_MANIFEST_DIR"),
         "/../docs/file_example_XLSX_1000.xlsx"
     ))
+}
+
+/// A workbook written cell by cell, one `(sheet, rows)` per sheet, every value
+/// as text. A cell spelled `#<number>` is stored as an Excel NUMBER instead,
+/// because that is how a sender's dates and amounts usually arrive.
+pub fn workbook(folder: &TempDir, name: &str, sheets: &[(&str, &[&[&str]])]) -> PathBuf {
+    let mut book = umya_spreadsheet::new_file();
+    for (position, (sheet, rows)) in sheets.iter().enumerate() {
+        if position == 0 {
+            if *sheet != "Sheet1" {
+                book.set_sheet_name(0, *sheet).unwrap();
+            }
+        } else {
+            book.new_sheet(*sheet).unwrap();
+        }
+        let worksheet = book.sheet_by_name_mut(sheet).unwrap();
+        for (row, cells) in rows.iter().enumerate() {
+            for (col, value) in cells.iter().enumerate() {
+                let cell = worksheet.cell_mut((col as u32 + 1, row as u32 + 1));
+                match value.strip_prefix('#').and_then(|n| n.parse::<f64>().ok()) {
+                    Some(number) => {
+                        cell.set_value_number(number);
+                    }
+                    None => {
+                        cell.set_value(*value);
+                    }
+                }
+            }
+        }
+    }
+    let path = folder.join(name);
+    umya_spreadsheet::writer::xlsx::write(&book, &path).unwrap();
+    path
 }
 
 // ─── model builders ───────────────────────────────────────────────

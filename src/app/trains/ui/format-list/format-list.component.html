@@ -1,0 +1,38 @@
+<ion-accordion-group [multiple]="true" (ionChange)="onExpandedChange($event)">
+  @for (group of formats(); track key(group)) {
+    <ion-accordion [value]="key(group)" data-testid="format-group">
+      <ion-item slot="header" lines="full">
+        <ion-label class="ion-text-wrap">
+          <h3>Spalte „{{ group.header }}“</h3>
+          <p>{{ group.rule }}</p>
+        </ion-label>
+        <ion-badge slot="end" color="medium">{{ group.count }}×</ion-badge>
+      </ion-item>
+      <div slot="content" class="format-list__content">
+        @if (isExpanded(group)) {
+          <table class="format-list__samples">
+            <thead>
+              <tr>
+                <th scope="col">Zeile</th>
+                <th scope="col">Original</th>
+                <th scope="col">Bereinigt</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (
+                sample of group.samples.slice(0, samples);
+                track sample.row
+              ) {
+                <tr>
+                  <td>{{ sample.row }}</td>
+                  <td>{{ sample.raw }}</td>
+                  <td>{{ sample.clean }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </ion-accordion>
+  }
+</ion-accordion-group>

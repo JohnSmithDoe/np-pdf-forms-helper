@@ -5,6 +5,12 @@
 //
 // This is NOT a trait and does not become one: the dispatcher calls these
 // before the `match`, so the per-format half still cannot skip them.
+//
+// `list_files` and `write_book` are reached from `filler` and `trains` alike.
+// A folder is listed FILES ONLY and SORTED: a sub-folder is not a document, and
+// the order the OS hands back is arbitrary while insertion order is the order
+// the UI lists things in. A workbook is written to a temp file and renamed, so a
+// failed write never leaves a half-written file under the final name.
 // ────────────────────────────────────────────────────────────────
 
 use std::path::{Path, PathBuf};
@@ -20,6 +26,27 @@ pub fn value_for<'a>(inputs: &'a [MappedInput], orig_id: &str) -> Option<&'a str
         .iter()
         .find(|input| input.identifiers.iter().any(|id| id == orig_id))
         .map(|input| input.value.as_str())
+}
+
+pub fn list_files(folder: &Path) -> AppResult<Vec<PathBuf>> {
+    let entries = std::fs::read_dir(folder).map_err(|error| AppError::io(folder, error))?;
+    let mut files: Vec<PathBuf> = entries
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.is_file())
+        .collect();
+    files.sort();
+    Ok(files)
+}
+
+pub fn write_book(
+    book: &umya_spreadsheet::Workbook,
+    path: &Path,
+    headline: String,
+) -> AppResult<()> {
+    let temp = path.with_extension("tmp.xlsx");
+    umya_spreadsheet::writer::xlsx::write(book, &temp)
+        .map_err(|error| AppError::detail(headline, error))?;
+    std::fs::rename(&temp, path).map_err(|error| AppError::io(path, error))
 }
 
 pub fn file_name(path: &Path) -> String {

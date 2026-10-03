@@ -1,13 +1,12 @@
 // ─── why ────────────────────────────────────────────────────────
-// FNV-1a, twelve lines, because the two things trains hashes both have to be
-// STABLE ACROSS VERSIONS and std's hasher explicitly is not — it is randomly
-// seeded per process, so a `dedupe_key` written today would not match the one
-// computed for the same event tomorrow.
+// FNV-1a, twelve lines, because what trains hashes — the `dedupe_key` — has to
+// be STABLE ACROSS VERSIONS and std's hasher explicitly is not: it is randomly
+// seeded per process, so a key written today would not match the one computed
+// for the same event tomorrow.
 //
-// Neither use is a security boundary. A `dedupe_key` collision would merge two
-// events, and a sender fingerprint collision would offer the wrong template —
-// both are visible in the preview before anything is written, which is why 64
-// bits is plenty and nobody should harden this into something undebuggable.
+// It is not a security boundary. A collision would merge two events, and that
+// is visible in the preview before anything is written, which is why 64 bits is
+// plenty and nobody should harden this into something undebuggable.
 // ────────────────────────────────────────────────────────────────
 
 const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;

@@ -21,6 +21,11 @@
 // updating in place and silently starts appending a second set of columns beside
 // the first.
 //
+// `fill` writes a header row and rows of TEXT (`set_value_string`), for every
+// sheet this program generates. `set_value` guesses a type, and turns a
+// wheelset number made of digits — or a Gattung `4` — into a number Excel then
+// reformats and strips the leading zeros from.
+//
 // `Run::report` is on the run and not in the command, for the reason
 // `filler::export` records: it reads `failed`, and a `#[tauri::command]` cannot
 // be exercised by `cargo test`.
@@ -30,6 +35,8 @@ pub mod erp;
 pub mod master;
 
 use std::path::Path;
+
+use umya_spreadsheet::Worksheet;
 
 use super::db::TrainsDb;
 use super::model::Instandhaltung;
@@ -68,6 +75,22 @@ pub fn instandhaltung_row(db: &TrainsDb, event: &Instandhaltung) -> [String; 7] 
         event.betrag_cent.map(format::money).unwrap_or_default(),
         event.bemerkung.clone().unwrap_or_default(),
     ]
+}
+
+pub fn fill(sheet: &mut Worksheet, headers: &[&str], rows: Vec<Vec<String>>) {
+    for (index, header) in headers.iter().enumerate() {
+        sheet
+            .cell_mut((index as u32 + 1, 1u32))
+            .set_value_string(*header);
+    }
+    for (offset, cells) in rows.into_iter().enumerate() {
+        let row = offset as u32 + 2;
+        for (index, value) in cells.into_iter().enumerate() {
+            sheet
+                .cell_mut((index as u32 + 1, row))
+                .set_value_string(value);
+        }
+    }
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]

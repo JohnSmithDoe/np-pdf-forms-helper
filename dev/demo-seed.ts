@@ -32,6 +32,12 @@
 //   • an Instandhaltung with no `datum` and one against a Radsatz rather than a
 //     Wagen, the two shapes that are easy to forget exist
 //
+// `demoScan()` is one file of every kind the hub has to show: recognised,
+// recognised twice (so the select starts empty), unknown, and not a workbook.
+// `demoClean()` is a review with all three tiers — a Fehler per field kind that
+// can have one, a Deutung of each of the three readings, several format groups
+// — because a clean file shows none of the review screen.
+//
 // `demoStaging()` builds a FRESH staging per call, and that is not tidiness:
 // `discard_import` sets it to null, so a shared constant would make the second
 // file of a session answer with nothing. It covers all four row states plus a
@@ -40,11 +46,13 @@
 // ────────────────────────────────────────────────────────────────
 
 import type {
+  FakeCleanReport,
   FakeDocument,
   FakeEinbau,
   FakeInstandhaltung,
   FakePartner,
   FakeRadsatz,
+  FakeScanFile,
   FakeSeed,
   FakeStaging,
   FakeTemplate,
@@ -396,8 +404,8 @@ const templates: FakeTemplate[] = [
   {
     id: 'tpl-bremen',
     name: 'Schienenbein Waggonwerk — Monatsliste',
-    fingerprint: 'wagennummer|datum|leistung|betrag',
     partnerId: 'p-werk-schienenbein',
+    builtin: false,
     createdAt: '2026-02-02',
     plan: {
       reader: 'headerRow',
@@ -414,8 +422,8 @@ const templates: FakeTemplate[] = [
   {
     id: 'tpl-hamm',
     name: 'Rundlauf Radsatztechnik — Radsatzblatt',
-    fingerprint: 'wagennummer|radsatznummer|einbauposition|eingebautam',
     partnerId: 'p-werk-rundlauf',
+    builtin: false,
     createdAt: '2026-03-04',
     plan: {
       reader: 'headerRow',
@@ -429,7 +437,222 @@ const templates: FakeTemplate[] = [
       date1904: false,
     },
   },
+  {
+    id: 'builtin:radsatz-monitoring',
+    name: 'Radsatz-Monitoring',
+    builtin: true,
+    createdAt: '2026-10-03',
+    plan: {
+      reader: 'headerRow',
+      layout: { headerRow: 1, firstDataRow: 2 },
+      columns: [
+        { header: 'Wagennummer', index: 1, field: 'wagennummer' },
+        { header: 'Radsatznummer', index: 2, field: 'radsatznummer' },
+        { header: 'Position', index: 3, field: 'einbauposition' },
+        { header: 'Einbaudatum', index: 4, field: 'eingebautAm' },
+      ],
+      date1904: false,
+    },
+  },
 ];
+
+export function demoScan(): FakeScanFile[] {
+  return [
+    {
+      path: 'C:\\Eingang\\Schienenbein Mai 2026.xlsx',
+      name: 'Schienenbein Mai 2026.xlsx',
+      status: 'erkannt',
+      matches: [
+        {
+          templateId: 'tpl-bremen',
+          templateName: 'Schienenbein Waggonwerk — Monatsliste',
+          sheet: 'Mai',
+        },
+      ],
+      sheets: ['Mai', 'April', 'Deckblatt'],
+    },
+    {
+      path: 'C:\\Eingang\\Radsatzblatt KW 38.xlsx',
+      name: 'Radsatzblatt KW 38.xlsx',
+      status: 'mehrdeutig',
+      matches: [
+        {
+          templateId: 'tpl-hamm',
+          templateName: 'Rundlauf Radsatztechnik — Radsatzblatt',
+          sheet: 'Radsätze',
+        },
+        {
+          templateId: 'builtin:radsatz-monitoring',
+          templateName: 'Radsatz-Monitoring',
+          sheet: 'Radsätze',
+        },
+      ],
+      sheets: ['Radsätze', 'Notizen'],
+    },
+    {
+      path: 'C:\\Eingang\\Rechnung Dreh & Gestell.xlsx',
+      name: 'Rechnung Dreh & Gestell.xlsx',
+      status: 'unbekannt',
+      matches: [],
+      sheets: ['Tabelle1'],
+    },
+    {
+      path: 'C:\\Eingang\\Begleitschreiben.pdf',
+      name: 'Begleitschreiben.pdf',
+      status: 'nichtUnterstuetzt',
+      matches: [],
+      sheets: [],
+      message: 'Nur Excel-Dateien (.xlsx) werden eingelesen.',
+    },
+  ];
+}
+
+export function demoClean(): FakeCleanReport {
+  return {
+    file: 'Schienenbein Mai 2026.xlsx',
+    sheet: 'Mai',
+    templateId: 'tpl-bremen',
+    templateName: 'Schienenbein Waggonwerk — Monatsliste',
+    plan: demoStaging().plan,
+    fehler: [
+      {
+        row: 7,
+        column: 2,
+        header: 'Datum',
+        raw: '31.13.2026',
+        message:
+          '„31.13.2026“ ist kein gültiges Datum (es gibt keinen 13. Monat).',
+        open: true,
+      },
+      {
+        row: 12,
+        column: 4,
+        header: 'Betrag',
+        raw: '12O,50',
+        message: '„12O,50“ ist kein Betrag.',
+        open: true,
+      },
+    ],
+    cards: [
+      {
+        column: 4,
+        header: 'Betrag',
+        field: 'betrag',
+        reading: { kind: 'decimal', chosen: 'german', alternative: 'english' },
+        reason:
+          'Jeder Betrag hat genau drei Stellen nach dem Trennzeichen — „1.250“ kann 1250 oder 1,25 heißen, und kein Wert der Spalte entscheidet es.',
+        count: 3,
+        examples: [
+          { row: 3, raw: '1.250', chosen: '1.250,00', alternative: '1,25' },
+          { row: 5, raw: '2.480', chosen: '2.480,00', alternative: '2,48' },
+          { row: 9, raw: '875', chosen: '875,00', alternative: '875,00' },
+        ],
+        confirmed: false,
+      },
+      {
+        column: 2,
+        header: 'Datum',
+        field: 'datum',
+        reading: {
+          kind: 'dateOrder',
+          chosen: 'dayFirst',
+          alternative: 'monthFirst',
+        },
+        reason:
+          'Die Daten sind mit „/“ geschrieben und in keinem ist Tag oder Monat größer als 12 — die Reihenfolge lässt sich nicht ablesen.',
+        count: 4,
+        examples: [
+          {
+            row: 3,
+            raw: '04/05/2026',
+            chosen: '04.05.2026',
+            alternative: '05.04.2026',
+          },
+          {
+            row: 4,
+            raw: '06/05/2026',
+            chosen: '06.05.2026',
+            alternative: '05.06.2026',
+          },
+          {
+            row: 8,
+            raw: '11/05/2026',
+            chosen: '11.05.2026',
+            alternative: '05.11.2026',
+          },
+        ],
+        confirmed: false,
+      },
+      {
+        column: 1,
+        header: 'Wagen-Nr.',
+        field: 'wagennummer',
+        reading: { kind: 'hinweis' },
+        reason:
+          'Bei diesen Wagennummern stimmt die Prüfziffer nicht. Sie werden so übernommen, wie sie dastehen — bitte mit dem Wagen vergleichen.',
+        count: 2,
+        examples: [
+          {
+            row: 6,
+            raw: '21 81 2471 217-4',
+            chosen: '21 81 2471 217-4',
+            message: 'Prüfziffer 4 erwartet 3.',
+          },
+          {
+            row: 10,
+            raw: '33 80 8012 345-0',
+            chosen: '33 80 8012 345-0',
+            message: 'Prüfziffer 0 erwartet 2.',
+          },
+        ],
+        confirmed: false,
+      },
+    ],
+    formats: [
+      {
+        column: 1,
+        header: 'Wagen-Nr.',
+        rule: 'Wagennummer in Blöcken geschrieben',
+        count: 18,
+        samples: [
+          { row: 2, raw: '218124712173', clean: '21 81 2471 217-3' },
+          { row: 3, raw: '33808012345-2', clean: '33 80 8012 345-2' },
+          { row: 4, raw: '378045567815', clean: '37 80 4556 781-5' },
+        ],
+      },
+      {
+        column: 2,
+        header: 'Datum',
+        rule: 'Jahr vierstellig ergänzt',
+        count: 6,
+        samples: [
+          { row: 13, raw: '02.05.26', clean: '02.05.2026' },
+          { row: 14, raw: '03.05.26', clean: '03.05.2026' },
+          { row: 15, raw: '07.05.26', clean: '07.05.2026' },
+        ],
+      },
+      {
+        column: 3,
+        header: 'Werkstatt',
+        rule: 'Leerzeichen am Rand entfernt',
+        count: 4,
+        samples: [
+          {
+            row: 2,
+            raw: ' Schienenbein WW ',
+            clean: 'Schienenbein WW',
+          },
+        ],
+      },
+    ],
+    summary: {
+      fehlerOffen: 2,
+      deutungenOffen: 3,
+      formatierungen: 28,
+      korrigiert: 0,
+    },
+  };
+}
 
 export function demoStaging(): FakeStaging {
   const cell = (

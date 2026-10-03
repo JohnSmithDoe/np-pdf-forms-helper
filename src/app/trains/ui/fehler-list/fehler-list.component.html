@@ -1,0 +1,57 @@
+@for (cell of fehler(); track cell.row + ':' + cell.column) {
+  <ion-item-group class="fehler-list__cell" data-testid="fehler-row">
+    <ion-item lines="none">
+      <ion-icon
+        slot="start"
+        [name]="cell.open ? 'alert-circle-outline' : 'checkmark-circle-outline'"
+        [color]="cell.open ? 'danger' : 'success'"
+        aria-hidden="true"
+      />
+      <ion-label class="ion-text-wrap">
+        <h3>Zeile {{ cell.row }} · Spalte „{{ cell.header }}“</h3>
+        <p>Original: „{{ cell.raw }}“</p>
+        @if (cell.open) {
+          <ion-note color="danger">{{ cell.message }}</ion-note>
+          @if (cell.correction !== undefined) {
+            <p>
+              Ihre Eingabe „{{ cell.correction }}“ ist ebenfalls nicht lesbar.
+            </p>
+          }
+        } @else if (cell.correction === '') {
+          <ion-note color="success">Wird leer gelassen.</ion-note>
+        } @else {
+          <ion-note color="success">
+            Korrigiert zu „{{ cell.correction }}“.
+          </ion-note>
+        }
+      </ion-label>
+    </ion-item>
+    <ion-item lines="full">
+      <ion-input
+        #value
+        label="Korrektur"
+        labelPlacement="stacked"
+        [value]="cell.correction ?? cell.raw"
+        (keyup.enter)="apply(cell, value.value)"
+        data-testid="fehler-input"
+      />
+      <ion-button
+        slot="end"
+        fill="outline"
+        (click)="apply(cell, value.value)"
+        data-testid="fehler-apply"
+      >
+        Übernehmen
+      </ion-button>
+      <ion-button
+        slot="end"
+        fill="clear"
+        color="medium"
+        (click)="leaveEmpty(cell)"
+        data-testid="fehler-empty"
+      >
+        Leer lassen
+      </ion-button>
+    </ion-item>
+  </ion-item-group>
+}

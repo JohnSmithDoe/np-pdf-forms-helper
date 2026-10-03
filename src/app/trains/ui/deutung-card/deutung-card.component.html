@@ -1,0 +1,104 @@
+@let deutung = card();
+
+<ion-card data-testid="deutung-card">
+  <ion-card-header>
+    <ion-card-subtitle>
+      {{ fieldLabel() }} · {{ deutung.count }} Zelle(n) betroffen
+    </ion-card-subtitle>
+    <ion-card-title>Spalte „{{ deutung.header }}“</ion-card-title>
+  </ion-card-header>
+
+  <ion-card-content>
+    <p class="deutung-card__reason">{{ deutung.reason }}</p>
+
+    @if (deutung.reading.kind === 'hinweis') {
+      <table class="deutung-card__examples" data-testid="deutung-examples">
+        <thead>
+          <tr>
+            <th scope="col">Zeile</th>
+            <th scope="col">Original</th>
+            <th scope="col">Gelesen als</th>
+            <th scope="col">Hinweis</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (example of deutung.examples; track example.row) {
+            <tr>
+              <td>{{ example.row }}</td>
+              <td>{{ example.raw }}</td>
+              <td>{{ example.chosen }}</td>
+              <td>{{ example.message }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else {
+      <ion-segment
+        class="deutung-card__choice"
+        [value]="selected()"
+        (ionChange)="onSelect($event)"
+        data-testid="deutung-choice"
+      >
+        @for (option of options(); track option.value) {
+          <ion-segment-button [value]="option.value">
+            <ion-label class="ion-text-wrap">{{ option.label }}</ion-label>
+          </ion-segment-button>
+        }
+      </ion-segment>
+
+      <table class="deutung-card__examples" data-testid="deutung-examples">
+        <thead>
+          <tr>
+            <th scope="col">Zeile</th>
+            <th scope="col">Original</th>
+            @for (option of options(); track option.value) {
+              <th scope="col">als {{ option.short }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (example of deutung.examples; track example.row) {
+            <tr>
+              <td>{{ example.row }}</td>
+              <td>{{ example.raw }}</td>
+              @if (alternativeSelected()) {
+                <td>{{ example.chosen }}</td>
+                <td>
+                  <strong>{{ example.alternative ?? '—' }}</strong>
+                </td>
+              } @else {
+                <td>
+                  <strong>{{ example.chosen }}</strong>
+                </td>
+                <td>{{ example.alternative ?? '—' }}</td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    @if (deutung.examples.length < deutung.count) {
+      <ion-note class="deutung-card__more">
+        {{ deutung.examples.length }} von {{ deutung.count }} Zellen gezeigt.
+      </ion-note>
+    }
+
+    <div class="deutung-card__actions">
+      @if (settled()) {
+        <ion-chip color="success" data-testid="deutung-confirmed">
+          <ion-icon name="checkmark-circle-outline" aria-hidden="true" />
+          <ion-label>Bestätigt</ion-label>
+        </ion-chip>
+      } @else if (deutung.reading.kind === 'hinweis') {
+        <ion-button (click)="onConfirm()" data-testid="deutung-confirm">
+          Gelesen
+        </ion-button>
+      } @else {
+        <ion-button (click)="onConfirm()" data-testid="deutung-confirm">
+          Bestätigen: {{ selectedLabel() }}
+        </ion-button>
+      }
+    </div>
+  </ion-card-content>
+</ion-card>

@@ -121,7 +121,7 @@ const STAGING: FakeStaging = {
 
 async function start(page: Page, seed: FakeSeed = {}): Promise<void> {
   await installFakeBackend(page, seed);
-  await page.goto('/#/trains/import');
+  await page.goto('/#/trains/import/manual');
 }
 
 test.describe('Zug-Import', () => {

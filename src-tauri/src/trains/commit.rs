@@ -37,6 +37,14 @@
 // seen closes the radsatz's open one and starts a new record — the old path
 // did that every time, and each re-send left a zero-length Einbau behind.
 //
+// `learn` is the other writer here: the readings the user confirmed while
+// cleaning a file, saved onto the template that file came through, so the
+// sender's next file asks nothing. A SHIPPED template is never changed — the
+// readings go onto a user copy whose `origin` names it, created on first use and
+// updated after that, which then shadows the shipped one. Only the readings move:
+// the template's own columns and headers are kept, because the plan the user
+// confirmed belongs to one file and the template describes them all.
+//
 // A wagen's `Likely` does NOT rewrite the stored number. The stored one is
 // presumed right and the incoming one is presumed to be the typo — the opposite
 // would let one bad file rewrite the fleet.
@@ -49,10 +57,11 @@ use uuid::Uuid;
 use super::clock;
 use super::db::{TrainsDb, Tx};
 use super::model::{
-    CommitDecisions, Einbau, EntityDecision, FieldKind, ImportTemplate, Instandhaltung, Partner,
-    PartnerRolle, Provenance, Radsatz, Resolution, RowDecision, RowStatus, StagedImport, StagedRow,
-    Wagen,
+    CommitDecisions, Einbau, EntityDecision, FieldKind, ImportPlan, ImportTemplate, Instandhaltung,
+    Partner, PartnerRolle, Provenance, Radsatz, Resolution, RowDecision, RowStatus, StagedImport,
+    StagedRow, Wagen,
 };
+use super::recognise;
 use super::resolve::partner::match_key;
 use super::sanitise::{format, Value};
 use super::stage::RowValues;
@@ -171,9 +180,10 @@ pub fn commit(
             tx.put_template(ImportTemplate {
                 id: Uuid::new_v4().to_string(),
                 name: name.clone(),
-                fingerprint: super::fingerprint::of(&staging.sheet, &staging.plan.columns),
                 plan: staging.plan.clone(),
                 partner_id: None,
+                origin: None,
+                builtin: false,
                 created_at: stamp.clone(),
             });
             committed
@@ -226,6 +236,57 @@ impl Created {
     fn anything(&self) -> bool {
         self.wagen || self.partner > 0 || self.radsatz || self.einbau || self.instandhaltung
     }
+}
+
+pub fn learn(
+    db: &mut TrainsDb,
+    template_id: &str,
+    confirmed: &ImportPlan,
+) -> AppResult<Option<String>> {
+    let Some(template) = db.template(template_id) else {
+        return Ok(None);
+    };
+    let base = if template.builtin {
+        db.user_copy_of(template_id)
+            .cloned()
+            .unwrap_or_else(|| ImportTemplate {
+                id: Uuid::new_v4().to_string(),
+                name: template.name.clone(),
+                plan: template.plan.clone(),
+                partner_id: None,
+                origin: Some(template.id.clone()),
+                builtin: false,
+                created_at: clock::today_iso(),
+            })
+    } else {
+        template
+    };
+
+    let mut learned = base.clone();
+    for binding in &mut learned.plan.columns {
+        if binding.field == FieldKind::Ignorieren {
+            continue;
+        }
+        let header = recognise::normalise(&binding.header);
+        if let Some(found) = confirmed.columns.iter().find(|column| {
+            column.field == binding.field && recognise::normalise(&column.header) == header
+        }) {
+            binding.decimal = found.decimal.or(binding.decimal);
+            binding.date_order = found.date_order.or(binding.date_order);
+        }
+    }
+    if learned.plan == base.plan {
+        return Ok(None);
+    }
+
+    let name = learned.name.clone();
+    db.transaction(|tx| {
+        tx.put_template(learned);
+        Ok(())
+    })?;
+    Ok(Some(format!(
+        "Vorlage „{name}“ merkt sich die bestätigten Lesarten."
+    )))
 }
 
 fn commit_row(
@@ -858,7 +919,7 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn saving_a_template_stores_the_plan_under_the_files_signature() {
+    fn saving_a_template_stores_the_plan_it_was_staged_with() {
         let (_f, mut db) = fresh("commit-template");
         let plan = staged(&db);
         commit(
@@ -872,15 +933,15 @@ pub(super) mod tests {
             },
         )
         .unwrap();
-        let templates = db.templates();
+        let templates: Vec<_> = db
+            .templates()
+            .into_iter()
+            .filter(|template| !template.builtin)
+            .collect();
         assert_eq!(templates.len(), 1);
         assert_eq!(templates[0].name, "Werkstatt Müller — Monatsliste");
-        assert_eq!(
-            db.template_by_fingerprint(&templates[0].fingerprint)
-                .unwrap()
-                .id,
-            templates[0].id
-        );
+        assert_eq!(templates[0].plan, plan.wire.plan);
+        assert_eq!(db.template(&templates[0].id), Some(templates[0].clone()));
     }
 
     #[test]
@@ -926,6 +987,97 @@ pub(super) mod tests {
             .unwrap();
         assert_eq!(owner.name, "Bahn Nord");
         assert!(owner.has_rolle(PartnerRolle::Halter));
+    }
+
+    fn reading_on(column: &str, order: super::super::model::DateOrder) -> ImportPlan {
+        let mut confirmed = plan();
+        for binding in &mut confirmed.columns {
+            if binding.header == column {
+                binding.date_order = Some(order);
+            }
+        }
+        confirmed
+    }
+
+    /// A shipped template is never changed; its user copy learns instead.
+    #[test]
+    fn a_confirmed_reading_on_a_builtin_goes_onto_a_user_copy() {
+        use super::super::model::DateOrder;
+        let (_f, mut db) = fresh("learn-builtin");
+        let mut confirmed = plan();
+        confirmed.columns[0].header = "werk_ausg_ist".into();
+        confirmed.columns[0].field = FieldKind::Datum;
+        confirmed.columns[0].date_order = Some(DateOrder::MonthFirst);
+
+        let said = learn(&mut db, "builtin:werkstattauftraege", &confirmed).unwrap();
+        assert!(said.unwrap().contains("Werkstattaufträge"));
+
+        let templates = db.templates();
+        assert!(
+            templates
+                .iter()
+                .all(|t| t.id != "builtin:werkstattauftraege"),
+            "the copy shadows the shipped template"
+        );
+        let copy = db
+            .user_copy_of("builtin:werkstattauftraege")
+            .unwrap()
+            .clone();
+        assert!(!copy.builtin);
+        let datum = copy
+            .plan
+            .columns
+            .iter()
+            .find(|binding| binding.header == "werk_ausg_ist")
+            .unwrap();
+        assert_eq!(datum.date_order, Some(DateOrder::MonthFirst));
+        assert_eq!(
+            copy.plan.columns.len(),
+            super::super::builtin::all()[0].plan.columns.len(),
+            "the template's own columns are kept, not the file's"
+        );
+
+        // Learning again updates the same copy rather than minting a second.
+        learn(&mut db, "builtin:werkstattauftraege", &confirmed).unwrap();
+        assert_eq!(
+            db.templates().iter().filter(|t| t.origin.is_some()).count(),
+            1
+        );
+    }
+
+    #[test]
+    fn nothing_confirmed_means_nothing_saved() {
+        let (_f, mut db) = fresh("learn-nothing");
+        let said = learn(&mut db, "builtin:telematik", &plan()).unwrap();
+        assert_eq!(said, None);
+        assert!(db.user_copy_of("builtin:telematik").is_none());
+    }
+
+    #[test]
+    fn a_user_template_learns_in_place() {
+        use super::super::model::DateOrder;
+        let (_f, mut db) = fresh("learn-user");
+        let staging = staged(&db);
+        commit(
+            &mut db,
+            &staging.wire,
+            &staging.values,
+            &CommitDecisions {
+                staging_id: "s1".into(),
+                rows: vec![],
+                save_template_as: Some("Monatsliste".into()),
+            },
+        )
+        .unwrap();
+        let id = db.templates().into_iter().find(|t| !t.builtin).unwrap().id;
+        learn(&mut db, &id, &reading_on("Datum", DateOrder::MonthFirst)).unwrap();
+
+        let saved = db.template(&id).unwrap();
+        assert_eq!(
+            saved.plan.columns[1].date_order,
+            Some(DateOrder::MonthFirst)
+        );
+        assert_eq!(db.templates().iter().filter(|t| !t.builtin).count(), 1);
     }
 }
 

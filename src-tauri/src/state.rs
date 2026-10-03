@@ -26,6 +26,7 @@ use std::sync::Mutex;
 
 use crate::config::AppConfig;
 use crate::filler::db::Database;
+use crate::trains::clean::HeldClean;
 use crate::trains::db::TrainsDb;
 use crate::trains::stage::HeldImport;
 
@@ -34,6 +35,7 @@ pub struct AppState {
     pub db: Mutex<Database>,
     pub trains: Mutex<TrainsDb>,
     pub staging: Mutex<Option<HeldImport>>,
+    pub cleaning: Mutex<Option<HeldClean>>,
 }
 
 impl AppState {
@@ -51,6 +53,12 @@ impl AppState {
 
     pub fn staging(&self) -> std::sync::MutexGuard<'_, Option<HeldImport>> {
         self.staging
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    pub fn cleaning(&self) -> std::sync::MutexGuard<'_, Option<HeldClean>> {
+        self.cleaning
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }

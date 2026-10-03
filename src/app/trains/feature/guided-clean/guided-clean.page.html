@@ -1,0 +1,75 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Datei bereinigen"
+  [step]="1"
+  [stepCount]="3"
+  backLabel="Verwerfen"
+  nextLabel="Bereinigte Datei schreiben"
+  [nextDisabled]="!facade.canWrite()"
+  (back)="onDiscard()"
+  (next)="onWrite()"
+>
+  @if (facade.cleaning(); as report) {
+    <ion-list lines="none">
+      <ion-item>
+        <ion-icon slot="start" name="document-outline" aria-hidden="true" />
+        <ion-label class="ion-text-wrap">
+          <h2 data-testid="clean-file">{{ report.file }}</h2>
+          <p>
+            Vorlage „{{ report.templateName }}“ · Blatt „{{ report.sheet }}“
+          </p>
+        </ion-label>
+      </ion-item>
+    </ion-list>
+
+    <app-clean-summary [summary]="report.summary" />
+
+    @if (report.fehler.length) {
+      <section class="guided-clean__section" data-testid="clean-fehler">
+        <h2>Fehler ({{ report.fehler.length }})</h2>
+        <ion-note class="guided-clean__hint">
+          Diese Zellen lassen sich nicht lesen. Korrigieren Sie den Wert oder
+          lassen Sie die Zelle leer — vorher geht es nicht weiter.
+        </ion-note>
+        <app-fehler-list
+          [fehler]="report.fehler"
+          (correct)="onCorrect($event)"
+        />
+      </section>
+    }
+
+    @if (report.cards.length) {
+      <section class="guided-clean__section" data-testid="clean-deutungen">
+        <h2>Deutungen ({{ report.cards.length }})</h2>
+        <ion-note class="guided-clean__hint">
+          Diese Spalten lassen sich auf mehr als eine Art lesen. Vergleichen Sie
+          die Beispiele mit der Datei und bestätigen Sie die richtige Lesart.
+        </ion-note>
+        @for (card of report.cards; track card.column) {
+          <app-deutung-card [card]="card" (confirm)="onConfirm($event)" />
+        }
+      </section>
+    }
+
+    @if (report.formats.length) {
+      <section class="guided-clean__section" data-testid="clean-formate">
+        <h2>Formatierungen ({{ report.summary.formatierungen }})</h2>
+        <ion-note class="guided-clean__hint">
+          Hier ändert sich nur die Schreibweise, nicht der Wert. Je Spalte und
+          Regel drei Beispiele zur Kontrolle.
+        </ion-note>
+        <app-format-list [formats]="report.formats" />
+      </section>
+    }
+
+    @if (
+      !report.fehler.length && !report.cards.length && !report.formats.length
+    ) {
+      <ion-note class="guided-clean__hint" data-testid="clean-nothing">
+        Die Datei ist bereits sauber — es gibt nichts zu prüfen.
+      </ion-note>
+    }
+  }
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

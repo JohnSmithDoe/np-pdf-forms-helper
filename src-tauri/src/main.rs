@@ -29,6 +29,7 @@ mod doc;
 mod error;
 mod filler;
 mod model;
+mod picker;
 mod state;
 #[cfg(test)]
 mod testing;
@@ -70,6 +71,7 @@ fn main() {
             trains::commands::get_trains_data,
             trains::commands::query_events,
             trains::commands::stage_import,
+            trains::commands::stage_import_path,
             trains::commands::restage_import,
             trains::commands::restage_sheet,
             trains::commands::discard_import,
@@ -83,6 +85,13 @@ fn main() {
             trains::commands::remove_template,
             trains::commands::reset_trains,
             trains::commands::create_trains_export,
+            trains::commands::pick_import_folder,
+            trains::commands::pick_import_files,
+            trains::commands::scan_import_paths,
+            trains::commands::clean_file,
+            trains::commands::reclean_file,
+            trains::commands::write_clean,
+            trains::commands::discard_clean,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri konnte nicht gestartet werden");
@@ -97,5 +106,6 @@ fn load_state() -> AppResult<AppState> {
         db: Mutex::new(db),
         trains: Mutex::new(trains),
         staging: Mutex::new(None),
+        cleaning: Mutex::new(None),
     })
 }

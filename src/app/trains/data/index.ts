@@ -9,6 +9,7 @@
 
 export { TrainsFacade } from './trains.facade';
 export { ImportFacade } from './import.facade';
+export { IntakeFacade } from './intake.facade';
 export { WagenListFacade } from './wagen-list.facade';
 export { PartnerListFacade } from './partner-list.facade';
 export { EventListFacade } from './event-list.facade';
@@ -20,3 +21,5 @@ export type { EventRow } from './event-list.facade';
 export type { TemplateRow } from './template-list.facade';
 export type { RadsatzRow } from './radsatz-list.facade';
 export type { Stage } from './import.store';
+export type { IntakeRow, IntakeStep, PickOption } from './intake.facade';
+export type { FileOutcome } from './intake.store';

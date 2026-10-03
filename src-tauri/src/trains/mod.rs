@@ -7,6 +7,7 @@
 // The pipeline runs in this order, and the order is the design:
 //
 //   sheet/    a file becomes a Grid, and a reader says WHERE the data is
+//   recognise which saved template the header row belongs to, if exactly one
 //   sanitise/ raw cell text becomes a typed value, or a German complaint
 //   resolve/  a row's names and numbers become entity references
 //   stage     all of the above, into a preview that touches NO database
@@ -19,15 +20,19 @@
 // aborted run.
 // ────────────────────────────────────────────────────────────────
 
+pub mod builtin;
+pub mod clean;
 pub mod clock;
 pub mod commands;
 pub mod commit;
 pub mod db;
 pub mod export;
-pub mod fingerprint;
 pub mod hash;
 pub mod model;
+pub mod reading;
+pub mod recognise;
 pub mod resolve;
 pub mod sanitise;
+pub mod scan;
 pub mod sheet;
 pub mod stage;

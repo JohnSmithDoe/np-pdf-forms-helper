@@ -16,22 +16,34 @@
 // disk cannot change under a preview mid-decision.
 //
 // A cancelled picker is not a failure and gets no report — same as `add_documents`.
+//
+// The guided import is a second held slot, `cleaning`, beside `staging`: the
+// file being cleaned and the cleaned file being previewed are two different
+// files, and one slot would have the second overwrite the first mid-flow.
+// `write_clean` is where one becomes the other — it re-runs the cleaning with
+// the decisions it was SENT rather than trusting the last report, refuses while
+// anything is open (`clean::ready`), writes the copy and stages THAT with the
+// confirmed plan. `commit_import` then teaches the plan's readings to its
+// template — for a guided import and a manual one alike, since a reading the
+// user set in the mapper is just as confirmed.
 // ────────────────────────────────────────────────────────────────
 
 use std::path::{Path, PathBuf};
 
 use tauri::State;
-use tauri_plugin_dialog::DialogExt;
 use uuid::Uuid;
 
 use crate::error::{AppError, AppResult};
 use crate::model::ClientReport;
+use crate::picker;
 use crate::state::AppState;
 use crate::trains::db::TrainsDb;
-use crate::trains::model::{CommitDecisions, ImportPlan, Partner, Radsatz, TrainsData, Wagen};
-use crate::trains::sheet::{grid, readers};
+use crate::trains::model::{
+    CleanDecisions, CommitDecisions, ImportPlan, Partner, Radsatz, TrainsData, Wagen,
+};
+use crate::trains::sheet::grid;
 use crate::trains::stage::{stage, HeldImport, StageInput};
-use crate::trains::{commit, export, fingerprint};
+use crate::trains::{clean, commit, export, recognise, scan};
 
 fn everything(db: &TrainsDb) -> TrainsData {
     TrainsData::nothing()
@@ -71,10 +83,15 @@ pub fn stage_import(
     window: tauri::WebviewWindow,
     state: State<'_, AppState>,
 ) -> AppResult<TrainsData> {
-    let Some(path) = pick_file(&window) else {
+    let Some(path) = picker::file(&window, "Datei importieren", None, Some(picker::EXCEL)) else {
         return Ok(TrainsData::nothing());
     };
     read_and_stage(&path, None, &state)
+}
+
+#[tauri::command(async)]
+pub fn stage_import_path(path: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    read_and_stage(Path::new(&path), None, &state)
 }
 
 #[tauri::command(async)]
@@ -125,9 +142,119 @@ pub fn commit_import(
     let held = state.staging();
     let held = held.as_ref().ok_or_else(stale)?;
     let mut db = state.trains();
-    let run = commit::commit(&mut db, &held.wire, &held.values, &decisions)?;
+    let mut report = commit::commit(&mut db, &held.wire, &held.values, &decisions)?.report();
 
-    Ok(everything(&db).report(run.report()))
+    if let Some(template_id) = &held.wire.plan.template_id {
+        if let Some(line) = commit::learn(&mut db, template_id, &held.wire.plan)? {
+            report.messages.push(line);
+        }
+    }
+    Ok(everything(&db).report(report))
+}
+
+#[tauri::command(async)]
+pub fn pick_import_folder(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    Ok(match picker::folder(&window, "Ordner importieren") {
+        Some(folder) => scanned(&[folder], &state),
+        None => TrainsData::nothing(),
+    })
+}
+
+#[tauri::command(async)]
+pub fn pick_import_files(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    Ok(
+        match picker::files(&window, "Dateien importieren", Some(picker::EXCEL)) {
+            Some(files) => scanned(&files, &state),
+            None => TrainsData::nothing(),
+        },
+    )
+}
+
+#[tauri::command(async)]
+pub fn scan_import_paths(paths: Vec<String>, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    Ok(scanned(&paths, &state))
+}
+
+#[tauri::command(async)]
+pub fn clean_file(
+    path: String,
+    sheet: String,
+    template_id: String,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    let template = state
+        .trains()
+        .template(&template_id)
+        .ok_or_else(|| AppError::Report(vec!["Die gewählte Vorlage gibt es nicht mehr.".into()]))?;
+    let held = clean::open(Path::new(&path), &sheet, &template)?;
+    let report = held.run(&CleanDecisions::default())?.report;
+    *state.cleaning() = Some(held);
+    Ok(TrainsData::nothing().cleaning(report))
+}
+
+#[tauri::command(async)]
+pub fn reclean_file(
+    decisions: CleanDecisions,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    let held = state.cleaning();
+    let held = held.as_ref().ok_or_else(stale)?;
+    Ok(TrainsData::nothing().cleaning(held.run(&decisions)?.report))
+}
+
+#[tauri::command(async)]
+pub fn write_clean(decisions: CleanDecisions, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    let (cleaned, path, sheet) = {
+        let held = state.cleaning();
+        let held = held.as_ref().ok_or_else(stale)?;
+        (
+            held.run(&decisions)?,
+            held.path.clone(),
+            held.grid.sheet.clone(),
+        )
+    };
+    clean::ready(&cleaned.report)?;
+
+    let folder = state
+        .config
+        .output_path
+        .join(format!("bereinigt-{}", crate::trains::clock::today_iso()));
+    let written = clean::write::write(&path, &sheet, &cleaned.changes, &folder)?;
+
+    let source = grid::read(&written, Some(&sheet))?;
+    let staged = stage_source(&written, source, Vec::new(), cleaned.confirmed, &state)?;
+    *state.cleaning() = None;
+
+    Ok(staged.report(ClientReport {
+        headline: "Bereinigte Datei wurde geschrieben".into(),
+        messages: vec![
+            format!("Datei wurde erstellt: {}", crate::doc::file_name(&written)),
+            format!(
+                "{} Änderung(en) im Blatt „{}“ protokolliert.",
+                cleaned.changes.len(),
+                clean::write::PROTOCOL
+            ),
+        ],
+        message_folder: Some(folder.to_string_lossy().into_owned()),
+    }))
+}
+
+#[tauri::command]
+pub fn discard_clean(state: State<'_, AppState>) -> AppResult<TrainsData> {
+    *state.cleaning() = None;
+    Ok(TrainsData::nothing())
+}
+
+fn scanned(paths: &[PathBuf], state: &AppState) -> TrainsData {
+    let templates = state.trains().templates();
+    TrainsData::nothing().scan(scan::scan(paths, &templates))
 }
 
 #[tauri::command]
@@ -217,6 +344,11 @@ pub fn remove_partner(id: String, state: State<'_, AppState>) -> AppResult<Train
 
 #[tauri::command]
 pub fn remove_template(id: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    if crate::trains::builtin::is_builtin(&id) {
+        return Err(AppError::Report(vec![
+            "Mitgelieferte Vorlagen können nicht entfernt werden.".into(),
+        ]));
+    }
     let mut db = state.trains();
     db.transaction(|tx| {
         tx.remove_template(&id);
@@ -248,41 +380,20 @@ pub fn create_trains_export(state: State<'_, AppState>) -> AppResult<TrainsData>
 
 fn read_and_stage(path: &Path, sheet: Option<&str>, state: &AppState) -> AppResult<TrainsData> {
     let source = grid::read(path, sheet)?;
-    let candidates = readers::detect(&source.grid);
+    let (plan, candidates) = recognise::detected(&source.grid)?;
+    let plan = recognise::apply(&state.trains().templates(), &plan).unwrap_or(plan);
+    stage_source(path, source, candidates, plan, state)
+}
 
-    let chosen = readers::choose(&candidates)
-        .or_else(|| candidates.first())
-        .ok_or_else(|| {
-            AppError::Report(vec![
-                "In dieser Arbeitsmappe wurde keine Tabelle gefunden.".into(),
-                "Bitte Kopfzeile und erste Datenzeile von Hand festlegen.".into(),
-            ])
-        })?;
-    let layout = chosen.reader.apply(&source.grid, chosen.hint)?;
-    let plan = ImportPlan {
-        reader: chosen.reader,
-        layout: chosen.hint,
-        columns: layout
-            .columns
-            .iter()
-            .map(|slot| crate::trains::model::ColumnBinding {
-                header: slot.header.clone(),
-                index: slot.index,
-                field: crate::trains::model::FieldKind::Ignorieren,
-                decimal: None,
-                date_order: None,
-            })
-            .collect(),
-        template_id: None,
-        date1904: false,
-    };
-
+fn stage_source(
+    path: &Path,
+    source: grid::Source,
+    candidates: Vec<crate::trains::sheet::layout::Candidate>,
+    plan: ImportPlan,
+    state: &AppState,
+) -> AppResult<TrainsData> {
     let file = path.to_string_lossy().into_owned();
     let staging_id = Uuid::new_v4().to_string();
-
-    // A template is applied before anything is staged, so a known sender's file
-    // arrives already mapped rather than mapped and then re-read.
-    let plan = apply_template(state, &source, &plan).unwrap_or(plan);
 
     let staged = stage(StageInput {
         id: staging_id.clone(),
@@ -305,33 +416,9 @@ fn read_and_stage(path: &Path, sheet: Option<&str>, state: &AppState) -> AppResu
         .counts(state.trains().counts()))
 }
 
-fn apply_template(
-    state: &AppState,
-    source: &grid::Source,
-    plan: &ImportPlan,
-) -> Option<ImportPlan> {
-    let signature = fingerprint::of(&source.grid.sheet, &plan.columns);
-    let db = state.trains();
-    let template = db.template_by_fingerprint(&signature)?;
-    let mut applied = template.plan.clone();
-    applied.template_id = Some(template.id.clone());
-    Some(applied)
-}
-
 fn stale() -> AppError {
     AppError::Report(vec![
         "Die Vorschau ist nicht mehr aktuell.".into(),
         "Bitte den Import erneut starten.".into(),
     ])
-}
-
-fn pick_file(window: &tauri::WebviewWindow) -> Option<PathBuf> {
-    window
-        .dialog()
-        .file()
-        .set_title("Datei importieren")
-        .add_filter("Excel", &["xlsx"])
-        .set_parent(window)
-        .blocking_pick_file()
-        .and_then(|picked| picked.into_path().ok())
 }

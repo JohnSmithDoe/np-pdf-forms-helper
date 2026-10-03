@@ -101,7 +101,7 @@ export class TrainsDashboardPage {
     label: 'Import',
     icon: 'cloud-upload-outline',
     description:
-      'Eine Datei einlesen, ihre Spalten zuordnen, die Zeilen prüfen und übernehmen.',
+      'Einen Ordner oder Dateien einlesen, erkennen lassen, bereinigen, prüfen und übernehmen.',
   };
 
   protected readonly tiles = computed<DashboardTile[]>(() => {

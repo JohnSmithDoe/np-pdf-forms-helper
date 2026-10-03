@@ -31,8 +31,8 @@ Zwischenschritt auf Bezeichner abbilden lassen.
 
 Ein Mitarbeiter beim Halter hat ein Wort für einen Wagen, einen Radsatz, einen Einbau, eine
 Instandhaltung, einen Halter, eine Werkstatt. Niemand dort hat ein Wort für eine `Resolution`, ein
-`ColumnBinding`, einen `LayoutHint`, eine `Provenance`, einen `dedupeKey`, einen `fingerprint` oder
-einen Staging-Lauf. Diese Begriffe zu übersetzen bringt nichts und kostet Lesbarkeit — sie bleiben
+`ColumnBinding`, einen `LayoutHint`, eine `Provenance`, einen `dedupeKey` oder einen
+Staging-Lauf. Diese Begriffe zu übersetzen bringt nichts und kostet Lesbarkeit — sie bleiben
 englisch. Die Grenze verläuft an der Frage: **hat der Anwender dafür ein Wort?**
 
 ### Schreibweise
@@ -155,7 +155,7 @@ Das ist kein Beiwerk — es ist die Begründung für fast jede Entwurfsentscheid
 | Nicht importieren | `ignorieren` |
 
 **Bewusst englisch geblieben**, weil Mechanik und kein Fachbegriff: `id`, `createdAt`, `source`,
-`matchKey`, `aliases`, `dedupeKey`, `fingerprint`, `Provenance`, `Resolution`, `ColumnBinding`,
+`matchKey`, `aliases`, `dedupeKey`, `Provenance`, `Resolution`, `ColumnBinding`,
 `LayoutHint`, `ImportPlan`, `ImportTemplate`, `StagedRow`, `RowStatus`.
 
 ---

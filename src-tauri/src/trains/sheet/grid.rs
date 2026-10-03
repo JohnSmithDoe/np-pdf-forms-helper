@@ -57,6 +57,14 @@
 // and roughly double the peak memory, on the one file whose loss would end the
 // project.
 //
+// `heads` is for RECOGNISING a file, not importing it: every sheet's top
+// `HEAD_ROWS` rows from ONE open of the workbook. Opening it once per sheet
+// re-parsed the shared strings every time — a folder holding the 28-sheet
+// workbook took a minute and a half to scan. Each sheet is dropped again once
+// its head is taken, so peak memory is one sheet, not the whole book. Sixty rows
+// cover the header search (`MAX_HEADER_ROW`) plus the data rows its scoring
+// looks at below it.
+//
 // `is_date_format` runs on EVERY non-empty cell, so it neither lowercases nor
 // allocates: `eq_ignore_ascii_case` for the early out and a per-character
 // `to_ascii_uppercase` in the loop. A `to_uppercase()` up front was one `String`
@@ -207,8 +215,48 @@ pub fn read(path: &Path, sheet: Option<&str>) -> AppResult<Source> {
     })
 }
 
+const HEAD_ROWS: u32 = 60;
+
+pub fn heads(path: &Path) -> AppResult<Vec<Grid>> {
+    let headline = || {
+        format!(
+            "Die Excel-Datei {} konnte nicht gelesen werden.",
+            crate::doc::file_name(path)
+        )
+    };
+    let mut book = AppError::reading(headline(), || {
+        umya_spreadsheet::reader::xlsx::lazy_read(path)
+    })?;
+    let count = book.sheet_collection_no_check().len();
+    if count == 0 {
+        return Err(AppError::Report(vec![
+            "Die Excel-Datei enthält keine Arbeitsmappen.".into(),
+        ]));
+    }
+
+    let mut grids = Vec::with_capacity(count);
+    for index in 0..count {
+        AppError::reading(headline(), || {
+            book.read_sheet(index);
+            Ok::<_, std::convert::Infallible>(())
+        })?;
+        let worksheet = &mut book.sheet_collection_mut()[index];
+        grids.push(build(worksheet, Some(HEAD_ROWS))?);
+        *worksheet = umya_spreadsheet::Worksheet::default();
+    }
+    Ok(grids)
+}
+
 pub fn from_worksheet(worksheet: &umya_spreadsheet::Worksheet) -> AppResult<Grid> {
-    let cells = worksheet.cells();
+    build(worksheet, None)
+}
+
+fn build(worksheet: &umya_spreadsheet::Worksheet, limit: Option<u32>) -> AppResult<Grid> {
+    let cells: Vec<_> = worksheet
+        .cells()
+        .into_iter()
+        .filter(|cell| limit.is_none_or(|limit| cell.coordinate().row_num() <= limit))
+        .collect();
 
     let mut rows = 0_u32;
     let mut cols = 0_u32;
@@ -227,7 +275,9 @@ pub fn from_worksheet(worksheet: &umya_spreadsheet::Worksheet) -> AppResult<Grid
         }
     }
 
-    check_rows(worksheet.name(), rows, last_not_zero)?;
+    if limit.is_none() {
+        check_rows(worksheet.name(), rows, last_not_zero)?;
+    }
     cols = cols.min(MAX_COLS);
 
     let mut grid = vec![RawCell::default(); rows as usize * cols as usize];

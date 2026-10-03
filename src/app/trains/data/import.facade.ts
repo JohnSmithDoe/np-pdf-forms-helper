@@ -8,6 +8,14 @@
 // template hit skips it entirely, which is the whole payoff: the second file
 // from a sender costs nothing.
 //
+// `stagePath` is `pickFile` without the picker: the guided import hands an
+// unrecognised file over by path, and it must land on the mapping step exactly
+// as a picked file does — same auto-mapping, same template rule.
+//
+// `decisions` is public because the guided import commits the same preview
+// through `IntakeFacade`, silently; two copies of the row→decision mapping would
+// drift on the next entity added.
+//
 // `commit` sends only the rows the user ticked. Everything else is not "skipped"
 // as an instruction, it is simply not asked for.
 // ────────────────────────────────────────────────────────────────
@@ -21,6 +29,7 @@ import type {
   FieldKind,
   ImportPlan,
   RowStatus,
+  TrainsData,
 } from '../model/trains.types';
 import { requiredFields } from '../model/field-catalogue';
 import { suggestBindings } from '../util/column-suggest.util';
@@ -72,7 +81,15 @@ export class ImportFacade {
   );
 
   async pickFile(): Promise<void> {
-    const data = await this.#backend.stageImport();
+    await this.#adopt(await this.#backend.stageImport());
+  }
+
+  async stagePath(path: string): Promise<void> {
+    await this.#adopt(await this.#backend.stageImportPath(path));
+  }
+
+  async #adopt(data: TrainsData): Promise<void> {
+    this.#store.reset();
     this.#trains.applyTrainsData(data);
     if (!data.staging) return;
 
@@ -146,11 +163,11 @@ export class ImportFacade {
     );
   }
 
-  async commit(): Promise<void> {
+  decisions(): CommitDecisions | undefined {
     const staging = this.staging();
-    if (!staging) return;
+    if (!staging) return undefined;
     const choices = this.choices();
-    const decisions: CommitDecisions = {
+    return {
       stagingId: staging.id,
       rows: this.includedRows().map((row) => ({
         row: row.row,
@@ -162,6 +179,11 @@ export class ImportFacade {
       })),
       saveTemplateAs: this.templateName().trim() || undefined,
     };
+  }
+
+  async commit(): Promise<void> {
+    const decisions = this.decisions();
+    if (!decisions) return;
     this.#trains.applyTrainsData(await this.#backend.commitImport(decisions));
     await this.discard();
   }

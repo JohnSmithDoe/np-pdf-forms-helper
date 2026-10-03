@@ -35,11 +35,22 @@
 // German sentence beats whatever the API throws when its globals are missing.
 // Anything that is not the serialised `AppError` is a renderer-side fault, not a
 // backend answer, so it keeps whatever text it has.
+//
+// `fileDrops$` is here for the same reason `invoke` is: it is Tauri's, and this
+// is the one file allowed to know Tauri. A NATIVE drop is the only way to get a
+// file PATH — Tauri 2's default `dragDropEnabled` hands the drop to the shell and
+// the webview's HTML5 drag events never fire, and an HTML5 `File` carries no path
+// anyway. It is COLD: the listener is registered per subscription and removed
+// with it, so nothing listens while no page wants drops. Outside the desktop
+// shell (`pnpm start`, the mock, Playwright) it simply never emits — the e2e fake
+// stubs `invoke` and nothing else, so registering is allowed to fail quietly.
+// `over` is dropped: it fires per mouse move and nothing here needs a position.
 // ────────────────────────────────────────────────────────────────
 
 import { computed, Injectable, Signal, signal } from '@angular/core';
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { Subject } from 'rxjs';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { Observable, Subject } from 'rxjs';
 import { ClientReport } from '../../model/client.types';
 
 const UNKNOWN_ERROR = 'Es ist ein unbekannter Fehler aufgetreten.';
@@ -58,6 +69,9 @@ export interface CallOptions {
 export interface BackendResponse {
   message?: ClientReport;
 }
+
+export type FileDrop =
+  { type: 'enter' } | { type: 'leave' } | { type: 'drop'; paths: string[] };
 
 export class BackendError extends Error {
   readonly messages: string[];
@@ -94,6 +108,33 @@ export class BackendService {
   readonly busy: Signal<boolean> = computed(() => this.#pending() > 0);
 
   readonly report$ = new Subject<ClientReport>();
+
+  readonly fileDrops$ = new Observable<FileDrop>((subscriber) => {
+    if (!isTauri()) return undefined;
+    let unlisten: (() => void) | undefined;
+    let closed = false;
+    try {
+      getCurrentWebview()
+        .onDragDropEvent(({ payload }) => {
+          if (payload.type === 'drop') {
+            subscriber.next({ type: 'drop', paths: payload.paths });
+          } else if (payload.type !== 'over') {
+            subscriber.next({ type: payload.type });
+          }
+        })
+        .then((stop) => {
+          if (closed) stop();
+          else unlisten = stop;
+        })
+        .catch(() => undefined);
+    } catch {
+      return undefined;
+    }
+    return () => {
+      closed = true;
+      unlisten?.();
+    };
+  });
 
   async #send<T>({ command, payload }: BackendRequest): Promise<T> {
     if (!isTauri()) throw new BackendError([NO_DESKTOP]);

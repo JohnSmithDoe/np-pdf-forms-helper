@@ -24,7 +24,10 @@
 // `infer_date_order` reads the same way — a component over 12 can only be a day.
 // Dotted dates are excluded from the evidence because `31.12.2025` is German
 // whatever the sender does with slashes, so it says nothing about the case in
-// question. A column that forces BOTH readings contradicts itself, and `None`
+// question. Year-first dates (`2025-12-31`) are excluded for the same reason: a
+// leading year is not a day over twelve, and counting it as one settled every
+// column holding a single ISO date as "day first" without a word. A column that
+// forces BOTH readings contradicts itself, and `None`
 // says so rather than resolving it: that is a fact the user needs.
 //
 // The German default is not a preference, it is the house language of every
@@ -136,7 +139,11 @@ pub fn infer_date_order(values: &[&str]) -> Option<Inference<DateOrder>> {
 fn leading_pair(value: &str) -> Option<(u32, u32)> {
     let separator = ['/', '-'].into_iter().find(|s| value.contains(*s))?;
     let mut parts = value.split(separator);
-    let first: u32 = parts.next()?.trim().parse().ok()?;
+    let leading = parts.next()?.trim();
+    if leading.len() > 2 {
+        return None;
+    }
+    let first: u32 = leading.parse().ok()?;
     let second: u32 = parts.next()?.trim().parse().ok()?;
     parts.next()?;
     Some((first, second))
@@ -232,6 +239,13 @@ mod tests {
     #[test]
     fn dotted_dates_are_not_evidence_about_order() {
         let inferred = infer_date_order(&["31.12.2025"]).expect("no conflict");
+        assert!(!inferred.certain);
+    }
+
+    /// 2025 is a year, not a day over twelve, so it settles nothing.
+    #[test]
+    fn year_first_dates_are_not_evidence_about_order() {
+        let inferred = infer_date_order(&["03/04/2025", "2025-05-06"]).expect("no conflict");
         assert!(!inferred.certain);
     }
 

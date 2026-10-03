@@ -30,7 +30,18 @@
 // anything by itself — it carries a check digit and a `Radsatz.nummer` does not.
 //
 // `Resolution` is tagged on `state` and `EntityDecision` on `action`, so both
-// narrow without a cast.
+// narrow without a cast; `Reading` and `Confirmation` are tagged on `kind`.
+//
+// A template is either the user's or BUILT-IN (`builtin`, id `builtin:…`), and
+// a built-in is read-only: confirming a reading against one writes a user copy
+// whose `origin` names the built-in it now shadows.
+//
+// The guided import's review is three TIERS, and they are three shapes rather
+// than one list with a tag, because each asks something different of the user:
+// a `FehlerCell` must be corrected or left empty, a `DeutungCard` must be
+// confirmed one way or the other, a `FormatGroup` asks nothing. `CleanDecisions`
+// is sent WHOLE on every call — the backend keeps no decisions between calls,
+// the same as `restage_import` takes the whole plan.
 // ────────────────────────────────────────────────────────────────
 
 import type { ClientReport } from '../../@shared/model/client.types';
@@ -159,9 +170,10 @@ export interface ImportPlan {
 export interface ImportTemplate {
   id: string;
   name: string;
-  fingerprint: string;
   plan: ImportPlan;
   partnerId?: string;
+  origin?: string;
+  builtin: boolean;
   createdAt: string;
 }
 
@@ -264,6 +276,107 @@ export interface InstandhaltungPage {
   offset: number;
 }
 
+export type ScanStatus =
+  'erkannt' | 'mehrdeutig' | 'unbekannt' | 'nichtUnterstuetzt' | 'unlesbar';
+
+export interface ScanMatch {
+  templateId: string;
+  templateName: string;
+  sheet: string;
+}
+
+export interface ScanFile {
+  path: string;
+  name: string;
+  status: ScanStatus;
+  matches: ScanMatch[];
+  sheets: string[];
+  message?: string;
+}
+
+export type Reading =
+  | { kind: 'decimal'; chosen: DecimalStyle; alternative: DecimalStyle }
+  | { kind: 'dateOrder'; chosen: DateOrder; alternative: DateOrder }
+  | { kind: 'hinweis' };
+
+export interface CardExample {
+  row: number;
+  raw: string;
+  chosen: string;
+  alternative?: string;
+  message?: string;
+}
+
+export interface DeutungCard {
+  column: number;
+  header: string;
+  field: FieldKind;
+  reading: Reading;
+  reason: string;
+  count: number;
+  examples: CardExample[];
+  confirmed: boolean;
+}
+
+export interface FehlerCell {
+  row: number;
+  column: number;
+  header: string;
+  raw: string;
+  message: string;
+  correction?: string;
+  open: boolean;
+}
+
+export interface FormatSample {
+  row: number;
+  raw: string;
+  clean: string;
+}
+
+export interface FormatGroup {
+  column: number;
+  header: string;
+  rule: string;
+  count: number;
+  samples: FormatSample[];
+}
+
+export interface CleanSummary {
+  fehlerOffen: number;
+  deutungenOffen: number;
+  formatierungen: number;
+  korrigiert: number;
+}
+
+export interface CleanReport {
+  file: string;
+  sheet: string;
+  templateId: string;
+  templateName: string;
+  plan: ImportPlan;
+  fehler: FehlerCell[];
+  cards: DeutungCard[];
+  formats: FormatGroup[];
+  summary: CleanSummary;
+}
+
+export interface Correction {
+  row: number;
+  column: number;
+  value: string;
+}
+
+export type Confirmation =
+  | { kind: 'decimal'; column: number; style: DecimalStyle }
+  | { kind: 'dateOrder'; column: number; order: DateOrder }
+  | { kind: 'hinweis'; column: number };
+
+export interface CleanDecisions {
+  corrections: Correction[];
+  confirmations: Confirmation[];
+}
+
 export interface TrainsData {
   wagen?: Wagen[];
   partners?: Partner[];
@@ -273,5 +386,7 @@ export interface TrainsData {
   counts?: TrainsCounts;
   staging?: StagedImport;
   instandhaltungPage?: InstandhaltungPage;
+  scan?: ScanFile[];
+  cleaning?: CleanReport;
   message?: ClientReport;
 }

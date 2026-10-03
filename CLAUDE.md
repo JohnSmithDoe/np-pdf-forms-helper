@@ -112,6 +112,14 @@ report renders as the PAGE with `ion-modal` at zero. Two traps it ran into, both
 its own `app-page-…` element or `Weiter` matches twice; and `filler.spec.ts` now navigates to
 `/#/documents/expert` directly, because `/` redirects by view mode and the default is the wizard.
 
+`intake.spec.ts` covers the guided import the same shallow way, seeded through `seed.scan`,
+`seed.clean` and `seed.cleaned`; the fake's `reclean_file` only echoes decisions back and never
+re-parses, and its `write_clean` applies no gate — both are `cargo test`'s. **Playwright reuses
+whatever already listens on its port**, so a different app there fails nearly every spec with
+nothing pointing at the cause. The dev server runs on **4400**, not Angular's default 4200, for
+exactly that reason — set in `angular.json` (`serve.options.port`), `tauri.conf.json` (`devUrl`) and
+`playwright.config.ts`; change one, change all three.
+
 `lefthook` runs prettier/eslint/stylelint pre-commit and lint+sheriff+typecheck+`cargo test`
 pre-push; `e2e` is not in either hook, because it needs a dev server. `cargo test` builds the crate
 with `cfg(test)` on and so type-checks `src-tauri/` on the way through — `rust:check` in the same
@@ -186,6 +194,19 @@ list is paged, so its loaded length would lie), and the three partner roles deri
 list, because nothing counts them server-side. The spokes therefore take `backHref="/trains"` on the
 list shell, which replaces the burger with a back button: a screen reached from a hub needs the way
 up, not the menu that no longer links to it.
+
+**`/trains/import` is a HUB too, and the old import is one of its spokes.** A folder or a set of
+files is dropped (Tauri's native drag-drop — `BackendService.fileDrops$`, the only other place
+`@tauri-apps/api` is touched) or picked (click = folder dialog, a separate button = file dialog,
+because Windows cannot offer both in one), scanned top-level by `scan_import_paths` /
+`pick_import_*`, and listed file → template, adjustable. A recognised file walks the guided steps
+`guided/clean` → `guided/preview` → `guided/result`; an unknown one goes to `manual`, the unchanged
+mapper. `IntakeStore` holds the walk; the backend holds one cleaning and one staging, so files go one
+at a time. The guards are `intake.guards.ts`, pure predicates as in filler. The review step is the
+point of the feature and is built from `ui` components that only emit (`clean-summary`,
+`fehler-list`, `deutung-card`, `format-list`) — the page sends every command, the decisions object is
+held in the store and sent WHOLE each time, like `restage_import`'s plan. `WizardShellComponent`
+lives in `@shared/ui` because both domains use it.
 
 **Only `Wagennummer` is required.** A date is not: plenty of the arriving documents are about
 something other than a dated repair, and the Wagennummer is the only anchor that ties a row to
@@ -384,7 +405,8 @@ the guarantee the copy used to buy now holds by construction. Do not reintroduce
 | `filler/db.rs`        | `IndexMap`, not a `BTreeMap` — insertion order _is_ the UI's document order and a sorted map would silently reshuffle every existing install. Writes are atomic (temp + rename) and a failed write is now an error the user sees                                                                                                                              |
 | `error.rs`            | `thiserror` enum, serialised as `{ messages: [...] }`. Messages are user-facing **German** and shown verbatim. `AppError::detail` is the "German sentence + the cause underneath" shape every file I/O failure uses; `AppError::reading` wraps every umya/lopdf read so a parser panic becomes that shape too                                                                                                                                           |
 | `state.rs`            | `AppState`, the composition root's shared handle. Outside any workflow so `filler/import` and `filler/export` reach the database without depending on the API surface — which is also why it is the one shared module allowed to name a workflow's store                                                                                                     |
-| `filler/commands.rs`  | the API surface and nothing else: `#[tauri::command]` per operation, the native pickers, `open`. The two picker commands are `#[tauri::command(async)]` on a **sync** fn — a plain command runs on the main thread, where a blocking native dialog deadlocks the loop it needs, and a real `async fn` cannot hold the `Mutex<Database>` guard across an await. `add_documents` takes a `DocumentSource` (`file`/`files`/`folder`), declared here rather than in `model.rs` because it is a command argument and nothing stores it |
+| `picker.rs`           | the native pickers (`file`/`files`/`folder`), shared by both workflows because they are sealed from each other. Every picker blocks — see the next row |
+| `filler/commands.rs`  | the API surface and nothing else: `#[tauri::command]` per operation, the native pickers (via `picker`), `open`. The two picker commands are `#[tauri::command(async)]` on a **sync** fn — a plain command runs on the main thread, where a blocking native dialog deadlocks the loop it needs, and a real `async fn` cannot hold the `Mutex<Database>` guard across an await. `add_documents` takes a `DocumentSource` (`file`/`files`/`folder`), declared here rather than in `model.rs` because it is a command argument and nothing stores it |
 | `filler/import.rs`    | linking one file, a hand-picked batch or a whole folder, **no Tauri** — a per-file failure becomes a report line, and only "nothing linked at all" is an error. `folder` is `many` over a sorted listing, so multi-select and folder cannot disagree about which failures are fatal                                                                            |
 | `filler/export.rs`    | one run of documents, **no Tauri** — `Run { messages, failed, refreshed }`; one document failing is a report line, only an unusable output folder stops the run                                                                                                                                                                                               |
 | `doc/mod.rs`          | the extension dispatch only. No trait: the shared steps run here, before the `match`, so the per-format half cannot skip them — and a subclass could forget `super`                                                                                                                                                                                           |
@@ -398,7 +420,12 @@ the guarantee the copy used to buy now holds by construction. Do not reintroduce
 | `trains/sanitise/`    | raw cell text → a typed value or a German line. `Err` is a Fehler, `Ok` with a `warning` is a Warnung, so severity is the result's SHAPE and not a field to keep in step. The one part of trains with unit tests, because being wrong here is invisible: `1.234` read as `1.234` instead of `1234` looks equally plausible in a preview                       |
 | `trains/sanitise/column.rs` | the decimal style and date order, inferred over the WHOLE column. A per-cell guess flips independently per row and silently mixes both readings; the column has evidence the cell does not. Where nothing is conclusive the default is flagged, which is what lets the preview offer one control that re-reads the column                               |
 | `trains/db.rs`        | six JSON stores under `data/trains/` (`wagen`, `partner`, `instandhaltungen`, `radsaetze`, `einbauten`, `templates`), split so saving a partner does not rewrite the Instandhaltungen. `transaction` is the API, not a convention: an import is a handful of writes, not one per row, and a failed flush rolls memory back. Four indexes — Wagennummer, match key incl. aliases, dedupe key, Radsatznummer |
-| `trains/commit.rs`    | the only module that writes. Re-checks EVERY gate server-side: the frontend's ticks are an input, never the authority. Confirming a partner learns the raw spelling as an alias, which is what makes the second file from a sender free                                                                                        |
+| `trains/commit.rs`    | the only module that writes. Re-checks EVERY gate server-side: the frontend's ticks are an input, never the authority. Confirming a partner learns the raw spelling as an alias, which is what makes the second file from a sender free. `learn` saves the readings confirmed while cleaning onto the template (a user copy for a built-in)                                                                                        |
+| `trains/recognise.rs` | which template a header row belongs to: every MAPPED template header present, extra columns ignored. Several matches are a question, never a pick. `rebind` carries bindings over BY HEADER, because an index is positional. Replaced the exact `fingerprint` hash, which failed the first time an export grew a column |
+| `trains/builtin.rs`   | the shipped templates, in Rust so a typo is a compile error. Read-only; confirming a reading against one writes a user copy (`origin`) that shadows it — `TrainsDb::templates` merges them at read time and never stores them |
+| `trains/scan.rs`      | a dropped/picked set of paths → one `ScanFile` per file with a status. Top level only, every sheet asked, Excel's `~$` owner files skipped. Reads headers, never stages |
+| `trains/reading.rs`   | how ONE column is read — decimal style, date order — decided once, for `stage` and `clean` alike, so the preview and the cleaned copy cannot read a file two ways. A saved reading the file conclusively contradicts is a question again; a question exists only if some cell actually reads differently under the alternative, and staging warns on exactly those rows |
+| `trains/clean/`       | the original read 1:1 through staging's own `parse_cell` and `reading`, every change sorted into Fehler / Deutung / Format; `write.rs` writes the copy (full read, text cells via `export::fill`, `doc::write_book`) with its `Änderungsprotokoll`. The copy is staged with the confirmed plan — canonical values read the same under any reading, so it asks nothing again |
 | `trains/sheet/grid.rs` | the only trains file that knows umya on the read side. Coordinates are `(col, row)` numbers, never strings, so `address.rs`'s panic cannot recur. Bounds come from cells that hold something — `highest_column_and_row()` counts styled blanks; only the chosen sheet is parsed (`lazy_read`)                                                                                                              |
 
 The whole backend is ported. `cargo check`, `cargo clippy --all-targets` and `cargo fmt --check` are

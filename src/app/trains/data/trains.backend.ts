@@ -6,11 +6,19 @@
 //
 // The `command` strings and payload keys ARE the `#[tauri::command]` names and
 // their parameters, so nothing translates on the way out.
+//
+// `silent` is taken by the two commands whose report the guided import renders
+// as a PAGE — `write_clean` and `commit_import` — the same opt-in per call that
+// `FillerBackend` uses. The manual import calls `commit_import` loud.
 // ────────────────────────────────────────────────────────────────
 
 import { inject, Injectable } from '@angular/core';
-import { BackendService } from '../../@shared/data/backend/backend.service';
+import {
+  BackendService,
+  type CallOptions,
+} from '../../@shared/data/backend/backend.service';
 import type {
+  CleanDecisions,
   CommitDecisions,
   ImportPlan,
   Partner,
@@ -26,6 +34,7 @@ export type TrainsCommand =
       payload: { wagenId?: string; offset: number; limit: number };
     }
   | { command: 'stage_import'; payload: Record<string, never> }
+  | { command: 'stage_import_path'; payload: { path: string } }
   | { command: 'restage_import'; payload: { plan: ImportPlan } }
   | { command: 'restage_sheet'; payload: { sheet: string } }
   | { command: 'discard_import'; payload: Record<string, never> }
@@ -39,14 +48,24 @@ export type TrainsCommand =
   | { command: 'remove_template'; payload: { id: string } }
   | { command: 'reset_trains'; payload: Record<string, never> }
   | { command: 'create_trains_export'; payload: Record<string, never> }
-  | { command: 'open_output_folder'; payload: { folder: string } };
+  | { command: 'open_output_folder'; payload: { folder: string } }
+  | { command: 'pick_import_folder'; payload: Record<string, never> }
+  | { command: 'pick_import_files'; payload: Record<string, never> }
+  | { command: 'scan_import_paths'; payload: { paths: string[] } }
+  | {
+      command: 'clean_file';
+      payload: { path: string; sheet: string; templateId: string };
+    }
+  | { command: 'reclean_file'; payload: { decisions: CleanDecisions } }
+  | { command: 'write_clean'; payload: { decisions: CleanDecisions } }
+  | { command: 'discard_clean'; payload: Record<string, never> };
 
 @Injectable({ providedIn: 'root' })
 export class TrainsBackend {
   readonly #backend = inject(BackendService);
 
-  #call(command: TrainsCommand): Promise<TrainsData> {
-    return this.#backend.call<TrainsData>(command);
+  #call(command: TrainsCommand, options?: CallOptions): Promise<TrainsData> {
+    return this.#backend.call<TrainsData>(command, options);
   }
 
   load(): Promise<TrainsData> {
@@ -68,6 +87,10 @@ export class TrainsBackend {
     return this.#call({ command: 'stage_import', payload: {} });
   }
 
+  stageImportPath(path: string): Promise<TrainsData> {
+    return this.#call({ command: 'stage_import_path', payload: { path } });
+  }
+
   restageImport(plan: ImportPlan): Promise<TrainsData> {
     return this.#call({ command: 'restage_import', payload: { plan } });
   }
@@ -80,8 +103,55 @@ export class TrainsBackend {
     return this.#call({ command: 'discard_import', payload: {} });
   }
 
-  commitImport(decisions: CommitDecisions): Promise<TrainsData> {
-    return this.#call({ command: 'commit_import', payload: { decisions } });
+  commitImport(
+    decisions: CommitDecisions,
+    options?: CallOptions
+  ): Promise<TrainsData> {
+    return this.#call(
+      { command: 'commit_import', payload: { decisions } },
+      options
+    );
+  }
+
+  pickImportFolder(): Promise<TrainsData> {
+    return this.#call({ command: 'pick_import_folder', payload: {} });
+  }
+
+  pickImportFiles(): Promise<TrainsData> {
+    return this.#call({ command: 'pick_import_files', payload: {} });
+  }
+
+  scanImportPaths(paths: string[]): Promise<TrainsData> {
+    return this.#call({ command: 'scan_import_paths', payload: { paths } });
+  }
+
+  cleanFile(
+    path: string,
+    sheet: string,
+    templateId: string
+  ): Promise<TrainsData> {
+    return this.#call({
+      command: 'clean_file',
+      payload: { path, sheet, templateId },
+    });
+  }
+
+  recleanFile(decisions: CleanDecisions): Promise<TrainsData> {
+    return this.#call({ command: 'reclean_file', payload: { decisions } });
+  }
+
+  writeClean(
+    decisions: CleanDecisions,
+    options?: CallOptions
+  ): Promise<TrainsData> {
+    return this.#call(
+      { command: 'write_clean', payload: { decisions } },
+      options
+    );
+  }
+
+  discardClean(): Promise<TrainsData> {
+    return this.#call({ command: 'discard_clean', payload: {} });
   }
 
   saveWagen(wagen: Wagen): Promise<TrainsData> {

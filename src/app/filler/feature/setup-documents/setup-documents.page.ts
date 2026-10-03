@@ -35,7 +35,7 @@ import { ListItemComponent } from '../../../@shared/ui/base-item/list-item/list-
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { FillerFacade } from '../../data';
 import type { FillerDocument } from '../../model/filler.types';
-import { WizardShellComponent } from '../../ui/wizard-shell/wizard-shell.component';
+import { WizardShellComponent } from '../../../@shared/ui/wizard-shell/wizard-shell.component';
 
 @Component({
   selector: 'app-page-setup-documents',

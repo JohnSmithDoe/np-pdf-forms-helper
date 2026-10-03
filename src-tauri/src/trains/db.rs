@@ -34,6 +34,10 @@
 // thousand events is a hundred million comparisons; with them it is two thousand
 // lookups.
 //
+// The SHIPPED templates are never stored. `templates` merges them in at read
+// time, minus any a user copy shadows through its `origin`, so a reset cannot
+// lose them and an update of the program can change them — see `builtin`.
+//
 // `version` is written and not read, exactly as `filler::db` does it. There is
 // no deployed store to migrate from and no shipped shape to be compatible with,
 // so a ladder now would be a guess about a format nobody has written yet. The
@@ -218,7 +222,16 @@ impl TrainsDb {
     }
 
     pub fn templates(&self) -> Vec<ImportTemplate> {
-        self.templates.values().cloned().collect()
+        let shadowed: HashSet<&str> = self
+            .templates
+            .values()
+            .filter_map(|template| template.origin.as_deref())
+            .collect();
+        super::builtin::all()
+            .into_iter()
+            .filter(|template| !shadowed.contains(template.id.as_str()))
+            .chain(self.templates.values().cloned())
+            .collect()
     }
 
     pub fn counts(&self) -> TrainsCounts {
@@ -268,14 +281,18 @@ impl TrainsDb {
         self.by_dedupe.contains(dedupe_key)
     }
 
-    pub fn template(&self, id: &str) -> Option<&ImportTemplate> {
-        self.templates.get(id)
+    pub fn template(&self, id: &str) -> Option<ImportTemplate> {
+        self.templates.get(id).cloned().or_else(|| {
+            super::builtin::all()
+                .into_iter()
+                .find(|template| template.id == id)
+        })
     }
 
-    pub fn template_by_fingerprint(&self, fingerprint: &str) -> Option<&ImportTemplate> {
+    pub fn user_copy_of(&self, builtin_id: &str) -> Option<&ImportTemplate> {
         self.templates
             .values()
-            .find(|template| template.fingerprint == fingerprint)
+            .find(|template| template.origin.as_deref() == Some(builtin_id))
     }
 
     /// Every event, borrowed and in insertion order. The exporters write the

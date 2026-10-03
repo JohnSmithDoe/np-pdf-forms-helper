@@ -24,8 +24,8 @@ use crate::config::AppConfig;
 use crate::error::{AppError, AppResult};
 use crate::model::{DocumentKind, MappedDocument, MappedInput};
 
-pub use shared::{file_name, value_for};
-use shared::{free_path, mtime_ms, warn_if_changed};
+pub use shared::{file_name, free_path, list_files, value_for, write_book};
+use shared::{mtime_ms, warn_if_changed};
 
 // Tests that need a document whose stored `mtime` already matches its file must
 // compute it the same way the dispatcher does, not re-derive the formula.

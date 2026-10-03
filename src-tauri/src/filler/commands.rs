@@ -5,7 +5,8 @@
 // caused it.
 //
 // The work behind the two big commands lives in `import` and `export`; what
-// stays here is what needs a window — the native pickers and opening a file.
+// stays here is what needs a window — the native pickers (`crate::picker`) and
+// opening a file.
 //
 // Commands that cannot touch a list leave it out of `ClientData` entirely —
 // see the `Option` note on that type. Where a command sends one list and not
@@ -23,7 +24,6 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use tauri::State;
-use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 use super::{export, import};
@@ -180,7 +180,9 @@ pub fn remap_document(
         .parent()
         .map(Path::to_path_buf);
 
-    let Some(filename) = pick_file(&window, "Dokument neu verknüpfen", folder.as_deref()) else {
+    let Some(filename) =
+        crate::picker::file(&window, "Dokument neu verknüpfen", folder.as_deref(), None)
+    else {
         // Cancelled. Answer with the unchanged state, never nothing — the
         // renderer dereferences the response.
         let db = state.db();
@@ -237,7 +239,7 @@ fn add_single(
     auto_map_fields: bool,
     state: &AppState,
 ) -> AppResult<Option<ClientReport>> {
-    let Some(filename) = pick_file(window, "Dokument verknüpfen", None) else {
+    let Some(filename) = crate::picker::file(window, "Dokument verknüpfen", None, None) else {
         return Ok(None);
     };
     let document = import::one(&filename, auto_map_fields, state)?;
@@ -256,7 +258,7 @@ fn add_many(
     auto_map_fields: bool,
     state: &AppState,
 ) -> AppResult<Option<ClientReport>> {
-    let Some(files) = pick_files(window, "Dokumente verknüpfen") else {
+    let Some(files) = crate::picker::files(window, "Dokumente verknüpfen", None) else {
         return Ok(None);
     };
     Ok(Some(ClientReport {
@@ -271,7 +273,7 @@ fn add_folder(
     auto_map_fields: bool,
     state: &AppState,
 ) -> AppResult<Option<ClientReport>> {
-    let Some(folder) = pick_folder(window, "Ordner verknüpfen") else {
+    let Some(folder) = crate::picker::folder(window, "Ordner verknüpfen") else {
         return Ok(None);
     };
     Ok(Some(ClientReport {
@@ -288,46 +290,6 @@ fn open(app: &tauri::AppHandle, path: &str) -> AppResult<ClientData> {
             AppError::detail("Die Datei konnte nicht geöffnet werden.".into(), error)
         })?;
     Ok(ClientData::nothing())
-}
-
-fn pick_file(window: &tauri::WebviewWindow, title: &str, folder: Option<&Path>) -> Option<PathBuf> {
-    let mut picker = window.dialog().file().set_title(title).set_parent(window);
-    if let Some(folder) = folder {
-        picker = picker.set_directory(folder);
-    }
-    picker.blocking_pick_file().and_then(into_path)
-}
-
-// An empty selection is a cancelled picker, not a batch of nothing: without the
-// check `import::many` would answer "0 Dokument(e) wurden hinzugefügt." to a
-// dialog the user dismissed.
-fn pick_files(window: &tauri::WebviewWindow, title: &str) -> Option<Vec<PathBuf>> {
-    let picked: Vec<PathBuf> = window
-        .dialog()
-        .file()
-        .set_title(title)
-        .set_parent(window)
-        .blocking_pick_files()?
-        .into_iter()
-        .filter_map(into_path)
-        .collect();
-    (!picked.is_empty()).then_some(picked)
-}
-
-fn pick_folder(window: &tauri::WebviewWindow, title: &str) -> Option<PathBuf> {
-    window
-        .dialog()
-        .file()
-        .set_title(title)
-        .set_parent(window)
-        .blocking_pick_folder()
-        .and_then(into_path)
-}
-
-// The picker can also answer with a URL on mobile. On desktop it never does,
-// and a path is the only thing the rest of the backend can use.
-fn into_path(picked: tauri_plugin_dialog::FilePath) -> Option<PathBuf> {
-    picked.into_path().ok()
 }
 
 // Only the decisions that were split out of a command are testable here: a

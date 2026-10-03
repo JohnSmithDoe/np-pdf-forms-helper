@@ -9,20 +9,11 @@
 // loop returns `Vec<StagedRow>` and not `AppResult<Vec<StagedRow>>` precisely so
 // a `?` cannot creep into it; if one appears in review, that is the regression.
 //
-// The interpretations are inferred ONCE PER COLUMN, before any row is read, and
-// a binding's stored answer beats the inference. That ordering is the whole
-// reason the preview can offer one control that re-reads a column: a per-cell
-// guess has nothing to flip.
-//
-// Each inference runs only for the field that CONSULTS it — the decimal style
-// for a Betrag, the date order for a date — because both walk every cell of the
-// column and normalise it, and `uncertainty` reports neither for any other
-// field. An unconsulted slot carries a `certain` default so it can never raise a
-// warning nobody asked for.
-//
-// `infer_date_order` answering `None` is CONTRADICTORY evidence, not absent
-// evidence: the column holds both readings. It becomes `assumed`, never
-// `certain`, because that is precisely the column the warning exists for.
+// The interpretations are decided ONCE PER COLUMN, before any row is read, by
+// `reading::read_column` — the same call `clean` makes, so the preview and the
+// cleaned copy cannot read one file two ways. A column's question becomes a
+// Warnung on exactly the rows that read differently under the alternative, not
+// on every row of the column: the rows that do not differ have nothing to check.
 //
 // `interpret` returns one slot PER COLUMN, `None` where the column is ignored,
 // so `stage_row` indexes it by position. Searching it by `binding.index` was a
@@ -64,6 +55,10 @@
 // FIELD rather than by column silently merges two columns mapped to the same
 // field.
 //
+// `parse_cell` is shared with `clean`, so the cleaned file holds exactly what
+// staging would have read from the original — a second reading of the same cell
+// would be a second answer.
+//
 // `AppError` is reserved for what stops the whole gesture — the layout does not
 // fit the sheet, or no required field is mapped. Everything else is a `CellIssue`
 // on a row that still arrives.
@@ -74,23 +69,16 @@ use std::collections::HashSet;
 use super::db::TrainsDb;
 use super::hash;
 use super::model::{
-    CellIssue, ColumnBinding, DateOrder, DecimalStyle, FieldKind, ImportPlan, Resolution,
-    RowStatus, Severity, StagedCell, StagedImport, StagedRow, StagedSummary,
+    CellIssue, ColumnBinding, FieldKind, ImportPlan, Resolution, RowStatus, Severity, StagedCell,
+    StagedImport, StagedRow, StagedSummary,
 };
+use super::reading::{read_column, Confirmed, Interpretation, Question};
 use super::resolve;
-use super::sanitise::column::Inference;
-use super::sanitise::{column, date, format, number, text, Parsed, Value};
+use super::sanitise::{date, format, number, text, Parsed, Value};
 use super::sheet::grid::Grid;
 use super::sheet::layout::{Candidate, Layout};
 use crate::error::AppResult;
 use crate::trains::model::PartnerRolle;
-
-struct Interpretation {
-    binding: ColumnBinding,
-    decimal: Inference<DecimalStyle>,
-    date_order: Inference<DateOrder>,
-    dates: bool,
-}
 
 pub struct RowValues {
     pub row: u32,
@@ -114,6 +102,11 @@ fn value_of(values: &[(FieldKind, Value)], field: FieldKind) -> Option<&Value> {
 pub struct Staged {
     pub wire: StagedImport,
     pub values: Vec<RowValues>,
+}
+
+struct Read {
+    interpretation: Interpretation,
+    question: Option<Question>,
 }
 
 pub struct HeldImport {
@@ -165,54 +158,36 @@ pub fn stage(input: StageInput<'_>) -> AppResult<Staged> {
     })
 }
 
-fn interpret(grid: &Grid, plan: &ImportPlan, layout: &Layout) -> Vec<Option<Interpretation>> {
+fn interpret(grid: &Grid, plan: &ImportPlan, layout: &Layout) -> Vec<Option<Read>> {
     plan.columns
         .iter()
         .map(|binding| {
             if binding.field == FieldKind::Ignorieren {
                 return None;
             }
-            let cells = grid.column(binding.index, layout.first_data_row, layout.last_data_row);
-
-            let decimal = match binding.decimal {
-                Some(chosen) => Inference::certain(chosen),
-                None if binding.field == FieldKind::Betrag => {
-                    let values: Vec<&str> = cells.iter().map(|cell| cell.text.as_str()).collect();
-                    column::infer_decimal(&values)
-                }
-                None => Inference::certain(DecimalStyle::German),
-            };
-            let date_order = match binding.date_order {
-                Some(chosen) => Inference::certain(chosen),
-                None if reads_a_date(binding.field) => {
-                    let values: Vec<&str> = cells.iter().map(|cell| cell.text.as_str()).collect();
-                    column::infer_date_order(&values)
-                        .unwrap_or_else(|| Inference::assumed(DateOrder::DayFirst))
-                }
-                None => Inference::certain(DateOrder::DayFirst),
-            };
-
-            let hints: Vec<bool> = cells.iter().map(|cell| cell.date_format).collect();
-            Some(Interpretation {
-                decimal,
-                date_order,
-                dates: column::looks_like_dates(&hints),
-                binding: binding.clone(),
+            let rows = layout.first_data_row..=layout.last_data_row.min(grid.rows);
+            let cells: Vec<(u32, &super::sheet::grid::RawCell)> = rows
+                .filter_map(|row| grid.cell(binding.index, row).map(|cell| (row, cell)))
+                .collect();
+            let texts: Vec<(u32, &str)> = cells
+                .iter()
+                .filter(|(_, cell)| cell.number.is_none() && !cell.text.trim().is_empty())
+                .map(|(row, cell)| (*row, cell.text.as_str()))
+                .collect();
+            let hints: Vec<bool> = cells.iter().map(|(_, cell)| cell.date_format).collect();
+            let (interpretation, question) =
+                read_column(binding, &texts, &hints, Confirmed::default());
+            Some(Read {
+                interpretation,
+                question,
             })
         })
         .collect()
 }
 
-fn reads_a_date(field: FieldKind) -> bool {
-    matches!(
-        field,
-        FieldKind::Datum | FieldKind::EingebautAm | FieldKind::AusgebautAm
-    )
-}
-
 fn stage_row(
     input: &StageInput<'_>,
-    interpretations: &[Option<Interpretation>],
+    interpretations: &[Option<Read>],
     row: u32,
     seen_keys: &mut HashSet<String>,
     partners: &mut resolve::PartnerMemo,
@@ -226,7 +201,7 @@ fn stage_row(
         let cell = input.grid.cell(binding.index, row);
         let raw = cell.map(|cell| cell.text.clone()).unwrap_or_default();
 
-        let Some(interpretation) = interpretations.get(position).and_then(Option::as_ref) else {
+        let Some(read) = interpretations.get(position).and_then(Option::as_ref) else {
             cells.push(StagedCell {
                 column: binding.index,
                 field: binding.field,
@@ -237,12 +212,13 @@ fn stage_row(
             continue;
         };
 
-        match parse_cell(interpretation, input.plan, cell) {
+        match parse_cell(&read.interpretation, input.plan, cell) {
             Ok(Parsed { value, warning }) => {
                 if let Some(message) = warning {
                     issues.push(issue(row, binding, &raw, message, Severity::Warnung));
                 }
-                if let Some(message) = uncertainty(interpretation) {
+                if let Some(question) = read.question.as_ref().filter(|q| q.touches(row)) {
+                    let message = format!("{} Bitte Spalte prüfen.", question.reason);
                     issues.push(issue(row, binding, &raw, message, Severity::Warnung));
                 }
                 cells.push(StagedCell {
@@ -345,7 +321,7 @@ fn stage_row(
     ))
 }
 
-fn parse_cell(
+pub(super) fn parse_cell(
     interpretation: &Interpretation,
     plan: &ImportPlan,
     cell: Option<&super::sheet::grid::RawCell>,
@@ -380,24 +356,6 @@ fn parse_cell(
 
 fn is_serial(interpretation: &Interpretation, serial: f64) -> bool {
     interpretation.dates || date::PLAUSIBLE_SERIALS.contains(&(serial.floor() as i64))
-}
-
-fn uncertainty(interpretation: &Interpretation) -> Option<String> {
-    match interpretation.binding.field {
-        FieldKind::Betrag if !interpretation.decimal.certain => Some(
-            "Tausender- oder Dezimaltrennzeichen nicht eindeutig; als deutsch gelesen (1.234 = 1234). Bitte Spalte prüfen."
-                .into(),
-        ),
-        FieldKind::Datum | FieldKind::EingebautAm | FieldKind::AusgebautAm
-            if !interpretation.date_order.certain =>
-        {
-            Some(
-            "Reihenfolge von Tag und Monat nicht eindeutig; als Tag zuerst gelesen. Bitte Spalte prüfen."
-                .into(),
-            )
-        }
-        _ => None,
-    }
 }
 
 fn issue(
@@ -913,18 +871,20 @@ mod tests {
         }
     }
 
-    /// A column holding BOTH readings — `13.01.` can only be day-first, `01.13.`
+    /// A column holding BOTH readings — `13/01` can only be day-first, `01/13`
     /// only month-first — is the case the warning exists for. `infer_date_order`
     /// answers `None` there, which must stay uncertain rather than fall back to
-    /// a confident default and say nothing.
+    /// a confident default and say nothing — on the row whose value depends on
+    /// the answer.
     #[test]
     fn a_column_contradicting_itself_on_day_and_month_still_warns() {
         let contradictory = Grid::from_text(
             "Tabelle1",
             &[
                 &["Wagennummer", "Datum"],
-                &["21 81 2471 217-3", "13.01.2026"],
-                &["31 80 4740 123-4", "01.13.2026"],
+                &["21 81 2471 217-3", "13/01/2026"],
+                &["21 81 2471 217-3", "01/13/2026"],
+                &["21 81 2471 217-3", "03/04/2026"],
             ],
         );
         let (_f, db) = empty_db("stage-contradiction");
@@ -943,7 +903,7 @@ mod tests {
                 .rows
                 .iter()
                 .flat_map(|row| &row.issues)
-                .any(|issue| issue.message.contains("Reihenfolge von Tag und Monat")),
+                .any(|issue| issue.row == 4 && issue.message.contains("beiden Reihenfolgen")),
             "{:?}",
             staged.rows
         );

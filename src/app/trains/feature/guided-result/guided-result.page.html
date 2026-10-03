@@ -1,0 +1,32 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Import abgeschlossen"
+  [step]="3"
+  [stepCount]="3"
+  [showBack]="false"
+  [nextLabel]="hasNext() ? 'Nächste Datei' : 'Fertig'"
+  nextColor="success"
+  (next)="onNext()"
+>
+  @if (facade.commitReport(); as report) {
+    <section class="guided-result__section" data-testid="guided-result-commit">
+      <h2>{{ report.headline }}</h2>
+      <app-report-view [report]="report" (openFolder)="onOpenFolder($event)" />
+    </section>
+  }
+
+  @if (facade.cleanedReport(); as report) {
+    <section class="guided-result__section" data-testid="guided-result-clean">
+      <h2>{{ report.headline }}</h2>
+      <app-report-view [report]="report" (openFolder)="onOpenFolder($event)" />
+    </section>
+  }
+
+  @if (hasNext()) {
+    <ion-button wizardFooter fill="clear" (click)="onDone()">
+      Fertig
+    </ion-button>
+  }
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

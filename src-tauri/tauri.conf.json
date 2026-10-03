@@ -5,7 +5,7 @@
   "identifier": "de.npdokumentenhilfe.desktop",
   "build": {
     "frontendDist": "../dist/renderer",
-    "devUrl": "http://localhost:4200",
+    "devUrl": "http://localhost:4400",
     "beforeDevCommand": "pnpm start",
     "beforeBuildCommand": "pnpm run build"
   },

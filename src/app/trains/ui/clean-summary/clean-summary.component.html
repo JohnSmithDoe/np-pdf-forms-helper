@@ -1,0 +1,39 @@
+@let counts = summary();
+
+<div class="clean-summary" role="status" data-testid="clean-summary">
+  <ion-chip
+    [color]="counts.fehlerOffen ? 'danger' : 'success'"
+    data-testid="clean-summary-fehler"
+  >
+    <ion-icon
+      [name]="
+        counts.fehlerOffen ? 'alert-circle-outline' : 'checkmark-circle-outline'
+      "
+      aria-hidden="true"
+    />
+    <ion-label>{{ counts.fehlerOffen }} Fehler offen</ion-label>
+  </ion-chip>
+  <ion-chip
+    [color]="counts.deutungenOffen ? 'warning' : 'success'"
+    data-testid="clean-summary-deutungen"
+  >
+    <ion-icon
+      [name]="
+        counts.deutungenOffen
+          ? 'help-circle-outline'
+          : 'checkmark-circle-outline'
+      "
+      aria-hidden="true"
+    />
+    <ion-label>{{ counts.deutungenOffen }} Deutungen zu bestätigen</ion-label>
+  </ion-chip>
+  <ion-chip color="medium" data-testid="clean-summary-formate">
+    <ion-icon name="sparkles-outline" aria-hidden="true" />
+    <ion-label>{{ counts.formatierungen }} Formatierungen</ion-label>
+  </ion-chip>
+  @if (counts.korrigiert) {
+    <ion-chip color="success" data-testid="clean-summary-korrigiert">
+      <ion-label>{{ counts.korrigiert }} korrigiert</ion-label>
+    </ion-chip>
+  }
+</div>

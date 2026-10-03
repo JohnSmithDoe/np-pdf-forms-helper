@@ -13,7 +13,7 @@
 
 import { defineConfig } from '@playwright/test';
 
-const PORT = 4200;
+const PORT = 4400;
 const URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
@@ -28,7 +28,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chrome', use: { channel: 'chrome' } }],
   // `ng serve`, reused if one is already up — `tauri dev` starts one too, and
-  // two servers on 4200 would just fight.
+  // two servers on 4400 would just fight.
   webServer: {
     command: 'pnpm start',
     url: URL,

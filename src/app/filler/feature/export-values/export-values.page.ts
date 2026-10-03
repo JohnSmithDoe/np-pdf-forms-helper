@@ -15,7 +15,7 @@ import { Router } from '@angular/router';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { FillerFacade } from '../../data';
 import { ValueFormComponent } from '../../smart-ui/value-form/value-form.component';
-import { WizardShellComponent } from '../../ui/wizard-shell/wizard-shell.component';
+import { WizardShellComponent } from '../../../@shared/ui/wizard-shell/wizard-shell.component';
 
 @Component({
   selector: 'app-page-export-values',

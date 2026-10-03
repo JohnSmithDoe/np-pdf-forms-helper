@@ -38,7 +38,7 @@ import { FillerFacade } from '../../data';
 import type { FillerDocument, FillerField } from '../../model/filler.types';
 import { FieldDialog } from '../../smart-ui/field-dialog/field.dialog';
 import { FieldEditorComponent } from '../../smart-ui/field-editor/field-editor.component';
-import { WizardShellComponent } from '../../ui/wizard-shell/wizard-shell.component';
+import { WizardShellComponent } from '../../../@shared/ui/wizard-shell/wizard-shell.component';
 
 @Component({
   selector: 'app-page-setup-fields',
