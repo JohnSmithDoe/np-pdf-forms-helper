@@ -28,6 +28,10 @@
 //     the caller's `order` is consulted only for `/` and `-`
 //   • a two-digit year maps 00–79 to 20xx and 80–99 to 19xx, and ALWAYS carries
 //     a warning: the file did not say, and a wrong century is invisible
+//   • a trailing time of day (`2026-10-02 18:48:42`, `02.10.2026 18:48`, ISO's
+//     `T`) is dropped, exactly as a serial's fraction is — telematics and ERP
+//     exports stamp every date with one. Only a tail made of digits, `:` and `.`
+//     WITH a `:` counts, so `17. Juli 2023` keeps its year
 //   • a month NAME (`17. Juli 2023`, `09. Sept. 2024`) is day-first too, and
 //     only in German, Austrian spellings included. The senders write German; an
 //     English table would put `Mai` and `May` side by side to buy nothing. It is
@@ -139,8 +143,9 @@ pub fn parse_text(raw: &str, order: DateOrder) -> Parse {
         return Ok(Parsed::plain(Value::Empty));
     }
 
-    let Some((first, second, third, separator)) = split(&trimmed) else {
-        let Some((day, month, year)) = with_month_name(&trimmed) else {
+    let date_part = without_time(&trimmed);
+    let Some((first, second, third, separator)) = split(date_part) else {
+        let Some((day, month, year)) = with_month_name(date_part) else {
             return Err(invalid(&trimmed));
         };
         let (year, warning) = full_year(&year, &trimmed)?;
@@ -160,6 +165,19 @@ pub fn parse_text(raw: &str, order: DateOrder) -> Parse {
 
     let (year, warning) = full_year(&third, &trimmed)?;
     finish(year, month.value, day.value, &trimmed, warning)
+}
+
+fn without_time(raw: &str) -> &str {
+    let is_time = |tail: &str| {
+        tail.contains(':')
+            && tail
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == ':' || c == '.')
+    };
+    match raw.rsplit_once(' ').or_else(|| raw.split_once('T')) {
+        Some((date, time)) if is_time(time) => date.trim_end(),
+        _ => raw,
+    }
 }
 
 fn full_year(year: &Part, raw: &str) -> Result<(i32, Option<String>), String> {
@@ -429,6 +447,31 @@ mod tests {
         assert!(parsed.warning.is_some());
 
         assert!(parse_text("31. Juni 2025", DayFirst).is_err());
+    }
+
+    // A real telematics export writes `Timestamp` as ISO text with a time; the
+    // time is dropped like a serial's fraction, and the error still quotes the
+    // whole cell.
+    #[test]
+    fn a_trailing_time_of_day_is_dropped() {
+        assert_eq!(
+            date("2026-10-02 18:48:42", DayFirst),
+            Date::new(2026, 10, 2).unwrap()
+        );
+        assert_eq!(
+            date("2026-10-02T18:48:42", DayFirst),
+            Date::new(2026, 10, 2).unwrap()
+        );
+        assert_eq!(
+            date("02.10.2026 18:48", MonthFirst),
+            Date::new(2026, 10, 2).unwrap()
+        );
+        assert_eq!(
+            date("17. Juli 2023 14:30", DayFirst),
+            Date::new(2023, 7, 17).unwrap()
+        );
+        let error = parse_text("31.02.2026 08:00", DayFirst).unwrap_err();
+        assert!(error.contains("08:00"), "{error}");
     }
 
     // English is deliberately not read — `May` is an error, not a fifth month.

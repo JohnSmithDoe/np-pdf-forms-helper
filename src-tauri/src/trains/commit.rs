@@ -1149,6 +1149,46 @@ mod radsatz_tests {
         assert_eq!(db.einbauten().len(), 0);
     }
 
+    // A real telematics export is one row per wagen and nothing this model holds
+    // but the Wagennummer: it is a fleet list. It must write wagen and no events,
+    // and sending it again must write nothing at all.
+    #[test]
+    fn a_fleet_list_writes_wagen_and_no_events_and_is_idempotent() {
+        let (_f, mut db) = fresh("fleet-list");
+        let grid = Grid::from_text(
+            "Sheet1",
+            &[
+                &["Asset", "Stadt"],
+                &["21 81 2471 217-3", "Neuhof"],
+                &["31 80 4740 123-4", "Sehnde"],
+            ],
+        );
+        let plan = radsatz_plan(&[(1, "Asset", FieldKind::Wagennummer)]);
+        let mut results = Vec::new();
+        for _ in 0..2 {
+            let staged = run(&grid, &plan, &db);
+            results.push(
+                commit(
+                    &mut db,
+                    &staged.wire,
+                    &staged.values,
+                    &CommitDecisions {
+                        staging_id: staged.wire.id.clone(),
+                        rows: vec![create_all(2), create_all(3)],
+                        save_template_as: None,
+                    },
+                )
+                .unwrap(),
+            );
+        }
+
+        assert_eq!(results[0].wagen, 2);
+        assert_eq!(results[0].instandhaltungen, 0);
+        assert_eq!(results[1].wagen, 0);
+        assert_eq!(results[1].skipped, 2, "a re-send changes nothing");
+        assert_eq!(db.instandhaltungen_page(None, 0, 10).0.len(), 0);
+    }
+
     // The converse: a row that only records a FITTING is not work done. A real
     // monitoring export has no Datum, Leistung or Betrag at all, and used to
     // leave one empty Instandhaltung per wagen beside its Einbauten.
