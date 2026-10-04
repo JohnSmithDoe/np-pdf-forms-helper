@@ -1,8 +1,9 @@
 // ─── why ────────────────────────────────────────────────────────
-// The customer's master workbook: which file it is, which of its sheets each
-// template refreshes, and the button that writes the refreshed COPY. The
-// original is never written — the page says so, because that is the promise
-// that makes pressing the button safe.
+// The customer's master workbook: which file it is, and how each of its sheets
+// is bound — what it IS, and which template's documents the export wizard
+// suggests for it, with the key and aliases that export remembered. Writing
+// happens in that wizard, started per document from the document list; the
+// original is never written, and the page says so.
 //
 // Every change sends the WHOLE `MasterSettings` back, like `restage_import`
 // takes the whole plan: the backend answers with a fresh `MasterView`, and the
@@ -12,7 +13,7 @@
 // The selects offer only what exists — the workbook's sheets, the bound sheet's
 // header row, the template's columns — so a binding cannot name a column by a
 // typo. A binding whose names went stale (a renamed sheet) still shows, with
-// the stale value, and the refresh reports it rather than this page hiding it.
+// the stale value, and the export reports it rather than this page hiding it.
 //
 // `snapshot` and `feed` are spelled for the user as what they do to the sheet:
 // „Stand ersetzen“ and „Fortlaufend ergänzen“ (docs/decisions.md).
@@ -26,7 +27,7 @@
 // customer as if it were whole is the mistake the banner exists to prevent.
 //
 // The real master has 28 sheets, so a binding is ONE ROW — sheet, what it
-// imports, what refreshes it — and its selects open on demand. Five selects on
+// imports, which template it is exported from — and its selects open on demand. Five selects on
 // each of 28 sheets would make the list unreadable, and most bindings are
 // never edited by hand.
 //
@@ -80,7 +81,6 @@ import {
 import { OverlayService } from '../../../@shared/data/overlays/overlay.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
-import type { ClientReport } from '../../../@shared/model/client.types';
 import { ImportWalkFacade, TrainsFacade } from '../../data';
 import type {
   MasterBinding,
@@ -170,12 +170,6 @@ export class TrainsMasterPage {
     () => this.view()?.settings ?? { bindings: [] }
   );
   protected readonly templates = computed(() => this.facade.templates() ?? []);
-  protected readonly ready = computed(
-    () =>
-      !!this.settings().file &&
-      this.settings().bindings.some((binding) => binding.templateId) &&
-      !this.view()?.problem
-  );
   protected readonly importReady = computed(
     () =>
       !!this.settings().file &&
@@ -368,16 +362,6 @@ export class TrainsMasterPage {
       ...binding,
       aliases: binding.aliases.filter((_, position) => position !== at),
     }));
-  }
-
-  protected async onRefresh(): Promise<void> {
-    let report: ClientReport | undefined;
-    const ok = await this.#reports.run(async () => {
-      report = await this.facade.refreshMaster();
-    });
-    if (!ok || !report) return;
-    const folder = await this.#reports.show(report);
-    if (folder) await this.#reports.run(() => this.facade.openFolder(folder));
   }
 
   #update(index: number, change: (binding: MasterBinding) => MasterBinding) {

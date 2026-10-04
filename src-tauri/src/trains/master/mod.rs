@@ -5,9 +5,10 @@
 // generates — formulas, colours, filters and columns this program invented no
 // meaning for — which is why it has a module of its own and is not an export.
 //
-//   refresh   Schattensystem → master: paste targets refreshed from filed
-//             documents, written into a DATED COPY; the original is never
-//             written. The main goal while the customer still works in Excel.
+//   export    Schattensystem → master: one filed document into the sheets the
+//             user ticks, previewed cell by cell, written into a DATED COPY;
+//             the original is never written. The main goal while the customer
+//             still works in Excel.
 //   mirror    master → Schattensystem: every bound sheet imported, the facts
 //             rebuilt from scratch each run, for checking against the customer.
 //
@@ -27,15 +28,14 @@
 
 pub mod bindings;
 mod book;
+pub mod export;
 pub mod kinds;
 pub mod mirror;
 mod paste;
 pub mod prepare;
-mod refresh;
 mod sheet_view;
 mod source;
 mod view;
 
-pub use refresh::refresh;
 pub use sheet_view::sheet_view;
 pub use view::view;

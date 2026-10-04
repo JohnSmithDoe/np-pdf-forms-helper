@@ -46,8 +46,8 @@ use crate::state::AppState;
 use crate::trains::db::TrainsDb;
 use crate::trains::dokument::{self, Cleaning, Filed};
 use crate::trains::model::{
-    CleanDecisions, EntityDecisions, ImportPlan, MasterSettings, Partner, Radsatz, StagingOrigin,
-    TrainsData, TrainsSettings, Vorhanden, Wagen,
+    CleanDecisions, EntityDecisions, ImportPlan, MasterExportRequest, MasterSettings, Partner,
+    Radsatz, StagingOrigin, TrainsData, TrainsSettings, Vorhanden, Wagen,
 };
 use crate::trains::sheet::grid;
 use crate::trains::stage::{stage, HeldImport, StageInput};
@@ -64,6 +64,7 @@ fn everything(db: &TrainsDb) -> TrainsData {
         .settings(db.settings())
         .counts(db.counts())
         .master_import_run(db.master().import_run.clone())
+        .master_file(db.master_file().clone())
 }
 
 #[tauri::command]
@@ -597,6 +598,7 @@ pub fn save_master(settings: MasterSettings, state: State<'_, AppState>) -> AppR
     let settings = MasterSettings {
         import_run: db.master().import_run.clone(),
         scan: db.master().scan.clone(),
+        last_export: db.master().last_export.clone(),
         ..settings
     };
     db.save_master(settings.clone())?;
@@ -632,9 +634,31 @@ fn stage_master(sheet: &str, state: &AppState) -> AppResult<TrainsData> {
 }
 
 #[tauri::command(async)]
-pub fn refresh_master(state: State<'_, AppState>) -> AppResult<TrainsData> {
-    let run = master::refresh(&state.trains(), &crate::trains::clock::today_iso())?;
-    Ok(TrainsData::nothing().report(run.report()))
+pub fn open_master_export(id: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    let mut db = state.trains();
+    let start = master::export::start(&mut db, &id)?;
+    Ok(TrainsData::nothing().master_export_start(start))
+}
+
+#[tauri::command(async)]
+pub fn preview_master_export(
+    request: MasterExportRequest,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    let run = master::export::preview(&state.trains(), &request)?;
+    Ok(TrainsData::nothing().master_export(run))
+}
+
+#[tauri::command(async)]
+pub fn write_master_export(
+    request: MasterExportRequest,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    let mut db = state.trains();
+    let run = master::export::write(&mut db, &request, &crate::trains::clock::today_iso())?;
+    Ok(TrainsData::nothing()
+        .master_export(run)
+        .master(master::view(db.master())))
 }
 
 fn read_and_stage(path: &Path, sheet: Option<&str>, state: &AppState) -> AppResult<TrainsData> {

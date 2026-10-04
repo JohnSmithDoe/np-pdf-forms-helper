@@ -215,29 +215,17 @@ test.describe('Master-Datei', () => {
     ).toBeVisible();
   });
 
-  test('ohne Datei lässt sich nichts aktualisieren', async ({ page }) => {
+  test('ohne Datei lässt sich nichts importieren', async ({ page }) => {
     await installFakeBackend(page);
     await page.goto('/#/trains/master');
     const screen = page.locator('app-page-trains-master');
     await expect(
       screen.getByText('Noch keine Master-Datei gewählt')
     ).toBeVisible();
-    await expect(screen.getByTestId('master-refresh')).toHaveAttribute(
+    await expect(screen.getByTestId('master-import')).toHaveAttribute(
       'disabled',
       ''
     );
-  });
-
-  test('die Aktualisierung meldet sich mit ihrem Bericht', async ({ page }) => {
-    await installFakeBackend(page, master);
-    await page.goto('/#/trains/master');
-    await page
-      .locator('app-page-trains-master')
-      .getByTestId('master-refresh')
-      .click();
-    await expect(
-      page.getByText('Master-Datei wurde aktualisiert')
-    ).toBeVisible();
   });
 });
 

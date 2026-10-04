@@ -74,14 +74,20 @@ front of a screen, or a piece of the migration that does not exist yet. Settled 
   Playwright covers the screens against a faked transport — but no XLSX has gone in one end of the
   real binary and come out the other. The first `pnpm run tauri:dev` pass should: import a real
   workshop file; check one column of each type against the source in Excel cell by cell; save a
-  template and re-import a second file from the same sender; commit; refresh the master and confirm
-  a hand-kept column travelled with its key; and corrupt one cell to confirm the row is reported
+  template and re-import a second file from the same sender; commit; export a document into the
+  master and confirm a hand-kept column travelled with its key; and corrupt one cell to confirm the row is reported
   rather than the run aborting.
-- **The master refresh writes a dated copy and has run against the real master only from a test.**
-  `trains/master/` refreshed `Telematik`, `aktuelleNodepit` and `ECHO_Eingänge` of the real workbook
-  straight from the three sender files (1.9 s, only those three sheets changed, every dashboard key
-  still found), and Excel opened umya's write cleanly. What has not run: the page at `/trains/master`
-  in `tauri:dev`, the native picker, and a refresh from documents filed through the cleaning walk.
+- **The master write path has run against the real master only from a test.** The former one-click
+  refresh pasted `Telematik`, `aktuelleNodepit` and `ECHO_Eingänge` of the real workbook straight from
+  the three sender files (1.9 s, only those three sheets changed, every dashboard key still found), and
+  Excel opened umya's write cleanly. Its replacement, the EXPORT WIZARD (2026-10-04, `master/export/`,
+  `/trains/master/export/*`), runs the same `paste` and is covered by `cargo test` and Playwright
+  only: it has never run against the real master. Worth measuring there first: a dry run deserialises
+  every ticked sheet of the ORIGINAL on every answer, so a sheet filled to row 1,048,576 makes each
+  preview cost what the read copy was built to avoid — and a sheet that size is refused by the grid's
+  row limit in the first place. Also unrun: the pages in `tauri:dev`. Every sheet recognised by a Wagen
+  key column is bound as the overview kind; the wizard no longer blocks those, it only refuses to
+  SUGGEST one without a remembered template and warns on it.
 - **The master IMPORT (Phase 1: Wagen, Halter, Radsatz, Einbau) has run against the real master only
   from a temporary test**, 2026-10-04, through `mirror::start` / `stage_sheet` / `commit` with every
   group answered „neu anlegen“: dashboard, fitting list and stock in 3.5 s, peak ~750 MB for the test

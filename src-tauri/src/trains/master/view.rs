@@ -10,7 +10,7 @@
 // POSITION, and the field each position is read as. The sheets repeat header
 // names (`einbau_am` twice, `an_wagen` twice), so a name is not an address. The
 // field comes from the SAME rebind the import runs (`mirror::plan_of_headers` +
-// `recognise::rebind`) with the binding's kind, or its refresh template where it
+// `recognise::rebind`) with the binding's kind, or its template where it
 // has no kind, so "column X is field F" is decided once, in Rust.
 // ────────────────────────────────────────────────────────────────
 

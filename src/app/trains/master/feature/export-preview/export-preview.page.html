@@ -1,0 +1,66 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Vorschau"
+  [phase]="phase"
+  phaseColor="secondary"
+  [step]="3"
+  [stepCount]="steps"
+  nextLabel="Exportieren"
+  nextColor="success"
+  [nextDisabled]="!facade.writable()"
+  (back)="onBack()"
+  (next)="onWrite()"
+>
+  @for (sheet of facade.preview()?.sheets ?? []; track sheet.sheet) {
+    <ion-card data-testid="export-preview-sheet">
+      <ion-card-header>
+        <ion-card-title>{{ sheet.sheet }}</ion-card-title>
+        <ion-card-subtitle>
+          @if (sheet.problem) {
+            wird nicht geschrieben
+          } @else {
+            {{ sheet.changed }} Zelle(n) ändern sich
+          }
+        </ion-card-subtitle>
+      </ion-card-header>
+      <ion-card-content>
+        @if (sheet.problem) {
+          <ion-note color="danger">{{ sheet.problem }}</ion-note>
+        } @else {
+          <p>{{ sheet.line }}</p>
+          @for (note of sheet.notes; track $index) {
+            <p>
+              <ion-note>{{ note }}</ion-note>
+            </p>
+          }
+          <app-cell-changes
+            [changes]="sheet.changes"
+            [changed]="sheet.changed"
+          />
+        }
+      </ion-card-content>
+    </ion-card>
+  }
+
+  <ion-list lines="none">
+    <ion-item>
+      <ion-checkbox
+        [checked]="facade.remember()"
+        justify="start"
+        labelPlacement="end"
+        (ionChange)="onRemember($event)"
+        data-testid="export-remember"
+      >
+        Blätter und Spalten für die Vorlage „{{ facade.start()?.template }}“
+        merken
+      </ion-checkbox>
+    </ion-item>
+  </ion-list>
+
+  <ion-note>
+    Erst mit „Exportieren“ wird geschrieben — als neue Kopie mit Datum neben der
+    Master-Datei. Das Original bleibt unverändert.
+  </ion-note>
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

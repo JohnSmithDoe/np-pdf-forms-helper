@@ -19,6 +19,13 @@
 // Partner, Wagen and Radsätze are one page with the kind in route `data`. All
 // steps are guarded in `intake.guards.ts`.
 //
+// `master-file` is the customer's master workbook taken in as a FILE — picked,
+// cleaned, kept in versions — and shares nothing with `master/*` below.
+//
+// `master/export/*` is the third walk: one filed document into the customer's
+// master workbook — sheets, column check, preview, result — started from the
+// document list.
+//
 // The entry load hangs on a PATHLESS parent so every route below it shares one
 // resolver run. Any of the six can be the first one reached, and the alternative
 // is the same `load()` in six page constructors.
@@ -30,6 +37,9 @@ import {
   cleaningGuard,
   importResultGuard,
   importWalkGuard,
+  masterExportGuard,
+  masterExportPreviewGuard,
+  masterExportResultGuard,
 } from './intake.guards';
 import { trainsDataResolver } from './trains-data.resolver';
 
@@ -155,10 +165,60 @@ const pages: Routes = [
     ],
   },
   {
+    path: 'master-file',
+    title: 'Master-Datei',
+    loadComponent: () =>
+      import('../feature/master-file/master-file.page').then(
+        (m) => m.MasterFilePage
+      ),
+  },
+  {
     path: 'master',
     title: 'Master-Datei',
     loadComponent: () =>
       import('../feature/master/master.page').then((m) => m.TrainsMasterPage),
+  },
+  {
+    path: 'master/export',
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: '/trains/documents' },
+      {
+        path: 'sheets',
+        title: 'Blätter wählen',
+        canActivate: [masterExportGuard],
+        loadComponent: () =>
+          import('../master/feature/export-sheets/export-sheets.page').then(
+            (m) => m.ExportSheetsPage
+          ),
+      },
+      {
+        path: 'structure',
+        title: 'Spalten abgleichen',
+        canActivate: [masterExportPreviewGuard],
+        loadComponent: () =>
+          import('../master/feature/export-structure/export-structure.page').then(
+            (m) => m.ExportStructurePage
+          ),
+      },
+      {
+        path: 'preview',
+        title: 'Vorschau',
+        canActivate: [masterExportPreviewGuard],
+        loadComponent: () =>
+          import('../master/feature/export-preview/export-preview.page').then(
+            (m) => m.ExportPreviewPage
+          ),
+      },
+      {
+        path: 'result',
+        title: 'Export abgeschlossen',
+        canActivate: [masterExportResultGuard],
+        loadComponent: () =>
+          import('../master/feature/export-result/export-result.page').then(
+            (m) => m.ExportResultPage
+          ),
+      },
+    ],
   },
   {
     path: 'master/sheets/:sheet',

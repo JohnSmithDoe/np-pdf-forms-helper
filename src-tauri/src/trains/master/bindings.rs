@@ -1,15 +1,15 @@
 // ─── why ────────────────────────────────────────────────────────
 // Every sheet of the master is bound without a click. A binding is DERIVED
 // from the sheet's header row: the kind that claims it (`kinds::recognise`),
-// and as refresh source the one template whose mapped headers it carries
+// and as export source the one template whose mapped headers it carries
 // (`recognise::matching`, and only when exactly one does). A sheet no kind
 // claims is bound view-only — it still gets a sheet view, it is just not
 // imported. What the user changes by hand stays: `sync` only ADDS bindings for
 // sheets not bound yet, and `auto` marks the ones nobody touched.
 //
-// ONLY MAPPING, IMPORT AND A SHEET VIEW READ THE FILE. `sync` runs when a file
-// is picked, on „Standardzuordnung“, when an import starts and when a sheet
-// view opens — never for the settings page, which answers from what the last
+// ONLY MAPPING, IMPORT, EXPORT AND A SHEET VIEW READ THE FILE. `sync` runs when
+// a file is picked, on „Standardzuordnung“, when an import starts, when the
+// export wizard opens and when a sheet view opens — never for the settings page, which answers from what the last
 // read stored (`MasterSettings.scan`).
 // Reading a header means deserialising the whole sheet — umya has no partial
 // read — and five of the customer's sheets are filled down to row 1,048,576
@@ -81,16 +81,17 @@ pub fn sync(db: &mut TrainsDb, reset: bool) -> AppResult<()> {
 pub fn default(sheet: &MasterSheet, templates: &[ImportTemplate]) -> MasterBinding {
     MasterBinding {
         sheet: sheet.name.clone(),
-        template_id: refresh_source(&sheet.headers, templates).unwrap_or_default(),
+        template_id: source_template(&sheet.headers, templates).unwrap_or_default(),
         kind: kinds::recognise(&sheet.headers),
         mode: MasterMode::Snapshot,
         key: None,
         aliases: Vec::new(),
+        ignored: Vec::new(),
         auto: true,
     }
 }
 
-fn refresh_source(headers: &[String], templates: &[ImportTemplate]) -> Option<String> {
+fn source_template(headers: &[String], templates: &[ImportTemplate]) -> Option<String> {
     let columns: Vec<ColumnBinding> = headers
         .iter()
         .enumerate()
@@ -169,8 +170,8 @@ mod tests {
     }
 
     #[test]
-    fn a_shipped_template_whose_headers_the_sheet_carries_becomes_its_refresh_source() {
-        let folder = TempDir::new("bindings-refresh");
+    fn a_shipped_template_whose_headers_the_sheet_carries_becomes_its_source_template() {
+        let folder = TempDir::new("bindings-source");
         let mut db = master(&folder);
         sync(&mut db, false).unwrap();
         let telematik = &db.master().bindings[4];

@@ -44,8 +44,15 @@
 //
 // The master workbook is `seed.masterSheets` — its sheet names and header rows,
 // which is all `get_master` reads of it — and `seed.masterPicker` the path the
-// file picker returns. `refresh_master` writes nothing and only reports one line
-// per binding: snapshot, feed, typing and formulas are `cargo test`'s.
+// file picker returns.
+//
+// The master EXPORT wizard is faked shallow. `open_master_export` offers every
+// seeded sheet, suggested ones first — those bound to the document's template —
+// and warning on an overview without a template; which sheets Rust would suggest beyond that is
+// `cargo test`'s. `preview_master_export` and `write_master_export` serve
+// `seed.masterExport[sheet]` — hand-written runs with their structure and cell
+// changes — and only ECHO the request's answers back: an answered column leaves
+// `open`, nothing is pasted or diffed. The write records `lastExport`.
 // Recognising a sheet by its header row is `kinds::recognise`'s too, so the
 // defaults are SEEDED (`seed.masterDefaults`): a picked new path and
 // `reset_master_bindings` apply them, the same path keeps what is bound.
@@ -59,6 +66,11 @@
 // is still open and drops it after the last, as `everything()` does — the
 // store reads that absence as "closed". `get_master_sheet` answers `seed.masterSheetViews[sheet]`,
 // else the bound sheet's headers with no rows: building the view is Rust's.
+//
+// The master FILE is `seed.masterFile`, and `seed.masterFilePick` is the
+// cleaned version `clean_master_file` answers in place of picker + cleaning —
+// what the cleaning changes is `master_file::clean`'s and proved by `cargo
+// test`. The pick lands as `pending`; accept puts it first, discard drops it.
 // ────────────────────────────────────────────────────────────────
 
 import type { Page } from '@playwright/test';
@@ -385,9 +397,94 @@ export interface FakeMasterSettings {
     mode: 'snapshot' | 'feed';
     key?: string;
     aliases: { master: string; source: string }[];
+    ignored?: string[];
     auto?: boolean;
   }[];
   importRun?: { startedAt: string; sheets: string[]; done: string[] };
+  lastExport?: string;
+}
+
+export interface FakeMasterFileVersion {
+  id: string;
+  name: string;
+  folder: string;
+  original: string;
+  cleaned: string;
+  originalHash: string;
+  cleanedHash: string;
+  bereinigtAm: string;
+  uebernommenAm?: string;
+  report: {
+    sheets: {
+      sheet: string;
+      rowsCut: number;
+      tailRowsCut: number;
+      formulaTail?: number;
+      trimmed: number;
+      numbers: number;
+      dates: number;
+      examples: {
+        row: number;
+        column: number;
+        header: string;
+        raw: string;
+        clean: string;
+        rule: 'trimmed' | 'number' | 'date';
+      }[];
+      notes: {
+        row: number;
+        column: number;
+        header: string;
+        raw: string;
+        reason: string;
+      }[];
+      noteCount: number;
+    }[];
+    totals: {
+      rowsCut: number;
+      tailRowsCut: number;
+      trimmed: number;
+      numbers: number;
+      dates: number;
+      notes: number;
+    };
+  };
+}
+
+export interface FakeMasterFile {
+  versions: FakeMasterFileVersion[];
+  pending?: FakeMasterFileVersion;
+}
+
+export interface FakeExportSheetRun {
+  matched: string[];
+  targets: string[];
+  open: string[];
+  conflicts?: string[];
+  problem?: string;
+  line: string;
+  notes?: string[];
+  changed: number;
+  changes: {
+    cell: string;
+    row: number;
+    column: string;
+    key: string;
+    before: string;
+    after: string;
+  }[];
+}
+
+interface FakeExportRequest {
+  dokumentId: string;
+  base: string;
+  sheets: {
+    sheet: string;
+    key?: string;
+    aliases: { master: string; source: string }[];
+    ignored: string[];
+  }[];
+  remember: boolean;
 }
 
 export interface FakeMasterSheetView {
@@ -434,6 +531,12 @@ export interface FakeSeed {
   masterStaging?: FakeStaging | null;
   /** What `get_master_sheet` answers per sheet name. */
   masterSheetViews?: Record<string, FakeMasterSheetView>;
+  /** What the master export's dry run and write answer per sheet name. */
+  masterExport?: Record<string, FakeExportSheetRun>;
+  /** The master file's versions and its untaken pick. */
+  masterFile?: FakeMasterFile;
+  /** What `clean_master_file` answers in place of picker and cleaning; `null` = cancelled. */
+  masterFilePick?: FakeMasterFileVersion | null;
   /** Command name → the German lines it should reject with. */
   failures?: Record<string, string[]>;
 }
@@ -494,6 +597,9 @@ export function install(seed: FakeSeed): void {
     masterDefaults: FakeMasterSettings['bindings'];
     masterStaging: FakeStaging | null;
     masterSheetViews: Record<string, FakeMasterSheetView>;
+    masterExport: Record<string, FakeExportSheetRun>;
+    masterFile: FakeMasterFile;
+    masterFilePick: FakeMasterFileVersion | null;
     committed: number[];
     failures: Record<string, string[]>;
     calls: RecordedCall[];
@@ -522,6 +628,9 @@ export function install(seed: FakeSeed): void {
     masterDefaults: seed.masterDefaults ?? [],
     masterStaging: seed.masterStaging ?? null,
     masterSheetViews: seed.masterSheetViews ?? {},
+    masterExport: seed.masterExport ?? {},
+    masterFile: seed.masterFile ?? { versions: [] },
+    masterFilePick: seed.masterFilePick ?? null,
     committed: [],
     failures: seed.failures ?? {},
     calls: [],
@@ -562,6 +671,7 @@ export function install(seed: FakeSeed): void {
     settings: copy(state.settings),
     counts: counts(),
     masterImportRun: openRun(),
+    masterFile: copy(state.masterFile),
   });
 
   const openRun = () => {
@@ -584,6 +694,41 @@ export function install(seed: FakeSeed): void {
       },
     };
   };
+
+  const baseName = (path: string) => path.split(/[\\/]/).pop() ?? path;
+
+  const exportRun = (request: FakeExportRequest) => ({
+    dokumentId: request.dokumentId,
+    base: request.base,
+    sheets: request.sheets.map((choice) => {
+      const seeded = state.masterExport[choice.sheet] ?? {
+        matched: [],
+        targets: [],
+        open: [],
+        line: `„${choice.sheet}“: übernommen.`,
+        changed: 0,
+        changes: [],
+      };
+      const answered = new Set([
+        ...choice.aliases.map((alias) => alias.source),
+        ...choice.ignored,
+      ]);
+      const mode =
+        state.master.bindings.find((entry) => entry.sheet === choice.sheet)
+          ?.mode ?? 'snapshot';
+      return {
+        ...copy(seeded),
+        sheet: choice.sheet,
+        mode,
+        key: choice.key,
+        aliases: copy(choice.aliases),
+        ignored: copy(choice.ignored),
+        open: seeded.open.filter((column) => !answered.has(column)),
+        conflicts: copy(seeded.conflicts ?? []),
+        notes: copy(seeded.notes ?? []),
+      };
+    }),
+  });
 
   const scanned = () => (state.scan ? { scan: copy(state.scan) } : {});
 
@@ -1021,21 +1166,109 @@ export function install(seed: FakeSeed): void {
       return { staging: copy(state.staging), counts: counts() };
     },
 
-    refresh_master: () => {
+    open_master_export: (args) => {
+      const dokument = state.dokumente.find(
+        (entry) => entry.id === String(args['id'])
+      );
+      if (!dokument) {
+        return Promise.reject({
+          messages: ['Das Dokument gibt es nicht mehr.'],
+        });
+      }
+      const file = state.master.file;
+      if (!file) {
+        return Promise.reject({
+          messages: ['Es ist noch keine Master-Datei gewählt.'],
+        });
+      }
+      const bases = [{ path: file, name: baseName(file), copy: false }];
+      const last = state.master.lastExport;
+      if (last) bases.push({ path: last, name: baseName(last), copy: true });
+      return {
+        masterExportStart: {
+          dokumentId: dokument.id,
+          dokument: dokument.name,
+          template: dokument.templateName,
+          bases,
+          base: last ?? file,
+          sheets: state.masterSheets
+            .map((sheet) => {
+              const bound = state.master.bindings.find(
+                (entry) => entry.sheet === sheet.name
+              );
+              const overview = bound?.kind === 'wagenliste';
+              const remembered = bound?.templateId === dokument.templateId;
+              return {
+                sheet: sheet.name,
+                kind: bound?.kind,
+                mode: bound?.mode ?? 'snapshot',
+                key: bound?.key,
+                aliases: copy(bound?.aliases ?? []),
+                ignored: copy(bound?.ignored ?? []),
+                matched: state.masterExport[sheet.name]?.matched.length ?? 0,
+                suggested: remembered,
+                reason: remembered
+                  ? `zugeordnet zur Vorlage „${dokument.templateName}“`
+                  : undefined,
+                warning:
+                  overview && !bound?.templateId
+                    ? 'Als Übersicht zugeordnet: Formeln und Notizen des Kunden können beim Schreiben ersetzt werden.'
+                    : undefined,
+              };
+            })
+            .sort((a, b) => Number(b.suggested) - Number(a.suggested)),
+        },
+      };
+    },
+
+    preview_master_export: (args) => ({
+      masterExport: exportRun(args['request'] as unknown as FakeExportRequest),
+    }),
+
+    write_master_export: (args) => {
+      const run = exportRun(args['request'] as unknown as FakeExportRequest);
       const file = state.master.file ?? '';
       const folder = file.replace(/[\\/][^\\/]*$/, '');
+      const target = `${folder}/Master 2026-10-04.xlsx`;
+      state.master = { ...state.master, lastExport: target };
       return {
-        message: report(
-          'Master-Datei wurde aktualisiert',
-          [
-            ...state.master.bindings.map(
-              (entry) => `„${entry.sheet}“: 3 Zeile(n) übernommen (vorher 3).`
-            ),
-            'Geschrieben als „Master 2026-10-03.xlsx“; das Original ist unverändert.',
-          ],
-          folder
-        ),
+        masterExport: { ...run, target, folder },
+        ...masterView(),
       };
+    },
+
+    get_master_file: () => ({ masterFile: copy(state.masterFile) }),
+
+    clean_master_file: () => {
+      if (!state.masterFilePick) return {};
+      state.masterFile = {
+        ...state.masterFile,
+        pending: copy(state.masterFilePick),
+      };
+      return { masterFile: copy(state.masterFile) };
+    },
+
+    accept_master_file: () => {
+      const pending = state.masterFile.pending;
+      if (!pending) {
+        return Promise.reject({
+          messages: [
+            'Es liegt keine bereinigte Master-Datei zur Übernahme vor.',
+          ],
+        });
+      }
+      state.masterFile = {
+        versions: [
+          { ...pending, uebernommenAm: '2026-10-04' },
+          ...state.masterFile.versions,
+        ],
+      };
+      return { masterFile: copy(state.masterFile) };
+    },
+
+    discard_master_file: () => {
+      state.masterFile = { versions: state.masterFile.versions };
+      return { masterFile: copy(state.masterFile) };
     },
 
     create_trains_export: () => ({

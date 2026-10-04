@@ -46,7 +46,7 @@
 // `TrainsSettings` is the Schattensystem's own configuration and lives in the
 // backend, not in localStorage: it changes what Rust writes into cleaned copies
 // and exports, so Rust has to hold it. `MasterSettings` likewise: the master
-// workbook and which of its sheets each template refreshes. `MasterView` is the
+// workbook and which of its sheets each template's documents are exported to. `MasterView` is the
 // settings plus what only the workbook can say — its sheets and the headers of
 // the bound ones — and a `problem` when the file cannot be read. A binding's
 // `kind` says what the sheet IS and makes it part of the master import;
@@ -54,6 +54,12 @@
 // meaningfully — `save_master` keeps the stored one. `MasterSheetView` is one
 // bound sheet as the mirror holds it, built whole in Rust: the frontend renders
 // its columns and rows and decides nothing about them.
+//
+// The master EXPORT wizard sends a `MasterExportRequest` WHOLE on every change
+// and gets a `MasterExportRun` back — the dry run, or after writing the copy,
+// the same shape plus `target`. Per sheet, `open` are the document columns that
+// still need an answer (an alias onto one of `targets`, or `ignored`);
+// `conflicts` are remembered answers the sheet no longer fits, already dropped.
 //
 // A staging says where it came from in `origin`: a file being mapped, a filed
 // document, or one sheet of the master. The walk matches its staging by it.
@@ -69,6 +75,7 @@
 // ────────────────────────────────────────────────────────────────
 
 import type { ClientReport } from '../../@shared/model/client.types';
+import type { MasterFile } from './master-file';
 
 export type DecimalStyle = 'german' | 'english';
 export type DateOrder = 'dayFirst' | 'monthFirst';
@@ -94,6 +101,7 @@ export interface MasterBinding {
   mode: MasterMode;
   key?: string;
   aliases: MasterAlias[];
+  ignored?: string[];
   auto: boolean;
 }
 
@@ -113,6 +121,7 @@ export interface MasterSettings {
   bindings: MasterBinding[];
   importRun?: MasterImportRun;
   scan?: MasterScan;
+  lastExport?: string;
 }
 
 export interface MasterSheet {
@@ -146,6 +155,82 @@ export interface MasterSheetView {
   columns: SheetColumn[];
   rows: SheetRow[];
   problem?: string;
+}
+
+export interface MasterExportChoice {
+  sheet: string;
+  key?: string;
+  aliases: MasterAlias[];
+  ignored: string[];
+}
+
+export interface MasterExportRequest {
+  dokumentId: string;
+  base: string;
+  sheets: MasterExportChoice[];
+  remember: boolean;
+}
+
+export interface MasterExportBase {
+  path: string;
+  name: string;
+  copy: boolean;
+}
+
+export interface MasterExportSheet {
+  sheet: string;
+  kind?: SheetKind;
+  mode: MasterMode;
+  key?: string;
+  aliases: MasterAlias[];
+  ignored: string[];
+  matched: number;
+  suggested: boolean;
+  reason?: string;
+  warning?: string;
+}
+
+export interface MasterExportStart {
+  dokumentId: string;
+  dokument: string;
+  template: string;
+  bases: MasterExportBase[];
+  base: string;
+  sheets: MasterExportSheet[];
+}
+
+export interface CellChange {
+  cell: string;
+  row: number;
+  column: string;
+  key: string;
+  before: string;
+  after: string;
+}
+
+export interface MasterExportSheetRun {
+  sheet: string;
+  mode: MasterMode;
+  key?: string;
+  aliases: MasterAlias[];
+  ignored: string[];
+  matched: string[];
+  targets: string[];
+  open: string[];
+  conflicts: string[];
+  problem?: string;
+  line: string;
+  notes: string[];
+  changed: number;
+  changes: CellChange[];
+}
+
+export interface MasterExportRun {
+  dokumentId: string;
+  base: string;
+  sheets: MasterExportSheetRun[];
+  target?: string;
+  folder?: string;
 }
 export type ReaderKind = 'headerRow' | 'manual';
 export type PartnerRolle = 'halter' | 'eigentuemer' | 'werkstatt';
@@ -575,5 +660,8 @@ export interface TrainsData {
   master?: MasterView;
   masterSheet?: MasterSheetView;
   masterImportRun?: MasterImportRun;
+  masterExportStart?: MasterExportStart;
+  masterExport?: MasterExportRun;
+  masterFile?: MasterFile;
   message?: ClientReport;
 }

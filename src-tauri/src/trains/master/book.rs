@@ -1,8 +1,8 @@
 // ─── why ────────────────────────────────────────────────────────
 // The master workbook opened the one way it may be: `lazy_read`, so only the
 // sheets a run touches are deserialised. umya writes an undeserialised sheet
-// back from its raw bytes, so on the real master 25 of 28 sheets leave the
-// refresh byte-identical — measured, with the losses that remain, in
+// back from its raw bytes, so on the real master 25 of 28 sheets leave a
+// three-sheet write byte-identical — measured, with the losses that remain, in
 // `docs/footguns.md`. A full read of the same file took 2.6 GB.
 //
 // A sheet is reached through `read_sheet(index)` and `sheet_mut(index)`, NEVER

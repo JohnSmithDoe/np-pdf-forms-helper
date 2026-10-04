@@ -1,0 +1,110 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/trains" text="Zurück" />
+    </ion-buttons>
+    <ion-title>Master-Datei</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="onPick()" data-testid="master-file-pick">
+        Master-Datei wählen
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  @if (facade.pending(); as pending) {
+    <ion-card data-testid="master-file-pending">
+      <ion-card-header>
+        <ion-card-title>{{ pending.name }}</ion-card-title>
+        <ion-card-subtitle>
+          Bereinigt am {{ pending.bereinigtAm }} · noch nicht übernommen
+        </ion-card-subtitle>
+      </ion-card-header>
+      <ion-card-content>
+        <app-master-file-report [report]="pending.report" />
+        <p>
+          <ion-button
+            color="success"
+            (click)="onAccept()"
+            data-testid="master-file-accept"
+          >
+            Übernehmen
+          </ion-button>
+          <ion-button
+            fill="outline"
+            color="danger"
+            (click)="onDiscard()"
+            data-testid="master-file-discard"
+          >
+            Verwerfen
+          </ion-button>
+          <ion-button fill="clear" (click)="onOpen(pending.cleaned)">
+            Bereinigte Datei
+          </ion-button>
+          <ion-button fill="clear" (click)="onOpenFolder(pending.folder)">
+            Ordner öffnen
+          </ion-button>
+        </p>
+      </ion-card-content>
+    </ion-card>
+  }
+
+  @if (facade.current(); as current) {
+    <ion-card data-testid="master-file-current">
+      <ion-card-header>
+        <ion-card-title>{{ current.name }}</ion-card-title>
+        <ion-card-subtitle>
+          Aktuelle Fassung · bereinigt am {{ current.bereinigtAm }}
+          @if (current.uebernommenAm) {
+            · übernommen am {{ current.uebernommenAm }}
+          }
+        </ion-card-subtitle>
+      </ion-card-header>
+      <ion-card-content>
+        <p>
+          <ion-button fill="clear" (click)="onOpenFolder(current.folder)">
+            Ordner öffnen
+          </ion-button>
+          <ion-button fill="clear" (click)="onOpen(current.original)">
+            Original
+          </ion-button>
+          <ion-button fill="clear" (click)="onOpen(current.cleaned)">
+            Bereinigte Datei
+          </ion-button>
+        </p>
+        <app-master-file-report [report]="current.report" />
+      </ion-card-content>
+    </ion-card>
+  } @else if (!facade.pending()) {
+    <ion-note data-testid="master-file-empty">
+      Noch keine Master-Datei. „Master-Datei wählen“ kopiert sie ins Programm
+      und bereinigt sie: leere Zeilen am Ende, Zahlen und Daten, die als Text
+      gespeichert sind, und Leerzeichen am Rand. Formeln und Zeilen innerhalb
+      der Daten bleiben unberührt; die Datei selbst wird nie verändert.
+    </ion-note>
+  }
+
+  @if (facade.older().length) {
+    <ion-list lines="full" data-testid="master-file-older">
+      <ion-list-header>Frühere Fassungen</ion-list-header>
+      @for (version of facade.older(); track version.id) {
+        <ion-item>
+          <ion-label class="ion-text-wrap">
+            <h2>{{ version.name }}</h2>
+            <p>bereinigt am {{ version.bereinigtAm }}</p>
+          </ion-label>
+          <ion-button
+            slot="end"
+            fill="clear"
+            (click)="onOpenFolder(version.folder)"
+          >
+            Ordner öffnen
+          </ion-button>
+        </ion-item>
+      }
+    </ion-list>
+  }
+</ion-content>
+
+<app-busy-overlay [busy]="trains.busy()" />

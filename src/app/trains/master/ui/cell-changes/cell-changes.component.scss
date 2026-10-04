@@ -1,0 +1,18 @@
+:host {
+  display: block;
+}
+
+.cell-changes {
+  overflow-x: auto;
+}
+
+.cell-changes table {
+  border-collapse: collapse;
+}
+
+.cell-changes th,
+.cell-changes td {
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  text-align: start;
+  vertical-align: top;
+}

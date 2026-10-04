@@ -1,0 +1,68 @@
+<p data-testid="master-file-totals">
+  <ion-chip
+    >{{ report().totals.rowsCut }} leere Zeilen am Ende entfernt</ion-chip
+  >
+  @if (report().totals.tailRowsCut) {
+    <ion-chip color="warning" data-testid="master-file-tail-total">
+      {{ report().totals.tailRowsCut }} Formelzeilen am Ende entfernt
+    </ion-chip>
+  }
+  <ion-chip>{{ report().totals.numbers }} Zahlen statt Text</ion-chip>
+  <ion-chip>{{ report().totals.dates }} Daten statt Text</ion-chip>
+  <ion-chip>{{ report().totals.trimmed }} Leerzeichen entfernt</ion-chip>
+  <ion-chip [color]="report().totals.notes ? 'warning' : 'success'">
+    {{ report().totals.notes }} Hinweise
+  </ion-chip>
+</p>
+<ion-note>
+  Formeln und Zeilen innerhalb der Daten bleiben unverändert. Steht unter den
+  Daten bis zum Blattende nur noch 0 oder #NV, bleiben davon 3 Zeilen stehen,
+  der Rest wird entfernt.
+  @if (unchanged()) {
+    {{ unchanged() }} von {{ report().sheets.length }} Blättern hatten nichts zu
+    bereinigen und sind unverändert übernommen.
+  }
+</ion-note>
+
+<ion-list lines="full" data-testid="master-file-sheets">
+  @for (sheet of changed(); track sheet.sheet) {
+    <ion-list-header>{{ sheet.sheet }}</ion-list-header>
+    <ion-item data-testid="master-file-sheet">
+      <ion-label class="ion-text-wrap">
+        <p>
+          @if (sheet.rowsCut) {
+            {{ sheet.rowsCut }} leere Zeilen am Ende entfernt ·
+          }
+          {{ sheet.numbers }} Zahlen, {{ sheet.dates }} Daten,
+          {{ sheet.trimmed }} Leerzeichen
+        </p>
+        @if (sheet.formulaTail) {
+          <p data-testid="master-file-tail">
+            Ab Zeile {{ sheet.formulaTail }} standen bis zum Blattende nur noch
+            Formeln mit 0 oder #NV: Zeilen {{ sheet.formulaTail }} bis
+            {{ sheet.formulaTail + 2 }} bleiben, {{ sheet.tailRowsCut }} Zeilen
+            darunter sind entfernt.
+          </p>
+        }
+        @for (note of sheet.notes; track $index) {
+          <p>
+            Hinweis Zeile {{ note.row }}, „{{ note.header }}“: „{{ note.raw }}“
+            — {{ note.reason }}
+          </p>
+        }
+        @if (sheet.noteCount > sheet.notes.length) {
+          <p>
+            … und {{ sheet.noteCount - sheet.notes.length }} weitere Hinweise im
+            Protokoll.
+          </p>
+        }
+        @for (change of sheet.examples; track $index) {
+          <p>
+            Zeile {{ change.row }}, „{{ change.header }}“: „{{ change.raw }}“ →
+            „{{ change.clean }}“ ({{ labels[change.rule] }})
+          </p>
+        }
+      </ion-label>
+    </ion-item>
+  }
+</ion-list>

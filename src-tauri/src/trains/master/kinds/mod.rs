@@ -7,7 +7,7 @@
 //
 // Each kind owns three answers, and this file only dispatches them: whether a
 // header row is OF that kind, the template its sheet is read with, and whether
-// the refresh writes it back.
+// the export may SUGGEST it (an overview is written only when ticked).
 //
 // RECOGNITION IS BY HEADER, never by sheet name — the names are the customer's
 // and carry firms and people. The most specific kind is asked first: a fitting
@@ -122,7 +122,7 @@ mod tests {
     // The dashboard is formulas over the other sheets plus the customer's own
     // notes; pasting into it would destroy both.
     #[test]
-    fn the_dashboard_is_never_written_back() {
+    fn the_dashboard_is_never_suggested_for_writing() {
         assert!(!updates(SheetKind::Wagenliste));
     }
 }

@@ -37,6 +37,11 @@
 // is a banner above the tiles, from `masterImportRun` — which rides on the list
 // answers, so the dashboard learns it without opening the workbook. It links to
 // the master page rather than continuing here: that page owns the run.
+//
+// The master tile and that banner exist only while `masterEnabled` is on; the
+// master workbook is unfinished.
+// „Master-Datei“ right after Dokumente is NOT that tile: it takes the customer's
+// workbook in as a file (`/trains/master-file`) and is always there.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -81,8 +86,9 @@ import {
   trainOutline,
   warningOutline,
 } from 'ionicons/icons';
+import { SettingsService } from '../../../@shared/data/settings/settings.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
-import { TrainsFacade } from '../../data';
+import { MasterFileFacade, TrainsFacade } from '../../data';
 import type { ClientReport } from '../../../@shared/model/client.types';
 import type { PartnerRolle } from '../../model/trains.types';
 
@@ -123,8 +129,10 @@ interface DashboardTile {
 })
 export class TrainsDashboardPage {
   readonly #facade = inject(TrainsFacade);
+  readonly #masterFile = inject(MasterFileFacade);
   readonly #router = inject(Router);
   readonly #reports = inject(ReportPresenterService);
+  readonly #masterEnabled = inject(SettingsService).masterEnabled;
 
   protected readonly loaded = this.#facade.loaded;
 
@@ -134,6 +142,15 @@ export class TrainsDashboardPage {
     icon: 'color-wand-outline',
     description:
       'Einen Ordner oder Dateien einlesen, erkennen lassen und bereinigen. Ins Schattensystem kommt dabei noch nichts.',
+  };
+
+  readonly #masterTile: DashboardTile = {
+    route: '/trains/master',
+    label: 'Master-Datei',
+    icon: 'grid-outline',
+    description:
+      'Die Master-Datei ins Schattensystem importieren, Blatt für Blatt ansehen und als Kopie mit Datum auffrischen.',
+    subtitle: 'Import, Ansicht, Kopie',
   };
 
   protected readonly tiles = computed<DashboardTile[]>(() => {
@@ -147,6 +164,16 @@ export class TrainsDashboardPage {
         description:
           'Die bereinigten Dateien — von hier aus ins Schattensystem importieren.',
         count: loaded ? counts.dokumente : undefined,
+      },
+      {
+        route: '/trains/master-file',
+        label: 'Master-Datei',
+        icon: 'grid-outline',
+        description:
+          'Die Master-Datei wählen und bereinigen. Formeln und Zeilen bleiben unberührt.',
+        subtitle: this.#masterFile.current()?.bereinigtAm
+          ? `Stand ${this.#masterFile.current()?.bereinigtAm}`
+          : 'Noch keine gewählt',
       },
       {
         route: '/trains/wagen',
@@ -197,14 +224,7 @@ export class TrainsDashboardPage {
         description: 'Gespeicherte Spaltenzuordnungen, eine je Dateiform.',
         count: this.#facade.templates()?.length,
       },
-      {
-        route: '/trains/master',
-        label: 'Master-Datei',
-        icon: 'grid-outline',
-        description:
-          'Die Master-Datei ins Schattensystem importieren, Blatt für Blatt ansehen und als Kopie mit Datum auffrischen.',
-        subtitle: 'Import, Ansicht, Kopie',
-      },
+      ...(this.#masterEnabled ? [this.#masterTile] : []),
       {
         route: '/trains/settings',
         label: 'Einstellungen',
@@ -216,7 +236,7 @@ export class TrainsDashboardPage {
   });
 
   protected readonly openSheets = computed(() => {
-    const run = this.#facade.masterImportRun();
+    const run = this.#masterEnabled && this.#facade.masterImportRun();
     return run ? run.sheets.filter((sheet) => !run.done.includes(sheet)) : [];
   });
 

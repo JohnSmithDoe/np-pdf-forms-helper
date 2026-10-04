@@ -133,12 +133,6 @@ export class TrainsFacade {
     return (await this.#backend.getMasterSheet(sheet)).masterSheet;
   }
 
-  async refreshMaster(): Promise<ClientReport | undefined> {
-    const data = await this.#backend.refreshMaster({ silent: true });
-    this.#store.applyTrainsData(data);
-    return data.message;
-  }
-
   async createExport(): Promise<ClientReport | undefined> {
     const data = await this.#backend.createExport({ silent: true });
     this.#store.applyTrainsData(data);

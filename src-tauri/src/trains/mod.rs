@@ -16,7 +16,8 @@
 //   entities  that preview grouped per entity, and the answers back per row
 //   commit    the preview plus the user's decisions, into one batched write
 //   export/   the ERP artefact
-//   master/   the customer's master workbook, refreshed from filed documents
+//   master/   the customer's master workbook, exported to from filed documents
+//   master_file/  the master workbook itself, copied in and cleaned, in versions
 //
 // Staging is deliberately severed from committing. Nothing between `stage` and
 // `commit` can change a stored byte, so "the import went wrong halfway" is not a state this
@@ -36,6 +37,7 @@ pub mod entities;
 pub mod export;
 pub mod hash;
 pub mod master;
+pub mod master_file;
 pub mod model;
 pub mod reading;
 pub mod recognise;

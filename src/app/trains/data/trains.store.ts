@@ -48,6 +48,7 @@ import type {
   Wagen,
   Radsatz,
 } from '../model/trains.types';
+import type { MasterFile } from '../model/master-file';
 
 type TrainsState = {
   wagen: Wagen[] | undefined;
@@ -61,6 +62,7 @@ type TrainsState = {
   settings: TrainsSettings;
   master: MasterView | undefined;
   masterImportRun: MasterImportRun | undefined;
+  masterFile: MasterFile | undefined;
   counts: TrainsCounts;
   staging: StagedImport | undefined;
 };
@@ -77,6 +79,7 @@ const initial: TrainsState = {
   settings: { wagennummer: 'compact' },
   master: undefined,
   masterImportRun: undefined,
+  masterFile: undefined,
   counts: { wagen: 0, partners: 0, events: 0, radsaetze: 0, dokumente: 0 },
   staging: undefined,
 };
@@ -122,6 +125,7 @@ export const TrainsStore = signalStore(
       if (data.dokumente) next.dokumente = data.dokumente;
       if (data.settings) next.settings = data.settings;
       if (data.master) next.master = data.master;
+      if (data.masterFile) next.masterFile = data.masterFile;
       if (data.counts) next.counts = data.counts;
       if (data.staging) next.staging = data.staging;
       if (data.instandhaltungPage) {

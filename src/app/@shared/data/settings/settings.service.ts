@@ -22,6 +22,10 @@
 // There is no `toggle`. Both switch sites name the mode they are going TO,
 // because each also navigates to that mode's landing route — a toggle would
 // return the new mode and leave the caller to map it back to a URL.
+//
+// `masterEnabled` is a feature toggle, not a preference: the master workbook is
+// unfinished and hidden from the UI until `npdh.master` is `on`. It has no
+// setter on purpose — the e2e and the developer set the key by hand.
 // ────────────────────────────────────────────────────────────────
 
 import { Injectable, signal } from '@angular/core';
@@ -29,6 +33,7 @@ import type { ViewMode } from '../../model/settings.types';
 
 const VIEW_MODE_KEY = 'npdh.viewMode';
 const DEFAULT_VIEW_MODE: ViewMode = 'wizard';
+const MASTER_KEY = 'npdh.master';
 
 function isViewMode(value: unknown): value is ViewMode {
   return value === 'expert' || value === 'wizard';
@@ -56,6 +61,8 @@ export class SettingsService {
   readonly #viewMode = signal<ViewMode>(readViewMode());
 
   readonly viewMode = this.#viewMode.asReadonly();
+
+  readonly masterEnabled = read(MASTER_KEY) === 'on';
 
   setViewMode(mode: ViewMode): void {
     this.#viewMode.set(mode);

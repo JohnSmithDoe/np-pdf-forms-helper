@@ -38,6 +38,12 @@
 // and a guessed header row in somebody else's workbook is the wrong place to be
 // clever. New rows take each column's style from row 2, so a date column stays
 // formatted as dates.
+//
+// `structure` is the same classification without the write, for the export
+// wizard's Abgleich: which master columns have a source, which are kept by
+// hand, and which source columns land nowhere — a renamed or dropped column.
+// `Outcome.columns` names what a write may have changed (formula columns are
+// re-emitted, not changed), so the wizard's cell diff looks only there.
 // ────────────────────────────────────────────────────────────────
 
 use std::collections::{BTreeMap, HashMap};
@@ -53,12 +59,28 @@ use crate::trains::sheet::grid;
 pub struct Outcome {
     pub line: String,
     pub notes: Vec<String>,
+    pub columns: Vec<u32>,
+    pub key: Option<u32>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct Structure {
+    pub matched: Vec<String>,
+    pub hand: Vec<String>,
+    pub unmatched: Vec<String>,
 }
 
 enum Kind {
     Matched { index: usize, numeric: bool },
     Formula(Box<Cell>),
     Hand(String),
+}
+
+struct Classified {
+    master: grid::Grid,
+    columns: BTreeMap<u32, Kind>,
+    last_row: u32,
+    last_col: u32,
 }
 
 struct Layout {
@@ -75,16 +97,56 @@ pub fn write(
     table: &Table,
 ) -> AppResult<Outcome> {
     let layout = layout(worksheet, binding, table)?;
-    let outcome = match binding.mode {
+    let mut outcome = match binding.mode {
         MasterMode::Snapshot => snapshot(worksheet, &layout, binding, table),
         MasterMode::Feed => feed(worksheet, &layout, binding, table)?,
     };
+    outcome.columns = layout
+        .columns
+        .iter()
+        .filter(|(_, kind)| !matches!(kind, Kind::Formula(_)))
+        .map(|(col, _)| *col)
+        .collect();
+    outcome.key = layout.key.map(|(col, _)| col);
     Ok(outcome)
 }
 
-fn layout(worksheet: &Worksheet, binding: &MasterBinding, table: &Table) -> AppResult<Layout> {
+pub fn structure(
+    worksheet: &Worksheet,
+    binding: &MasterBinding,
+    table: &Table,
+) -> AppResult<Structure> {
+    let classified = classify(worksheet, binding, table)?;
+    let mut structure = Structure::default();
+    let mut used = Vec::new();
+    for (col, kind) in &classified.columns {
+        match kind {
+            Kind::Matched { index, .. } => {
+                used.push(*index);
+                structure
+                    .matched
+                    .push(classified.master.text(*col, 1).trim().to_string());
+            }
+            Kind::Hand(header) => structure.hand.push(header.clone()),
+            Kind::Formula(_) => {}
+        }
+    }
+    structure.unmatched = table
+        .headers
+        .iter()
+        .enumerate()
+        .filter(|(index, header)| !header.is_empty() && !used.contains(index))
+        .map(|(_, header)| header.clone())
+        .collect();
+    Ok(structure)
+}
+
+fn classify(
+    worksheet: &Worksheet,
+    binding: &MasterBinding,
+    table: &Table,
+) -> AppResult<Classified> {
     let master = grid::from_worksheet(worksheet)?;
-    let sheet = &binding.sheet;
 
     let mut formulas: BTreeMap<u32, Cell> = BTreeMap::new();
     let mut last_row = master.rows.max(1);
@@ -133,6 +195,23 @@ fn layout(worksheet: &Worksheet, binding: &MasterBinding, table: &Table) -> AppR
         };
         columns.insert(col, kind);
     }
+
+    Ok(Classified {
+        master,
+        columns,
+        last_row,
+        last_col,
+    })
+}
+
+fn layout(worksheet: &Worksheet, binding: &MasterBinding, table: &Table) -> AppResult<Layout> {
+    let Classified {
+        master,
+        columns,
+        last_row,
+        last_col,
+    } = classify(worksheet, binding, table)?;
+    let sheet = &binding.sheet;
 
     if !columns
         .values()
@@ -263,6 +342,7 @@ fn snapshot(
             layout.last_row - 1
         ),
         notes,
+        ..Outcome::default()
     }
 }
 
@@ -330,6 +410,7 @@ fn feed(
             binding.sheet, table.name
         ),
         notes,
+        ..Outcome::default()
     })
 }
 
@@ -439,6 +520,7 @@ mod tests {
             mode,
             key: key.map(str::to_string),
             aliases: vec![],
+            ignored: Vec::new(),
             auto: false,
         }
     }
@@ -617,6 +699,17 @@ mod tests {
         let error = write(&mut sheet, &binding(MasterMode::Snapshot, None), &source).unwrap_err();
         assert!(error.into_messages()[0].contains("keine Spalte"));
         assert_eq!(value(&sheet, 3, 2), "Alt");
+    }
+
+    #[test]
+    fn the_structure_names_matched_hand_kept_and_unplaced_columns() {
+        let sheet = worksheet();
+        let source = table(&["Wagen", "Ort", "Extra"], &[&[n(2.0), t("x"), t("y")]]);
+        let structure = structure(&sheet, &binding(MasterMode::Snapshot, None), &source).unwrap();
+        assert_eq!(structure.matched, ["Wagen"]);
+        // The formula column has no header and is neither.
+        assert_eq!(structure.hand, ["Stadt", "Notiz"]);
+        assert_eq!(structure.unmatched, ["Ort", "Extra"]);
     }
 
     #[test]

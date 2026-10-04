@@ -1,0 +1,84 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Blätter wählen"
+  [phase]="phase"
+  phaseColor="secondary"
+  [step]="1"
+  [stepCount]="steps"
+  backLabel="Abbrechen"
+  [nextDisabled]="facade.tickedCount() === 0"
+  (back)="onBack()"
+  (next)="onNext()"
+>
+  @if (facade.start(); as start) {
+    <p data-testid="export-document">
+      „{{ start.dokument }}“ · Vorlage „{{ start.template }}“
+    </p>
+
+    @if (start.bases.length > 1) {
+      <ion-list data-testid="export-bases">
+        <ion-list-header>Ausgangsdatei</ion-list-header>
+        <ion-radio-group [value]="facade.base()" (ionChange)="onBase($event)">
+          @for (base of start.bases; track base.path) {
+            <ion-item>
+              <ion-radio
+                [value]="base.path"
+                justify="start"
+                labelPlacement="end"
+              >
+                {{ base.name }}
+                <ion-note>
+                  {{
+                    base.copy
+                      ? ' · zuletzt geschriebene Kopie'
+                      : ' · Original des Kunden'
+                  }}
+                </ion-note>
+              </ion-radio>
+            </ion-item>
+          }
+        </ion-radio-group>
+      </ion-list>
+      <ion-note>
+        Auf der Kopie aufbauen sammelt mehrere Dokumente in einer Datei. Wurde
+        das Original seitdem gespeichert, ist es vorgewählt — sonst gingen
+        dessen Änderungen verloren.
+      </ion-note>
+    }
+
+    <ion-list lines="full" data-testid="export-sheets">
+      <ion-list-header>Blätter der Master-Datei</ion-list-header>
+      @for (view of facade.sheets(); track view.sheet.sheet) {
+        <ion-item data-testid="export-sheet">
+          <ion-checkbox
+            justify="start"
+            labelPlacement="end"
+            [checked]="view.ticked"
+            (ionChange)="onTick(view.sheet.sheet, $event)"
+          >
+            <ion-label class="ion-text-wrap">
+              <h2>{{ view.sheet.sheet }}</h2>
+              <p>
+                {{ modes[view.sheet.mode] }} ·
+                {{ view.sheet.matched }} Spalte(n) wie im Dokument
+                @if (view.sheet.reason) {
+                  · {{ view.sheet.reason }}
+                }
+              </p>
+              @if (view.sheet.warning) {
+                <p>
+                  <ion-note color="warning">{{ view.sheet.warning }}</ion-note>
+                </p>
+              }
+            </ion-label>
+          </ion-checkbox>
+          @if (view.sheet.suggested) {
+            <ion-chip slot="end" color="success">Vorschlag</ion-chip>
+          }
+        </ion-item>
+      }
+    </ion-list>
+  }
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

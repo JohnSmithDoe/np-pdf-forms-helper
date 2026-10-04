@@ -17,14 +17,6 @@
         />
         Importieren
       </ion-button>
-      <ion-button
-        [disabled]="!ready()"
-        (click)="onRefresh()"
-        data-testid="master-refresh"
-      >
-        <ion-icon slot="start" name="refresh-outline" aria-hidden="true" />
-        Aktualisieren
-      </ion-button>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
@@ -32,9 +24,11 @@
 <ion-content class="ion-padding">
   <p>
     Die Blätter der Master-Datei, in die bisher Exporte von Hand eingefügt
-    werden, füllt das Programm aus den bereinigten Dokumenten — je Blatt aus dem
-    neuesten Dokument der zugeordneten Vorlage. Geschrieben wird eine Kopie mit
-    Datum daneben; das Original bleibt unverändert.
+    werden, füllt das Programm aus den bereinigten Dokumenten: unter „Dokumente“
+    je Dokument mit „In Master übertragen“ — Blätter wählen, Vorschau prüfen,
+    schreiben. Geschrieben wird eine Kopie mit Datum daneben; das Original
+    bleibt unverändert. Die Vorlage je Blatt ist die gemerkte Zuordnung, mit der
+    der Export Blätter vorschlägt.
   </p>
   <p>
     „Importieren“ liest umgekehrt jedes Blatt mit einem Inhalt ins

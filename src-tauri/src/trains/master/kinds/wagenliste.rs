@@ -10,8 +10,10 @@
 // names), compared normalised, first match in sheet order wins. A sheet with
 // none of them falls back to „Wagennummer“, which then simply finds nothing.
 //
-// Never written back: the dashboard is formulas over the other sheets plus the
-// customer's own notes, and pasting rows into it would replace both.
+// Never SUGGESTED for writing: the dashboard is formulas over the other sheets
+// plus the customer's own notes, and pasting rows into it would replace both.
+// A pasted export of this kind is written once the user ticks it — the export
+// remembers its template, and a remembered template is suggested again.
 // ────────────────────────────────────────────────────────────────
 
 use crate::trains::builtin::shaped;

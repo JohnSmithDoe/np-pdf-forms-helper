@@ -653,3 +653,92 @@ Spitze ~750 MB.
 Deliberately not done here (Phasen 2–5 im Plan): Wagenmeldung inkl. der Handfarben des Dashboards,
 Telematik-Gerät, Werkstattauftrag, Rechnungsaufteilung (Matrix-Leser), Leistungskatalog, Frist,
 Werkstattbedarf, Standorte, Bauteile, Radsatz-Messwerte, Wagen-Stammdaten.
+
+## Export in die Master-Datei (appended 2026-10-04)
+
+Der Ein-Klick-Refresh („Master aktualisieren“: jedes Blatt aus dem neuesten Dokument seiner Vorlage)
+ist ersetzt durch einen **Assistenten je Dokument**, gestartet in der Dokumentliste mit „In Master
+übertragen“: Blätter wählen → Spalten abgleichen → Vorschau → Ergebnis. Entschieden mit Martin am
+2026-10-04. Code: `trains/master/export/`, Seiten `trains/master/feature/export-*`.
+
+- **Vorschlag aus der Bindung, keine neue Vorlagenart.** `MasterBinding.template_id` war die
+  Refresh-Quelle und ist jetzt die gemerkte Zuordnung „Dokumente dieser Vorlage gehen in dieses
+  Blatt“. Vorgeschlagen wird ein Blatt, dessen Bindung die Vorlage des Dokuments nennt (oder eine
+  Nutzerkopie derselben eingebauten), sonst eines ohne Vorlage, das jede zugeordnete Spalte des
+  Dokuments trägt. „Merken“ (Standard an) schreibt Auswahl, Schlüssel, Aliase und Ignorierte auf die
+  Bindungen; ein abgewähltes, vorher gemerktes Blatt verliert die Vorlage.
+- **Modus bleibt der der Bindung.** *Stand ersetzen* und *Fortlaufend ergänzen* gelten wie zuvor,
+  eine Regel für alle Wege.
+- **Konflikt heißt Struktur, nie Wert.** Jedes Dokument ist ein Inkrement; ein abweichender Wert ist
+  die Aktualisierung selbst und steht in der Vorschau. Gefragt wird nur, wenn eine Spalte des
+  Dokuments im Blatt kein Gegenstück hat — beantwortet mit einem Alias auf eine von Hand gepflegte
+  Spalte oder „nicht übertragen“ (`MasterBinding.ignored`, neu). Beides wird gemerkt, also fragt das
+  nächste Dokument derselben Vorlage erst wieder, wenn sich das Blatt oder die Datei geändert hat.
+  Ein gemerkter Alias oder Schlüssel, den das Blatt nicht mehr hat, wird verworfen und GESAGT, nie
+  still umgebogen. Weiter bleibt gesperrt, solange eine Spalte offen ist oder ein Blatt gar nicht
+  geschrieben werden kann.
+- **Vorschau = echter Schreiblauf.** `preview` fügt in ein Buch im Speicher ein und vergleicht das
+  Blatt vorher/nachher Zelle für Zelle (`export/diff.rs`), nur in den Spalten, die `paste` schreibt
+  (Formelspalten werden neu ausgegeben, ihre zwischengespeicherten Werte sind absichtlich alt).
+  `write` ist derselbe Lauf plus Speichern. Eine Vorhersage wäre ein zweites `paste`, das beim ersten
+  Unterschied lügt. Dafür kostet jede Antwort im Abgleich einen Lauf über die gewählten Blätter des
+  ORIGINALS (nicht der Lesekopie, die nicht jede Zeile hat).
+- **Aufbauend auf der letzten Kopie.** Ergebnis ist wie bisher `<Original> <Datum>.xlsx` neben dem
+  Original, das nie geschrieben wird. Die Kopie wird als `MasterSettings.last_export` gemerkt und ist
+  beim nächsten Export die vorgewählte Ausgangsdatei, solange sie nicht älter als das Original ist —
+  so sammeln sich mehrere Dokumente in einer Datei, ohne dass Änderungen verloren gehen, die der Kunde
+  inzwischen im Original gespeichert hat. Andere Pfade als Original und letzte Kopie lehnt das Backend
+  ab.
+- **`paste` bekam eine Lesehälfte** (`structure`: zugeordnet / von Hand / ohne Ziel) und meldet, welche
+  Spalten es schreibt; sonst ist das Einfügen unverändert das des Refresh.
+
+- **Kein Blatt ist gesperrt, Vorschläge stehen oben.** Die Erkennung bindet jedes Blatt mit
+  Wagen-Schlüsselspalte als Art Wagenliste (Übersicht) — am echten Master 22 von 29, darunter die
+  Einfügeziele `ECHO_Eingänge` und `Telematik`. Die erste Fassung sperrte diese Art und damit genau die
+  Blätter, die vorgeschlagen gehörten. Jetzt gilt: eine gemerkte Vorlage schlägt vor, egal welche Art;
+  eine Übersicht ohne Vorlage wird nie vorgeschlagen und trägt einen Warnhinweis, lässt sich aber
+  ankreuzen — die Vorschau zeigt jede Zelle, bevor etwas geschrieben wird.
+
+Bewusst nicht gebaut: mehrere Dokumente in einem Lauf (die Kette über `last_export` deckt das ab);
+Konflikte auf Wertebene.
+
+## Die Master-Datei als Datei (appended 2026-10-04)
+
+Die Master-Datei des Kunden kommt als eigene Datei ins Programm, getrennt von allem, was bisher
+„Master“ heißt (Bindungen, Spiegel, Export — die laufen aus). Entschieden mit Martin am 2026-10-04.
+Code: `trains/master_file/`, Seite `/trains/master-file`, oben angeheftet in der Dokumentliste.
+
+- **Eigener Weg, eigene Seite.** Dateiauswahl → Bereinigung → Übernehmen/Verwerfen. Nicht über den
+  Bereinigen-Hub: der bereinigt eine Absenderdatei über eine Vorlage und fragt je Spalte; die Master
+  hat keine Vorlage, und ihre Bereinigung fragt nichts.
+- **Eigener Datensatz, kein `Dokument`.** Eine Master wird nie per Import-Walk ins Schattensystem
+  übernommen und nie in sich selbst exportiert. Als `Dokument` mit Kennzeichen hätte jeder Leser der
+  Dokumente einen Wächter gebraucht; ein eigener Typ macht das Vergessen unmöglich.
+- **Nur eine, in Fassungen.** Der Kunde erzeugt die Datei immer wieder. Jede Wahl ist eine neue
+  Fassung DER Master und ersetzt die vorige als aktuelle (`versions[0]`); ältere bleiben als
+  Verlauf. Gleiche Bytes werden abgelehnt (Inhalts-Hash wie beim `Dokument`). Unsere datierten
+  Export-Kopien gehören ausdrücklich nicht dazu.
+- **Eingezogen wie ein Dokument** (`dokument::adopt`): das Original wird nach
+  `data/trains/masterdatei/<id>/` kopiert, bevor es gelesen wird; die Kundendatei wird nie geschrieben.
+- **Bereinigt wird nur, was nichts bedeuten kann.** Nie eine Formel innerhalb der Daten (auch nicht
+  die Kinder einer geteilten), nie eine verschobene Zeile. Abgeschnitten werden leere Zellen unterhalb
+  der letzten Zeile mit Wert oder Formel — am echten Master drei Blätter mit je rund einer Million
+  gestylter Leerzeilen. Ein Schwanz, in dem bis zum Blattende nur noch `0`/`#NV` steht (am echten
+  Master heruntergezogene Formeln), behält **3 Zeilen**, der Rest geht — Martins Entscheidung, damit
+  das Muster zum Weiterziehen bleibt. Weil das die einzige Stelle ist, an der Formeln entfernt werden,
+  wird es getrennt gezählt (`tail_rows_cut`) und in Vorschau, Summen und Dokumentzeile genannt; eine
+  geteilte Formel, deren Bereich in den Schnitt reichte, endet an der letzten behaltenen Zeile. Text-Zahlen und Text-Daten werden nur
+  umgetypt, wo die Spalte schon überwiegend Zahlen bzw. Daten hält und die Schreibweise eindeutig
+  ist; führende Nullen, `1,234`, `01/02/2025` und zweistellige Jahre sind Hinweise. Leerzeichen am
+  Rand (auch NBSP) gehen. Die Kopfzeile bleibt, weil Bindungen und `VERGLEICH`-Formeln sie lesen.
+- **Ein Blatt ohne Befund bleibt Byte für Byte.** umya verliert in jedem Blatt, das es liest und
+  zurückschreibt, Kleinigkeiten (footguns.md). Darum wird zweimal gelesen: ein Probe-Buch bereinigt
+  jedes Blatt und wird verworfen, im geschriebenen Buch werden nur die geänderten Blätter
+  deserialisiert. Gemessen am echten Master: 18 s, Spitze ~1,7 GB, 12 von 28 Blättern bytegleich,
+  19,8 → 10,7 MB. `customXml/` und `calcChain.xml` fallen trotzdem weg (bekannt, Excel rechnet neu).
+- **Plan/Apply mit Dateien auf der Platte.** Die bereinigte Fassung liegt als `pending` in
+  `masterdatei.json`, bis sie übernommen oder verworfen wird — ein ganzes Buch zwischen zwei Commands
+  im Speicher zu halten, wären Gigabyte.
+
+Bewusst offen: Bindungen, Spiegel und Export lesen weiter `MasterSettings.file`, nicht die übernommene
+Fassung — sie werden abgelöst, nicht angeschlossen.

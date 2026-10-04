@@ -1,0 +1,68 @@
+<app-wizard-shell
+  class="ion-page"
+  heading="Export abgeschlossen"
+  [phase]="phase"
+  phaseColor="secondary"
+  [step]="steps"
+  [stepCount]="steps"
+  [showBack]="false"
+  nextLabel="Fertig"
+  nextColor="success"
+  (next)="onDone()"
+>
+  @if (facade.result(); as result) {
+    @if (result.target) {
+      <section data-testid="export-result">
+        <h2>Geschrieben als „{{ name(result.target) }}“</h2>
+        <p><ion-note>Das Original ist unverändert.</ion-note></p>
+        <ion-button fill="outline" (click)="onOpenFile(result.target)">
+          <ion-icon slot="start" name="document-outline" aria-hidden="true" />
+          Datei öffnen
+        </ion-button>
+        @if (result.folder) {
+          <ion-button fill="clear" (click)="onOpenFolder(result.folder)">
+            <ion-icon
+              slot="start"
+              name="folder-open-outline"
+              aria-hidden="true"
+            />
+            Ordner öffnen
+          </ion-button>
+        }
+      </section>
+    }
+
+    @for (sheet of result.sheets; track sheet.sheet) {
+      <ion-card data-testid="export-result-sheet">
+        <ion-card-header>
+          <ion-card-title>{{ sheet.sheet }}</ion-card-title>
+          <ion-card-subtitle>
+            @if (sheet.problem) {
+              nicht geschrieben
+            } @else {
+              {{ sheet.changed }} Zelle(n) aktualisiert
+            }
+          </ion-card-subtitle>
+        </ion-card-header>
+        <ion-card-content>
+          @if (sheet.problem) {
+            <ion-note color="danger">{{ sheet.problem }}</ion-note>
+          } @else {
+            <p>{{ sheet.line }}</p>
+            @for (note of sheet.notes; track $index) {
+              <p>
+                <ion-note>{{ note }}</ion-note>
+              </p>
+            }
+            <app-cell-changes
+              [changes]="sheet.changes"
+              [changed]="sheet.changed"
+            />
+          }
+        </ion-card-content>
+      </ion-card>
+    }
+  }
+</app-wizard-shell>
+
+<app-busy-overlay [busy]="facade.busy()" />

@@ -74,7 +74,7 @@
 // WRITES (cleaned copies, exports), so the backend has to know it, and it holds
 // for every desk that shares the data folder. `MasterSettings` is the same
 // kind of thing: which workbook is the customer's master and which of its sheets
-// a template refreshes — names from the customer's file, so user data and never
+// a template's documents are exported into — names from the customer's file, so user data and never
 // `builtin.rs`. `MasterView` adds what only the workbook can say, its sheets and
 // the header row of each bound one, so the page can offer them without a second
 // read per select.
@@ -87,6 +87,19 @@
 // `EinbauKonflikt` is the master import's one non-entity question — a Radsatz
 // already fitted on the same Wagen under another date — answered per Radsatz
 // by an `EinbauChoice`.
+//
+// The master EXPORT is a wizard over one filed Dokument: `MasterExportStart`
+// offers the sheets and the base file, a `MasterExportRequest` is the user's
+// whole answer — sheets, keys, aliases — sent again on every change like
+// `restage_import`'s plan, and a `MasterExportRun` is the dry run or the
+// written copy, with each sheet's structure and its changed cells.
+// `MasterSettings.last_export` is the copy the next export builds on; the
+// backend owns it, like `import_run`.
+//
+// The MASTER FILE is a different thing from all of the above: the customer's
+// workbook itself, copied in and cleaned of what nothing reads — never a formula,
+// never a moved row. `MasterFile.versions` is newest first, so the current one is
+// `versions[0]`; `pending` is a cleaned version not yet taken over.
 //
 // `master_import_run` rides on every whole-list answer, and only while a master
 // import is OPEN: the dashboard warns about a partial mirror without opening the
@@ -161,6 +174,8 @@ pub struct MasterBinding {
     pub key: Option<String>,
     #[serde(default)]
     pub aliases: Vec<MasterAlias>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignored: Vec<String>,
     #[serde(default)]
     pub auto: bool,
 }
@@ -196,6 +211,8 @@ pub struct MasterSettings {
     pub import_run: Option<MasterImportRun>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scan: Option<MasterScan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_export: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -243,6 +260,110 @@ pub struct MasterView {
     pub headers: Vec<MasterSheet>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub problem: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterExportChoice {
+    pub sheet: String,
+    #[serde(default)]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub aliases: Vec<MasterAlias>,
+    #[serde(default)]
+    pub ignored: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterExportRequest {
+    pub dokument_id: String,
+    pub base: String,
+    pub sheets: Vec<MasterExportChoice>,
+    #[serde(default)]
+    pub remember: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterExportBase {
+    pub path: String,
+    pub name: String,
+    pub copy: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterExportSheet {
+    pub sheet: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<SheetKind>,
+    pub mode: MasterMode,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    pub aliases: Vec<MasterAlias>,
+    pub ignored: Vec<String>,
+    pub matched: u32,
+    pub suggested: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterExportStart {
+    pub dokument_id: String,
+    pub dokument: String,
+    pub template: String,
+    pub bases: Vec<MasterExportBase>,
+    pub base: String,
+    pub sheets: Vec<MasterExportSheet>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CellChange {
+    pub cell: String,
+    pub row: u32,
+    pub column: String,
+    pub key: String,
+    pub before: String,
+    pub after: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterExportSheetRun {
+    pub sheet: String,
+    pub mode: MasterMode,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    pub aliases: Vec<MasterAlias>,
+    pub ignored: Vec<String>,
+    pub matched: Vec<String>,
+    pub targets: Vec<String>,
+    pub open: Vec<String>,
+    pub conflicts: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub problem: Option<String>,
+    pub line: String,
+    pub notes: Vec<String>,
+    pub changed: u32,
+    pub changes: Vec<CellChange>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterExportRun {
+    pub dokument_id: String,
+    pub base: String,
+    pub sheets: Vec<MasterExportSheetRun>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -957,6 +1078,95 @@ pub struct InstandhaltungPage {
     pub offset: u32,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MasterFile {
+    pub versions: Vec<MasterFileVersion>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending: Option<MasterFileVersion>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterFileVersion {
+    pub id: String,
+    pub name: String,
+    pub folder: String,
+    pub original: String,
+    pub cleaned: String,
+    pub original_hash: String,
+    pub cleaned_hash: String,
+    pub bereinigt_am: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uebernommen_am: Option<String>,
+    pub report: MasterFileReport,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterFileReport {
+    pub sheets: Vec<MasterFileSheet>,
+    pub totals: MasterFileTotals,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterFileTotals {
+    pub rows_cut: u32,
+    #[serde(default)]
+    pub tail_rows_cut: u32,
+    pub trimmed: u32,
+    pub numbers: u32,
+    pub dates: u32,
+    pub notes: u32,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterFileSheet {
+    pub sheet: String,
+    pub rows_cut: u32,
+    #[serde(default)]
+    pub tail_rows_cut: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub formula_tail: Option<u32>,
+    pub trimmed: u32,
+    pub numbers: u32,
+    pub dates: u32,
+    pub examples: Vec<MasterFileChange>,
+    pub notes: Vec<MasterFileNote>,
+    pub note_count: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MasterFileRule {
+    Trimmed,
+    Number,
+    Date,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterFileChange {
+    pub row: u32,
+    pub column: u32,
+    pub header: String,
+    pub raw: String,
+    pub clean: String,
+    pub rule: MasterFileRule,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterFileNote {
+    pub row: u32,
+    pub column: u32,
+    pub header: String,
+    pub raw: String,
+    pub reason: String,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TrainsData {
@@ -990,6 +1200,12 @@ pub struct TrainsData {
     pub master_sheet: Option<MasterSheetView>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub master_import_run: Option<MasterImportRun>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub master_export_start: Option<MasterExportStart>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub master_export: Option<MasterExportRun>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub master_file: Option<MasterFile>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<crate::model::ClientReport>,
 }
@@ -1071,6 +1287,21 @@ impl TrainsData {
 
     pub fn master_sheet(mut self, sheet: MasterSheetView) -> Self {
         self.master_sheet = Some(sheet);
+        self
+    }
+
+    pub fn master_export_start(mut self, start: MasterExportStart) -> Self {
+        self.master_export_start = Some(start);
+        self
+    }
+
+    pub fn master_export(mut self, run: MasterExportRun) -> Self {
+        self.master_export = Some(run);
+        self
+    }
+
+    pub fn master_file(mut self, file: MasterFile) -> Self {
+        self.master_file = Some(file);
         self
     }
 

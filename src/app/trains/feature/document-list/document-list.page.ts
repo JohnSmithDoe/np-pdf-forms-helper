@@ -5,8 +5,17 @@
 //
 // A plain list rather than the shared list shell: that shell's rows are
 // `BaseItem`s that open on a click and carry no actions, and every row here
-// has four (its folder, two copies to open, one import to start). A second
+// has five (its folder, two copies to open, an import and a master export to start). A second
 // kind of row in the shell would be the shell growing a mode.
+//
+// „In Master übertragen“ opens the master export wizard for one document, the
+// replacement of the one-click master refresh. It is offered for every
+// document, imported or not: the master and the Schattensystem are separate
+// targets. Hidden unless `masterEnabled` — the master workbook is unfinished.
+//
+// The customer's MASTER FILE is pinned on top, apart from the documents: there
+// is only ever one, it is never imported by the walk nor exported into itself,
+// so its row offers its copies and the way to its versions and nothing else.
 //
 // An imported document offers no „Importieren“, and that is only the
 // explanation: `stage_document` and `commit_document` refuse it themselves.
@@ -29,13 +38,20 @@ import {
   IonItem,
   IonLabel,
   IonList,
+  IonListHeader,
   IonNote,
   IonTitle,
   IonToolbar,
 } from '@ionic/angular/standalone';
+import { SettingsService } from '../../../@shared/data/settings/settings.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
-import { ImportWalkFacade, TrainsFacade } from '../../data';
+import {
+  ImportWalkFacade,
+  MasterExportFacade,
+  MasterFileFacade,
+  TrainsFacade,
+} from '../../data';
 
 @Component({
   selector: 'app-page-document-list',
@@ -53,6 +69,7 @@ import { ImportWalkFacade, TrainsFacade } from '../../data';
     IonItem,
     IonLabel,
     IonList,
+    IonListHeader,
     IonNote,
     IonTitle,
     IonToolbar,
@@ -60,9 +77,12 @@ import { ImportWalkFacade, TrainsFacade } from '../../data';
 })
 export class DocumentListPage {
   protected readonly trains = inject(TrainsFacade);
+  protected readonly masterFile = inject(MasterFileFacade);
   readonly #walk = inject(ImportWalkFacade);
+  readonly #export = inject(MasterExportFacade);
   readonly #reports = inject(ReportPresenterService);
   readonly #router = inject(Router);
+  protected readonly masterEnabled = inject(SettingsService).masterEnabled;
 
   protected readonly dokumente = computed(() =>
     [...(this.trains.dokumente() ?? [])].sort(
@@ -83,6 +103,15 @@ export class DocumentListPage {
   protected async onImport(id: string): Promise<void> {
     const ok = await this.#reports.run(() => this.#walk.start(id));
     if (ok) await this.#router.navigate(['/trains/import/partners']);
+  }
+
+  protected async onExport(id: string): Promise<void> {
+    const ok = await this.#reports.run(() => this.#export.begin(id));
+    if (ok) await this.#router.navigate(['/trains/master/export/sheets']);
+  }
+
+  protected onMasterFile(): void {
+    void this.#router.navigate(['/trains/master-file']);
   }
 
   protected onClean(): void {

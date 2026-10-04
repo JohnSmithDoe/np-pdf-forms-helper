@@ -108,7 +108,7 @@ Measured 2026-08-22 in Chrome against `@ionic/angular@8`, while reworking the ex
 - **A full `read` deserialises every sheet, whichever one you wanted.** The same workbook had two
   sheets filled with `0` down to row 1,048,576: 6.5 s and 2.6 GB for a full read, 0.4 s and 300 MB for
   `lazy_read` plus the one sheet. `grid::read` therefore reads one sheet, and so does the master
-  refresh, which writes the workbook back out; the filler and the cleaner keep the full read.
+  export, which writes the workbook back out; the filler and the cleaner keep the full read.
 
 - **There is no partial read of a sheet, so a header costs the whole sheet.** `read_sheet(index)`
   deserialises every cell, and the master's five fill-down sheets are up to 72 MB of XML each: one header

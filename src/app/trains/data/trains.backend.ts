@@ -22,6 +22,7 @@ import type {
   CleanDecisions,
   EntityDecisions,
   ImportPlan,
+  MasterExportRequest,
   MasterSettings,
   Partner,
   TrainsData,
@@ -58,10 +59,22 @@ export type TrainsCommand =
   | { command: 'pick_master_file'; payload: Record<string, never> }
   | { command: 'reset_master_bindings'; payload: Record<string, never> }
   | { command: 'save_master'; payload: { settings: MasterSettings } }
-  | { command: 'refresh_master'; payload: Record<string, never> }
+  | { command: 'open_master_export'; payload: { id: string } }
+  | {
+      command: 'preview_master_export';
+      payload: { request: MasterExportRequest };
+    }
+  | {
+      command: 'write_master_export';
+      payload: { request: MasterExportRequest };
+    }
   | { command: 'get_master_sheet'; payload: { sheet: string } }
   | { command: 'start_master_import'; payload: Record<string, never> }
   | { command: 'stage_master_sheet'; payload: { sheet: string } }
+  | { command: 'get_master_file'; payload: Record<string, never> }
+  | { command: 'clean_master_file'; payload: Record<string, never> }
+  | { command: 'accept_master_file'; payload: Record<string, never> }
+  | { command: 'discard_master_file'; payload: Record<string, never> }
   | { command: 'open_output_folder'; payload: { folder: string } }
   | { command: 'open_file'; payload: { filename: string } }
   | { command: 'pick_import_folder'; payload: Record<string, never> }
@@ -243,8 +256,22 @@ export class TrainsBackend {
     return this.#call({ command: 'save_master', payload: { settings } });
   }
 
-  refreshMaster(options?: CallOptions): Promise<TrainsData> {
-    return this.#call({ command: 'refresh_master', payload: {} }, options);
+  openMasterExport(id: string): Promise<TrainsData> {
+    return this.#call({ command: 'open_master_export', payload: { id } });
+  }
+
+  previewMasterExport(request: MasterExportRequest): Promise<TrainsData> {
+    return this.#call({
+      command: 'preview_master_export',
+      payload: { request },
+    });
+  }
+
+  writeMasterExport(request: MasterExportRequest): Promise<TrainsData> {
+    return this.#call({
+      command: 'write_master_export',
+      payload: { request },
+    });
   }
 
   startMasterImport(): Promise<TrainsData> {
@@ -253,6 +280,22 @@ export class TrainsBackend {
 
   stageMasterSheet(sheet: string): Promise<TrainsData> {
     return this.#call({ command: 'stage_master_sheet', payload: { sheet } });
+  }
+
+  loadMasterFile(): Promise<TrainsData> {
+    return this.#call({ command: 'get_master_file', payload: {} });
+  }
+
+  cleanMasterFile(): Promise<TrainsData> {
+    return this.#call({ command: 'clean_master_file', payload: {} });
+  }
+
+  acceptMasterFile(): Promise<TrainsData> {
+    return this.#call({ command: 'accept_master_file', payload: {} });
+  }
+
+  discardMasterFile(): Promise<TrainsData> {
+    return this.#call({ command: 'discard_master_file', payload: {} });
   }
 
   // The opener is the filler's command and is deliberately reused: opening a

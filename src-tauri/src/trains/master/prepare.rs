@@ -25,8 +25,8 @@
 // walk and this is not one.
 //
 // Only READERS use the copy — the import's `stage_sheet` and the sheet views.
-// The refresh writes a dated copy of the ORIGINAL and must carry every row the
-// customer has, so it never opens this one; provenance keeps naming the
+// The export writes a dated copy of the ORIGINAL (or of its own last copy) and
+// must carry every row the customer has, so it never opens this one; provenance keeps naming the
 // original file and the customer's sheet.
 // ────────────────────────────────────────────────────────────────
 

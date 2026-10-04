@@ -20,9 +20,9 @@
 // the page says so — a cancelled walk leaves a partial mirror, and a partial
 // mirror that looked whole would be checked against the customer as if it were.
 //
-// Nothing here files a `Dokument`. The refresh reads the latest filed document
-// per template, and a master sheet filed as one would become the source the
-// next refresh pastes back into the master. The staging carries
+// Nothing here files a `Dokument`. The export wizard offers every filed
+// document for the master, and a master sheet filed as one would be offered
+// for pasting back into the master it came from. The staging carries
 // `StagingOrigin::Master` instead, which is what lets `commit` take it without a
 // document and what keeps that gate shut for every other file.
 //
@@ -301,6 +301,7 @@ pub(super) mod tests {
             mode: MasterMode::Snapshot,
             key: None,
             aliases: Vec::new(),
+            ignored: Vec::new(),
             auto: false,
         }
     }
@@ -317,6 +318,7 @@ pub(super) mod tests {
             ],
             import_run: None,
             scan: None,
+            last_export: None,
         })
         .unwrap();
         super::super::bindings::sync(&mut db, false).unwrap();
@@ -623,6 +625,7 @@ pub(super) mod tests {
             bindings: vec![binding("Einbauliste", SheetKind::RadsatzEinbau)],
             import_run: None,
             scan: None,
+            last_export: None,
         })
         .unwrap();
         super::super::bindings::sync(&mut db, false).unwrap();

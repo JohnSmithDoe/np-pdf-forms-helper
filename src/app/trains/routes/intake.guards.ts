@@ -6,6 +6,10 @@
 // a redirect is the only thing that can answer in time — and `loaded` is part
 // of every predicate, so a cold deep link lands on the walk's way in.
 //
+// The master export wizard is guarded the same way: its first step needs the
+// offer, the next two a dry run, the result the written run — all of them
+// bounce to the document list, the wizard's only way in.
+//
 // The cleaning hub and the document list are those ways in and deliberately
 // UNGUARDED; a guard on either would have nowhere to redirect but itself.
 //
@@ -18,7 +22,7 @@
 
 import { inject } from '@angular/core';
 import { CanActivateFn, Router, UrlTree } from '@angular/router';
-import { ImportWalkFacade, IntakeFacade } from '../data';
+import { ImportWalkFacade, IntakeFacade, MasterExportFacade } from '../data';
 
 function guard<T>(
   facade: new (...args: never[]) => T,
@@ -61,5 +65,26 @@ export const importResultGuard = guard(
   ImportWalkFacade,
   (facade) => facade.loaded(),
   (facade) => facade.report() !== null,
+  DOCUMENTS
+);
+
+export const masterExportGuard = guard(
+  MasterExportFacade,
+  (facade) => facade.loaded(),
+  (facade) => facade.start() !== undefined,
+  DOCUMENTS
+);
+
+export const masterExportPreviewGuard = guard(
+  MasterExportFacade,
+  (facade) => facade.loaded(),
+  (facade) => facade.preview() !== undefined,
+  DOCUMENTS
+);
+
+export const masterExportResultGuard = guard(
+  MasterExportFacade,
+  (facade) => facade.loaded(),
+  (facade) => facade.result() !== undefined,
   DOCUMENTS
 );

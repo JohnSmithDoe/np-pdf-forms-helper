@@ -51,7 +51,7 @@
 // `clear_mirror` is the master import's narrow wipe: the FACTS go (Wagen,
 // Radsatz, Einbau, Instandhaltung) because the master brings them back whole;
 // IDENTITY and configuration stay — Partner with its learned aliases, templates
-// with their learned readings, and the filed Dokumente the refresh reads, which
+// with their learned readings, and the filed Dokumente the master export reads, which
 // become importable again. A kept alias only survives with what it points at,
 // which is why Partner is kept rather than its aliases extracted.
 //
@@ -63,6 +63,10 @@
 // configuration, not imported data. The master's read copy under `master/` is
 // removed like the owned documents: it is derived, and `master::bindings::sync`
 // rebuilds it on the next read because the copy is missing.
+//
+// `masterdatei.json` holds the customer's master FILE — its cleaned versions,
+// owned under `masterdatei/` like the Dokumente under `dokumente/`. It is data
+// the user brought in, not configuration, so `reset` removes it with its files.
 //
 // The SHIPPED templates are never stored. `templates` merges them in at read
 // time, minus any a user copy shadows through its `origin`, so a reset cannot
@@ -83,13 +87,14 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use crate::config::AppConfig;
 use crate::error::{AppError, AppResult};
 use crate::trains::model::{
-    Dokument, Einbau, ImportTemplate, Instandhaltung, MasterSettings, Partner, PartnerRolle,
-    Radsatz, RadsatzAlias, TrainsCounts, TrainsSettings, Wagen,
+    Dokument, Einbau, ImportTemplate, Instandhaltung, MasterFile, MasterSettings, Partner,
+    PartnerRolle, Radsatz, RadsatzAlias, TrainsCounts, TrainsSettings, Wagen,
 };
 
 const VERSION: u32 = 1;
 const SETTINGS: &str = "einstellungen.json";
 const MASTER: &str = "master.json";
+const MASTER_FILE: &str = "masterdatei.json";
 
 pub fn remove_folder(folder: &Path) -> AppResult<()> {
     match std::fs::remove_dir_all(folder) {
@@ -133,6 +138,7 @@ pub struct TrainsDb {
     dokumente: IndexMap<String, Dokument>,
     settings: TrainsSettings,
     master: MasterSettings,
+    master_file: MasterFile,
     by_wagennummer: HashMap<String, String>,
     by_match_key: HashMap<String, String>,
     by_dedupe: HashSet<String>,
@@ -171,6 +177,7 @@ impl TrainsDb {
             dokumente: read(&folder.join("dokumente.db"))?,
             settings: read_or_default(&folder.join(SETTINGS))?,
             master: read_or_default(&folder.join(MASTER))?,
+            master_file: read_or_default(&folder.join(MASTER_FILE))?,
             folder,
             by_wagennummer: HashMap::new(),
             by_match_key: HashMap::new(),
@@ -339,6 +346,20 @@ impl TrainsDb {
         Ok(())
     }
 
+    pub fn master_file(&self) -> &MasterFile {
+        &self.master_file
+    }
+
+    pub fn save_master_file(&mut self, file: MasterFile) -> AppResult<()> {
+        write_whole(&self.folder.join(MASTER_FILE), &file)?;
+        self.master_file = file;
+        Ok(())
+    }
+
+    pub fn master_file_folder(&self) -> PathBuf {
+        self.folder.join("masterdatei")
+    }
+
     pub fn dokumente(&self) -> Vec<Dokument> {
         self.dokumente.values().cloned().collect()
     }
@@ -499,7 +520,9 @@ impl TrainsDb {
         })?;
         self.reindex();
         remove_folder(&self.dokumente_folder())?;
-        remove_folder(&self.master_folder())
+        remove_folder(&self.master_folder())?;
+        self.save_master_file(MasterFile::default())?;
+        remove_folder(&self.master_file_folder())
     }
 }
 

@@ -11,6 +11,8 @@ export { TrainsFacade } from './trains.facade';
 export { ImportFacade } from './import.facade';
 export { IntakeFacade } from './intake.facade';
 export { ImportWalkFacade } from './import-walk.facade';
+export { MasterExportFacade } from './master-export.facade';
+export { MasterFileFacade } from './master-file.facade';
 export { WagenListFacade } from './wagen-list.facade';
 export { PartnerListFacade } from './partner-list.facade';
 export { EventListFacade } from './event-list.facade';
@@ -37,3 +39,8 @@ export type {
   GroupView,
   PlanCount,
 } from './import-walk.facade';
+export type {
+  ColumnAnswer,
+  ExportSheetView,
+  StructureView,
+} from './master-export.facade';

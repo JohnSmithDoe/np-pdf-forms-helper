@@ -48,7 +48,7 @@
 // "nur fehlerfreie Zeilen" default cannot be seen with a clean file.
 //
 // THE MASTER is bound three ways — a Wagen list and a Radsatz list with a kind,
-// and a refresh-only sheet without one, edited by hand so „von Hand angepasst“
+// and an export-only sheet without one, edited by hand so „von Hand angepasst“
 // shows and „Standardzuordnung“ visibly undoes it (`masterDefaults` makes it
 // view-only again) — and its import run is left HALF done,
 // so the „unvollständig“ banners show. The sheet views are written out by hand
@@ -57,6 +57,15 @@
 // view on purpose, so the fake's headers-only answer — every column „nicht im
 // Schattensystem“, no rows — has a sheet to show on. `demoMasterStaging()` is
 // the Mai walk with one Einbau conflict, the card no other file produces.
+//
+// THE MASTER EXPORT of a tpl-bremen document suggests the Werkstattliste,
+// with one column to answer (Werkstatt → Notiz or nicht übertragen) and a
+// handful of changed cells; „Radsätze aktuell“, ticked by hand, shows a sheet
+// that cannot be written. Hand-written for the same reason as the views.
+//
+// THE MASTER FILE starts with one taken-over version, and a pick answers a
+// second one as pending — with a cut tail, a retyped Wagennummer, a text date,
+// a note and a formula tail, every kind of line its report renders.
 // ────────────────────────────────────────────────────────────────
 
 import type {
@@ -64,7 +73,9 @@ import type {
   FakeDokument,
   FakeDocument,
   FakeEinbau,
+  FakeExportSheetRun,
   FakeInstandhaltung,
+  FakeMasterFileVersion,
   FakeMasterSettings,
   FakeMasterSheetView,
   FakePartner,
@@ -1232,6 +1243,161 @@ const masterSheetViews: Record<string, FakeMasterSheetView> = {
   },
 };
 
+const masterExport: Record<string, FakeExportSheetRun> = {
+  Werkstattliste: {
+    matched: ['Wagen-Nr.', 'Datum', 'Leistung', 'Betrag'],
+    targets: ['Notiz'],
+    open: ['Werkstatt'],
+    line: '„Werkstattliste“: 2 Zeile(n) angehängt, 1 aktualisiert aus „Schienenbein Mai 2026.xlsx“.',
+    changed: 9,
+    changes: [
+      [
+        'C4',
+        4,
+        'Leistung',
+        '218124712173',
+        'Radsatztausch',
+        'Radsatztausch, Achse 2',
+      ],
+      ['D4', 4, 'Betrag', '218124712173', '1.180,00', '1.240,50'],
+      ['A9', 9, 'Wagen-Nr.', '238566234569', '', '238566234569'],
+      ['B9', 9, 'Datum', '238566234569', '', '12.05.2026'],
+      ['C9', 9, 'Leistung', '238566234569', '', 'Bremsprüfung'],
+      ['D9', 9, 'Betrag', '238566234569', '', '320,00'],
+      ['A10', 10, 'Wagen-Nr.', '338080123452', '', '338080123452'],
+      ['B10', 10, 'Datum', '338080123452', '', '19.05.2026'],
+      ['C10', 10, 'Leistung', '338080123452', '', 'Revision R2'],
+    ].map(([cell, row, column, key, before, after]) => ({
+      cell: String(cell),
+      row: Number(row),
+      column: String(column),
+      key: String(key),
+      before: String(before),
+      after: String(after),
+    })),
+  },
+  'Radsätze aktuell': {
+    matched: ['Wagen'],
+    targets: ['Position'],
+    open: [],
+    problem:
+      '„Radsätze aktuell“ wird fortlaufend ergänzt und braucht dafür eine Schlüsselspalte.',
+    line: '',
+    changed: 0,
+    changes: [],
+  },
+};
+
+function masterFileVersion(
+  id: string,
+  bereinigtAm: string,
+  uebernommenAm?: string
+): FakeMasterFileVersion {
+  const folder = `C:\\Daten\\masterdatei\\${id}`;
+  return {
+    id,
+    name: 'Wagenmut Übersicht.xlsx',
+    folder,
+    original: `${folder}\\Wagenmut Übersicht.xlsx`,
+    cleaned: `${folder}\\Wagenmut Übersicht bereinigt.xlsx`,
+    originalHash: id,
+    cleanedHash: `${id}-b`,
+    bereinigtAm,
+    ...(uebernommenAm ? { uebernommenAm } : {}),
+    report: {
+      sheets: [
+        {
+          sheet: 'Alle Wagen',
+          rowsCut: 1046846,
+          tailRowsCut: 0,
+          trimmed: 2,
+          numbers: 1,
+          dates: 0,
+          examples: [
+            {
+              row: 14,
+              column: 1,
+              header: 'Wagen-Nr.',
+              raw: '3385.065.9151-4',
+              clean: '338506591514',
+              rule: 'number',
+            },
+            {
+              row: 20,
+              column: 3,
+              header: 'Bemerkung',
+              raw: 'Abstellort Schadwagen: ',
+              clean: 'Abstellort Schadwagen:',
+              rule: 'trimmed',
+            },
+          ],
+          notes: [],
+          noteCount: 0,
+        },
+        {
+          sheet: 'Werkstattliste',
+          rowsCut: 5,
+          tailRowsCut: 0,
+          trimmed: 0,
+          numbers: 0,
+          dates: 1,
+          examples: [
+            {
+              row: 7,
+              column: 2,
+              header: 'Datum',
+              raw: '17.09.2024',
+              clean: '17.09.2024',
+              rule: 'date',
+            },
+          ],
+          notes: [
+            {
+              row: 9,
+              column: 4,
+              header: 'Betrag',
+              raw: '1,234',
+              reason: 'Zahl als Text, nicht eindeutig lesbar',
+            },
+          ],
+          noteCount: 1,
+        },
+        {
+          sheet: 'Radsätze aktuell',
+          rowsCut: 0,
+          tailRowsCut: 1048398,
+          formulaTail: 175,
+          trimmed: 0,
+          numbers: 0,
+          dates: 0,
+          examples: [],
+          notes: [],
+          noteCount: 0,
+        },
+        {
+          sheet: 'Dashboard',
+          rowsCut: 0,
+          tailRowsCut: 0,
+          trimmed: 0,
+          numbers: 0,
+          dates: 0,
+          examples: [],
+          notes: [],
+          noteCount: 0,
+        },
+      ],
+      totals: {
+        rowsCut: 1046851,
+        tailRowsCut: 1048398,
+        trimmed: 2,
+        numbers: 1,
+        dates: 1,
+        notes: 2,
+      },
+    },
+  };
+}
+
 export const DEMO_SEED: FakeSeed = {
   dokumente,
   wagen,
@@ -1243,6 +1409,11 @@ export const DEMO_SEED: FakeSeed = {
   master,
   masterDefaults,
   masterSheetViews,
+  masterExport,
+  masterFile: {
+    versions: [masterFileVersion('m-2026-09', '2026-09-15', '2026-09-15')],
+  },
+  masterFilePick: masterFileVersion('m-2026-10', '2026-10-04'),
   masterPicker: 'C:\\Daten\\Wagenmut Übersicht.xlsx',
   masterSheets: [
     { name: 'Alle Wagen', headers: ['Wagen-Nr.', 'Status', 'Bemerkung'] },
