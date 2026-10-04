@@ -635,6 +635,16 @@ in einem Drill mit Martin am 2026-10-04; die Analyse aller 28 Blätter liegt lok
   jede Ansicht vollständig — Spalten in Blattreihenfolge inkl. leerer Köpfe, je Spalte ob die App sie
   füllt, fertig formatierte Zeilen. Die Spalte→Feld-Zuordnung ist derselbe `rebind` wie beim Import,
   also kann die Ansicht ein Blatt nicht anders lesen als der Import, der sie füllt.
+- **Gelesen wird eine Lesekopie, nicht die Kundendatei** (`trains/master/prepare.rs`). umya liest ein
+  Blatt nur ganz, und fünf Blätter sind bis Zeile 1.048.576 gefüllt. Der eine Lesedurchgang, der die
+  Kopfzeilen holt (`bindings::sync`), schneidet deshalb jedes Blatt hinter der letzten echten Zeile ab
+  und schreibt das Ergebnis nach `data/trains/master/<Name> Lesekopie.xlsx` — einmal je Dateistand,
+  danach lesen Import und Blattansicht nur noch die Kopie. Bewusst umya behalten statt eines eigenen
+  Streaming-XML-Lesers: keine zweite Leseschicht, die vom Rest der Pipeline abweichen könnte. Die Kopie
+  liegt nie neben der Kundendatei (eine zweite Mappe in seinem Ordner würde geöffnet und bearbeitet)
+  und heißt nicht „bereinigt“ (das ist der Bereinigen-Gang). Der Refresh liest weiter das ORIGINAL: er
+  schreibt eine datierte Kopie mit jeder Zeile des Kunden. Gemessen 2026-10-04: Kopie in 7,9 s, Spitze
+  ~2 GB, 935 KB groß; danach jedes Blatt in 14–140 ms gestaget, alle 28 Blätter zellgleich zum Original.
 
 Gemessen am echten Master (lokal, 2026-10-04): 405 Wagen, 1.207 Einbauten mit Position, 13
 Datumskonflikte, 533 zusätzliche Radsätze ohne Position, 0 verworfene Zeilen; drei Blätter in 3,5 s,

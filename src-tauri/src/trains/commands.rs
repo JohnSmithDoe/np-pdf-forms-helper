@@ -575,6 +575,9 @@ pub fn pick_master_file(
     let mut settings = db.master().clone();
     let file = file.to_string_lossy().into_owned();
     let changed = settings.file.as_deref() != Some(file.as_str());
+    if changed {
+        settings.scan = None;
+    }
     settings.file = Some(file);
     db.save_master(settings)?;
     master::bindings::sync(&mut db, changed)?;
@@ -602,7 +605,8 @@ pub fn save_master(settings: MasterSettings, state: State<'_, AppState>) -> AppR
 
 #[tauri::command(async)]
 pub fn get_master_sheet(sheet: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
-    Ok(TrainsData::nothing().master_sheet(master::sheet_view(&state.trains(), &sheet)))
+    let mut db = state.trains();
+    Ok(TrainsData::nothing().master_sheet(master::sheet_view(&mut db, &sheet)))
 }
 
 #[tauri::command(async)]

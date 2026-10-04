@@ -89,6 +89,11 @@ front of a screen, or a piece of the migration that does not exist yet. Settled 
   533 Radsätze only the stock knows (open, without position), 0 rejected rows. The ~750 MB is worth
   watching on the Citrix desktops. What has not run: the page and the walk in `tauri:dev`, and any
   phase after the first — see the plan and `decisions.md`, „Der Master wird gespiegelt“.
+- **The master's read copy has run against the real master only from a temporary test**, 2026-10-04:
+  7.9 s and a ~2 GB peak to write it (935 KB), then every one of the 20 bound sheets staged from it in
+  14–140 ms and a sheet view in 31 ms; all 28 sheets read cell for cell the same as from the original
+  (nodepit and RSanKundSgemeldet were cut at rows 175 and 191). The ~2 GB is the one cost worth watching
+  on Citrix — it is paid on the first import or sheet view after the customer saves the file.
 
 ## Known limitations — not work, and not fixable here
 

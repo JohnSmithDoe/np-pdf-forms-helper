@@ -7,13 +7,19 @@
 // imported. What the user changes by hand stays: `sync` only ADDS bindings for
 // sheets not bound yet, and `auto` marks the ones nobody touched.
 //
-// ONLY MAPPING AND IMPORT READ THE FILE. `sync` runs when a file is picked, on
-// „Standardzuordnung“, and when an import starts — never for the settings
-// page, which answers from what the last read stored (`MasterSettings.scan`).
+// ONLY MAPPING, IMPORT AND A SHEET VIEW READ THE FILE. `sync` runs when a file
+// is picked, on „Standardzuordnung“, when an import starts and when a sheet
+// view opens — never for the settings page, which answers from what the last
+// read stored (`MasterSettings.scan`).
 // Reading a header means deserialising the whole sheet — umya has no partial
 // read — and five of the customer's sheets are filled down to row 1,048,576
-// (up to 72 MB of XML each). Even on those three occasions the scan is skipped
-// when the file's modification time matches the stored one.
+// (up to 72 MB of XML each). So the read that takes the headers also writes the
+// trimmed read copy every later reader opens (`prepare`), and even on those
+// occasions it is skipped while the file's modification time matches the
+// stored one and the copy is still there. „Standardzuordnung“ on an unchanged
+// file rebinds from the stored headers without opening the workbook at all.
+// The stored scan says nothing about WHICH file it was taken from, so picking a
+// different one drops it (`pick_master_file`) rather than trusting an mtime.
 //
 // A DIFFERENT file starts over: bindings belong to the workbook they were made
 // for, so `reset` replaces them all with the defaults, and so does picking a new
@@ -22,14 +28,13 @@
 
 use std::path::Path;
 
-use super::kinds;
+use super::{kinds, prepare};
 use crate::error::AppResult;
 use crate::trains::db::TrainsDb;
 use crate::trains::model::{
     ColumnBinding, FieldKind, ImportTemplate, MasterBinding, MasterMode, MasterScan, MasterSheet,
 };
 use crate::trains::recognise;
-use crate::trains::sheet::grid;
 
 pub fn sync(db: &mut TrainsDb, reset: bool) -> AppResult<()> {
     let mut settings = db.master().clone();
@@ -43,14 +48,18 @@ pub fn sync(db: &mut TrainsDb, reset: bool) -> AppResult<()> {
     let fresh = settings
         .scan
         .as_ref()
-        .is_some_and(|scan| scan.modified == modified);
+        .is_some_and(|scan| scan.modified == modified)
+        && prepare::copy_path(db, path).is_file();
     if fresh && !reset {
         return Ok(());
     }
 
-    let scan = MasterScan {
-        modified,
-        sheets: scanned(path)?,
+    let scan = match settings.scan.take() {
+        Some(scan) if fresh => scan,
+        _ => MasterScan {
+            modified,
+            sheets: prepare::copy(db, path)?,
+        },
     };
     if reset {
         settings.bindings.clear();
@@ -97,19 +106,6 @@ fn refresh_source(headers: &[String], templates: &[ImportTemplate]) -> Option<St
         [only] => Some(only.id.clone()),
         _ => None,
     }
-}
-
-fn scanned(path: &Path) -> AppResult<Vec<MasterSheet>> {
-    Ok(grid::heads(path)?
-        .into_iter()
-        .map(|grid| MasterSheet {
-            headers: (1..=grid.cols)
-                .map(|col| grid.text(col, 1).trim().to_string())
-                .filter(|text| !text.is_empty())
-                .collect(),
-            name: grid.sheet,
-        })
-        .collect())
 }
 
 #[cfg(test)]
@@ -215,5 +211,31 @@ mod tests {
             db.master().scan.as_ref().unwrap().sheets.is_empty(),
             "the cache was trusted, the workbook not opened"
         );
+    }
+
+    #[test]
+    fn standardzuordnung_on_an_unchanged_file_rebinds_from_the_stored_headers() {
+        let folder = TempDir::new("bindings-reset-cached");
+        let mut db = master(&folder);
+        sync(&mut db, false).unwrap();
+        let mut settings = db.master().clone();
+        settings.scan.as_mut().unwrap().sheets.truncate(1);
+        db.save_master(settings).unwrap();
+
+        sync(&mut db, true).unwrap();
+        assert_eq!(db.master().bindings.len(), 1, "the workbook was not opened");
+    }
+
+    #[test]
+    fn a_missing_read_copy_is_made_again_although_the_file_is_unchanged() {
+        let folder = TempDir::new("bindings-copy-gone");
+        let mut db = master(&folder);
+        sync(&mut db, false).unwrap();
+        let path = prepare::existing(&db).unwrap();
+        std::fs::remove_file(&path).unwrap();
+
+        sync(&mut db, false).unwrap();
+        assert!(path.is_file());
+        assert_eq!(db.master().scan.as_ref().unwrap().sheets.len(), 6);
     }
 }

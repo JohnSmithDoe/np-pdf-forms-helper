@@ -2,8 +2,8 @@
 // What the settings page needs and only the workbook knows: its sheet names,
 // and the header row of each BOUND sheet, for the key and alias selects. Both
 // come from the SCAN stored in the settings by the last mapping or import
-// (`bindings::sync`), never from the workbook: only mapping and import read the
-// file, and reading a header means deserialising a whole sheet. A missing file is a `problem` on the view, not
+// (`bindings::sync`), never from the workbook: only mapping, import and a sheet
+// view read the file, and reading a header means deserialising a whole sheet. A missing file is a `problem` on the view, not
 // an error, so the page can still show the settings that point at it.
 //
 // `header_row` and `fields` are shared with `sheet_view`: a header row by

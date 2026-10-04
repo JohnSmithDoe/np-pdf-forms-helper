@@ -254,10 +254,14 @@ pub fn heads(path: &Path) -> AppResult<Vec<Grid>> {
         let worksheet = book
             .sheet_mut(index)
             .map_err(|error| AppError::detail(headline(), error))?;
-        grids.push(build(worksheet, Some(HEAD_ROWS), Mode::Strict)?.0);
+        grids.push(head(worksheet)?);
         *worksheet = umya_spreadsheet::Worksheet::default();
     }
     Ok(grids)
+}
+
+pub fn head(worksheet: &umya_spreadsheet::Worksheet) -> AppResult<Grid> {
+    build(worksheet, Some(HEAD_ROWS), Mode::Strict).map(|(grid, _)| grid)
 }
 
 pub fn from_worksheet(worksheet: &umya_spreadsheet::Worksheet) -> AppResult<Grid> {

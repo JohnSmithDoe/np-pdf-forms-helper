@@ -18,6 +18,7 @@
 //
 //   bindings  every sheet bound by its headers; the header scan, cached per file version
 //   book      opening the workbook the one safe way (lazy, one sheet at a time)
+//   prepare   the trimmed read copy every reader opens instead of the original
 //   view      what the settings page needs from the workbook
 //   sheet_view  one bound sheet as the mirror holds it, built for display
 //   paste     writing a table into a paste-target sheet by header
@@ -29,6 +30,7 @@ mod book;
 pub mod kinds;
 pub mod mirror;
 mod paste;
+pub mod prepare;
 mod refresh;
 mod sheet_view;
 mod source;

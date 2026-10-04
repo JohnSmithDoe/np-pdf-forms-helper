@@ -20,12 +20,16 @@
 // Formatting is the app's own: the Wagennummer in the Schattensystem's
 // spelling (`TrainsSettings`), dates `dd.mm.yyyy`. A missing file or an unbound
 // sheet is a `problem`, never an error, like the master view's.
+//
+// The sheet is read from the trimmed read copy (`prepare`), and a view is the
+// one reader outside an import, so it runs `bindings::sync` first: a file
+// changed since the last read is copied again, or the view would show columns
+// the customer has already moved. When nothing changed that is one `stat`.
 // ────────────────────────────────────────────────────────────────
 
 use std::collections::HashMap;
-use std::path::Path;
 
-use super::{book, view};
+use super::{bindings, book, prepare, view};
 use crate::error::{AppError, AppResult};
 use crate::trains::db::TrainsDb;
 use crate::trains::model::{
@@ -85,7 +89,7 @@ struct Entity<'a> {
     einbau: Option<&'a Einbau>,
 }
 
-pub fn sheet_view(db: &TrainsDb, sheet: &str) -> MasterSheetView {
+pub fn sheet_view(db: &mut TrainsDb, sheet: &str) -> MasterSheetView {
     let mut out = MasterSheetView {
         sheet: sheet.to_string(),
         ..MasterSheetView::default()
@@ -96,12 +100,11 @@ pub fn sheet_view(db: &TrainsDb, sheet: &str) -> MasterSheetView {
     out
 }
 
-fn build(db: &TrainsDb, sheet: &str, out: &mut MasterSheetView) -> AppResult<()> {
+fn build(db: &mut TrainsDb, sheet: &str, out: &mut MasterSheetView) -> AppResult<()> {
+    bindings::sync(db, false)?;
+    let copy = prepare::existing(db)?;
+    let db = &*db;
     let settings = db.master();
-    let path =
-        settings.file.as_deref().map(Path::new).ok_or_else(|| {
-            AppError::Report(vec!["Es ist noch keine Master-Datei gewählt.".into()])
-        })?;
     let binding = settings
         .bindings
         .iter()
@@ -113,9 +116,9 @@ fn build(db: &TrainsDb, sheet: &str, out: &mut MasterSheetView) -> AppResult<()>
         })?;
     out.kind = binding.kind;
 
-    let mut workbook = book::open(path)?;
+    let mut workbook = book::open(&copy)?;
     let index = book::index(&book::names(&workbook), sheet)?;
-    book::deserialise(&mut workbook, index, path)?;
+    book::deserialise(&mut workbook, index, &copy)?;
     let header = view::header_row(&workbook.sheet_collection_no_check()[index]);
     let fields = view::fields(&header, view::template_of(binding, db, &header).as_ref());
     let grain = Grain::of(&fields);
@@ -284,8 +287,8 @@ mod tests {
     #[test]
     fn a_radsatz_sheet_keeps_every_column_and_fills_only_the_first_repeated_one() {
         let folder = TempDir::new("sheetview-columns");
-        let db = imported(&folder);
-        let view = sheet_view(&db, "Einbauliste");
+        let mut db = imported(&folder);
+        let view = sheet_view(&mut db, "Einbauliste");
         assert_eq!(view.problem, None);
         assert_eq!(view.row_label, "Radsätze");
 
@@ -312,8 +315,8 @@ mod tests {
     #[test]
     fn radsatz_rows_are_the_mirror_sorted_by_wagen_and_position_with_their_source() {
         let folder = TempDir::new("sheetview-rows");
-        let db = imported(&folder);
-        let view = sheet_view(&db, "Bestand");
+        let mut db = imported(&folder);
+        let view = sheet_view(&mut db, "Bestand");
 
         let keys: Vec<&str> = view.rows.iter().map(|row| row.key.as_str()).collect();
         assert_eq!(
@@ -346,8 +349,8 @@ mod tests {
     #[test]
     fn the_dashboard_is_one_row_per_wagen_with_its_notes_column_unfilled() {
         let folder = TempDir::new("sheetview-fleet");
-        let db = imported(&folder);
-        let view = sheet_view(&db, "Übersicht");
+        let mut db = imported(&folder);
+        let view = sheet_view(&mut db, "Übersicht");
         assert_eq!(view.row_label, "Wagen");
         assert_eq!(view.rows.len(), 2);
         assert_eq!(view.columns[1].header, "Bemerkungen");
@@ -358,8 +361,8 @@ mod tests {
     #[test]
     fn an_unbound_sheet_is_a_problem_not_an_error() {
         let folder = TempDir::new("sheetview-unbound");
-        let db = imported(&folder);
-        let view = sheet_view(&db, "Kontakte");
+        let mut db = imported(&folder);
+        let view = sheet_view(&mut db, "Kontakte");
         assert!(view.problem.unwrap().contains("nicht zugeordnet"));
         assert!(view.rows.is_empty());
     }

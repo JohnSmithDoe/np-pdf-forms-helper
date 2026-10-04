@@ -26,8 +26,9 @@
 // `StagingOrigin::Master` instead, which is what lets `commit` take it without a
 // document and what keeps that gate shut for every other file.
 //
-// A sheet is read through `book` and `grid::from_master`: one sheet
-// deserialised, the zero tail cut, cached formula errors empty. Its header row
+// A sheet is read from the trimmed read copy `start` made sure of
+// (`prepare`), through `book` and `grid::from_master`: one sheet deserialised,
+// cached formula errors empty, the zero tail cut again as a guard. Its header row
 // is row 1 by construction of these exports, so the plan is built from row 1
 // and the kind's template rebound onto it by header (`recognise::rebind`) —
 // not detected, because the dashboard's wrapped headers are exactly what a
@@ -39,7 +40,7 @@ use std::path::Path;
 
 use uuid::Uuid;
 
-use super::{book, kinds};
+use super::{book, kinds, prepare};
 use crate::error::{AppError, AppResult};
 use crate::trains::db::TrainsDb;
 use crate::trains::model::{
@@ -97,10 +98,11 @@ pub fn stage_sheet(db: &TrainsDb, sheet: &str) -> AppResult<HeldImport> {
         )]));
     };
 
-    let mut workbook = book::open(path)?;
+    let copy = prepare::existing(db)?;
+    let mut workbook = book::open(&copy)?;
     let sheets = book::names(&workbook);
     let index = book::index(&sheets, sheet)?;
-    book::deserialise(&mut workbook, index, path)?;
+    book::deserialise(&mut workbook, index, &copy)?;
     let (grid, _) = grid::from_master(&workbook.sheet_collection_no_check()[index])?;
 
     let header = header_plan(&grid);
@@ -317,6 +319,7 @@ pub(super) mod tests {
             scan: None,
         })
         .unwrap();
+        super::super::bindings::sync(&mut db, false).unwrap();
         db
     }
 
@@ -511,6 +514,16 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn a_sheet_is_staged_from_the_read_copy_and_named_after_the_original() {
+        let folder = TempDir::new("mirror-copy");
+        let db = bound(&folder);
+        std::fs::remove_file(db.master().file.as_deref().unwrap()).unwrap();
+
+        let held = stage_sheet(&db, "Bestand").unwrap();
+        assert_eq!(held.wire.file, "Master.xlsx");
+    }
+
+    #[test]
     fn the_zero_tail_is_cut_and_never_staged() {
         let folder = TempDir::new("mirror-tail");
         let mut db = bound(&folder);
@@ -612,6 +625,7 @@ pub(super) mod tests {
             scan: None,
         })
         .unwrap();
+        super::super::bindings::sync(&mut db, false).unwrap();
 
         let held = stage_sheet(&db, "Einbauliste").unwrap();
         let status = |row: u32| {

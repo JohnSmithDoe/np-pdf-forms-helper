@@ -110,6 +110,15 @@ Measured 2026-08-22 in Chrome against `@ionic/angular@8`, while reworking the ex
   `lazy_read` plus the one sheet. `grid::read` therefore reads one sheet, and so does the master
   refresh, which writes the workbook back out; the filler and the cleaner keep the full read.
 
+- **There is no partial read of a sheet, so a header costs the whole sheet.** `read_sheet(index)`
+  deserialises every cell, and the master's five fill-down sheets are up to 72 MB of XML each: one header
+  scan of all 28 sheets cost 6.2 s and ~1.7 GB. `trains/master/prepare.rs` pays that once per file
+  version and writes a trimmed read copy. Trimming it is its own trap: `Worksheet::cleanup()` walks up
+  from the bottom and stops at the first VISUALLY non-empty row, which a `0` is, so it removes nothing
+  there; `remove_row` shifts every formula reference in the book for each removal. `remove_cell` per
+  cell plus `row_dimensions_to_hashmap_mut().retain(..)` removes the tail and nothing else. The trimmed
+  sheets stay in memory until the write, so the pass peaks near 2 GB rather than one sheet's worth.
+
 - **`Workbook::sheet_collection_mut()` deserialises EVERY sheet before it answers.** It looks like a
   plain accessor; it calls `read_sheet_collection()`. On the 28-sheet master, reaching one sheet through
   it cost 4 s, made the write 7 s instead of 1 s — a deserialised sheet is re-serialised rather than

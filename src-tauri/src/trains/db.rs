@@ -60,7 +60,9 @@
 // loads) and written alone, atomically. It sits outside `transaction` because
 // it changes nothing a rollback would have to restore alongside. `master.json`
 // is the same shape for the same reasons, and `reset` keeps both: they are
-// configuration, not imported data.
+// configuration, not imported data. The master's read copy under `master/` is
+// removed like the owned documents: it is derived, and `master::bindings::sync`
+// rebuilds it on the next read because the copy is missing.
 //
 // The SHIPPED templates are never stored. `templates` merges them in at read
 // time, minus any a user copy shadows through its `origin`, so a reset cannot
@@ -88,6 +90,14 @@ use crate::trains::model::{
 const VERSION: u32 = 1;
 const SETTINGS: &str = "einstellungen.json";
 const MASTER: &str = "master.json";
+
+pub fn remove_folder(folder: &Path) -> AppResult<()> {
+    match std::fs::remove_dir_all(folder) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(AppError::io(folder, error)),
+    }
+}
 
 /// Its own key AND every alias key, so a spelling learnt for one sender finds
 /// the radsatz at all — whether it then DECIDES is `resolve::radsatz`'s call.
@@ -345,6 +355,10 @@ impl TrainsDb {
         self.folder.join("dokumente")
     }
 
+    pub fn master_folder(&self) -> PathBuf {
+        self.folder.join("master")
+    }
+
     pub fn wagen_by_id(&self, id: &str) -> Option<&Wagen> {
         self.wagen.get(id)
     }
@@ -484,12 +498,8 @@ impl TrainsDb {
             Ok(())
         })?;
         self.reindex();
-        let folder = self.dokumente_folder();
-        match std::fs::remove_dir_all(&folder) {
-            Ok(()) => Ok(()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(AppError::io(&folder, error)),
-        }
+        remove_folder(&self.dokumente_folder())?;
+        remove_folder(&self.master_folder())
     }
 }
 
