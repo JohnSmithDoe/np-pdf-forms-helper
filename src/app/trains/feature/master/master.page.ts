@@ -19,8 +19,9 @@
 // typo. A binding whose names went stale (a renamed sheet) still shows, with
 // the stale value, and the export reports it rather than this page hiding it.
 //
-// `snapshot` and `feed` are spelled for the user as what they do to the sheet:
-// „Stand ersetzen“ and „Fortlaufend ergänzen“ (docs/decisions.md).
+// There is no mode: the master update is always incremental, matched by the
+// key column set here (docs/decisions.md, „Die Kunden-Master ist die einzige
+// Master“).
 //
 // The IMPORT runs the other way: every binding with an „Inhalt“ (its sheet
 // kind) is read into the Schattensystem, sheet by sheet through the import
@@ -89,20 +90,9 @@ import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-over
 import { ImportWalkFacade, MasterFileFacade, TrainsFacade } from '../../data';
 import type {
   MasterBinding,
-  MasterMode,
   MasterSettings,
   SheetKind,
 } from '../../model/trains.types';
-
-interface ModeOption {
-  value: MasterMode;
-  label: string;
-}
-
-const MODES: readonly ModeOption[] = [
-  { value: 'snapshot', label: 'Stand ersetzen' },
-  { value: 'feed', label: 'Fortlaufend ergänzen' },
-];
 
 const NO_KEY = '';
 const NO_KIND = '';
@@ -165,7 +155,6 @@ export class TrainsMasterPage {
   readonly #overlays = inject(OverlayService);
   readonly #router = inject(Router);
 
-  protected readonly modes = MODES;
   protected readonly kinds = KINDS;
   protected readonly noKey = NO_KEY;
   protected readonly noKind = NO_KIND;
@@ -261,7 +250,6 @@ export class TrainsMasterPage {
     const binding: MasterBinding = {
       sheet: this.view()?.sheets.find((sheet) => !bound.has(sheet)) ?? '',
       templateId: this.templates()[0]?.id ?? '',
-      mode: 'snapshot',
       aliases: [],
       auto: false,
     };
@@ -323,11 +311,6 @@ export class TrainsMasterPage {
   protected onTemplate(index: number, event: Event): void {
     const templateId = this.#value(event);
     if (templateId !== undefined) this.onChange(index, { templateId });
-  }
-
-  protected onMode(index: number, event: Event): void {
-    const mode = this.#value(event) as MasterMode | undefined;
-    if (mode) this.onChange(index, { mode });
   }
 
   protected onKey(index: number, event: Event): void {

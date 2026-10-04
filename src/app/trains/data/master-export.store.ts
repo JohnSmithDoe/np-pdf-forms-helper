@@ -52,6 +52,7 @@ export const MasterExportStore = signalStore(
           key: sheet.key,
           aliases: sheet.aliases,
           ignored: sheet.ignored,
+          append: sheet.append,
         };
       }
       patchState(store, {
@@ -88,6 +89,7 @@ export const MasterExportStore = signalStore(
           key: sheet.key,
           aliases: sheet.aliases,
           ignored: sheet.ignored,
+          append: sheet.append,
         };
       }
       patchState(store, { preview: run, choices });

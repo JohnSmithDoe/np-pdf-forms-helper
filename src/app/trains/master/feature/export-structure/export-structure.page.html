@@ -25,7 +25,9 @@
     <ion-card data-testid="export-structure-sheet">
       <ion-card-header>
         <ion-card-title>{{ view.run.sheet }}</ion-card-title>
-        <ion-card-subtitle>{{ modes[view.run.mode] }}</ion-card-subtitle>
+        <ion-card-subtitle>{{
+          view.run.append ? appendLabels.on : appendLabels.off
+        }}</ion-card-subtitle>
       </ion-card-header>
       <ion-card-content>
         <ion-list lines="none">

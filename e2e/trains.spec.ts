@@ -191,7 +191,6 @@ test.describe('Master-Datei', () => {
         {
           sheet: 'Telematik',
           templateId: 't-telematik',
-          mode: 'snapshot',
           aliases: [],
         },
       ],

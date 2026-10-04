@@ -15,8 +15,12 @@
 // hand-kept column or by „nicht übertragen“ (`ignored`), both remembered on the
 // binding, so the next document of the template asks again only when the
 // structure moved. A remembered alias or key the sheet no longer has is
-// dropped and SAID (`conflicts`), never silently re-pointed. A sheet that cannot
-// be written at all — no shared column, a feed without key — is a `problem`.
+// dropped and SAID (`conflicts`), never silently re-pointed. Only a sheet that
+// takes new rows (`append` — the one the document's template belongs to) asks:
+// a sheet that is only UPDATED shares a few columns with the document by
+// design, and the rest of the document's columns simply do not go there. A
+// sheet that cannot be written at all — no shared column, no key, a key the
+// document names twice — is a `problem`.
 //
 // THE RESULT IS A NEW VERSION OF THE CLIENT MASTER (`master_file::updated`),
 // never a write into the current one and never a loose copy beside it: there is
@@ -41,7 +45,7 @@ use crate::error::{AppError, AppResult};
 use crate::trains::db::TrainsDb;
 use crate::trains::model::{
     Dokument, MasterBinding, MasterExportChoice, MasterExportRequest, MasterExportRun,
-    MasterExportSheetRun, MasterMode, MasterSettings,
+    MasterExportSheetRun, MasterSettings,
 };
 use crate::trains::sheet::grid;
 
@@ -158,7 +162,7 @@ fn sheet(
 ) -> MasterExportSheetRun {
     let mut out = MasterExportSheetRun {
         sheet: choice.sheet.clone(),
-        mode: binding.mode,
+        append: choice.append,
         ..MasterExportSheetRun::default()
     };
     let result = (|| -> AppResult<()> {
@@ -205,17 +209,19 @@ fn sheet(
             .filter(|column| structure.unmatched.contains(column))
             .cloned()
             .collect();
-        out.open = structure
-            .unmatched
-            .iter()
-            .filter(|column| !binding.ignored.contains(column))
-            .cloned()
-            .collect();
+        if choice.append {
+            out.open = structure
+                .unmatched
+                .iter()
+                .filter(|column| !binding.ignored.contains(column))
+                .cloned()
+                .collect();
+        }
         out.matched = structure.matched;
         out.targets = structure.hand;
 
         let before = grid::from_worksheet(worksheet)?;
-        let outcome = paste::write(worksheet, &binding, table)?;
+        let outcome = paste::write(worksheet, &binding, table, choice.append)?;
         let after = grid::from_worksheet(worksheet)?;
         (out.changed, out.changes) = diff::changes(&before, &after, &outcome.columns, outcome.key);
         out.line = outcome.line;
@@ -236,7 +242,6 @@ fn unbound(sheet: &str) -> MasterBinding {
         sheet: sheet.to_string(),
         template_id: String::new(),
         kind: None,
-        mode: MasterMode::Snapshot,
         key: None,
         aliases: Vec::new(),
         ignored: Vec::new(),
@@ -254,7 +259,11 @@ fn remember(
     for binding in &mut settings.bindings {
         match run.sheets.iter().find(|sheet| sheet.sheet == binding.sheet) {
             Some(sheet) if sheet.problem.is_none() => {
-                binding.template_id = template_id.to_string();
+                if sheet.append {
+                    binding.template_id = template_id.to_string();
+                } else if related.contains(&binding.template_id) {
+                    binding.template_id = String::new();
+                }
                 binding.key = sheet.key.clone();
                 binding.aliases = sheet.aliases.clone();
                 binding.ignored = sheet.ignored.clone();
@@ -359,6 +368,13 @@ mod tests {
                         &["#338506590011", "", "#45001", "Altstadt"],
                     ],
                 ),
+                (
+                    "Projekt",
+                    &[
+                        &["TRANSPORTMITTELNR", "Stadt", "Projekt"],
+                        &["#338506591522", "Altstadt", "Pilot"],
+                    ],
+                ),
             ],
         )
     }
@@ -392,35 +408,17 @@ mod tests {
             key: Some("Asset".into()),
             aliases: vec![],
             ignored: vec![],
+            append: true,
         }
     }
 
     const HEADERS: [&str; 3] = ["Asset", "Anbaudatum", "Stadt"];
 
-    // The recognition binds every sheet with a Wagen key as the overview kind,
-    // paste targets included: a remembered template must still win, and come
-    // first; the overview without one is offered with a warning, not blocked.
+    // The template's own sheet takes new rows; a sheet that merely shares a
+    // column is pre-ticked too, but only updated, its Wagen column linked to the
+    // document's by an alias; a sheet sharing nothing but the key is left.
     #[test]
-    fn a_remembered_overview_kind_sheet_is_suggested_first() {
-        let folder = TempDir::new("export-overview");
-        let (mut db, _) = setup(&folder, &HEADERS);
-        let mut settings = db.master().clone();
-        for binding in &mut settings.bindings {
-            binding.kind = Some(crate::trains::model::SheetKind::Wagenliste);
-        }
-        settings.bindings[1].template_id = "t-telematik".into();
-        db.save_master(settings).unwrap();
-
-        let start = start(&mut db, "d-1").unwrap();
-        assert_eq!(start.sheets[0].sheet, "Telematik");
-        assert!(start.sheets[0].suggested);
-        assert_eq!(start.sheets[0].warning, None);
-        assert!(!start.sheets[1].suggested);
-        assert!(start.sheets[1].warning.is_some());
-    }
-
-    #[test]
-    fn the_sheet_bound_to_the_template_is_suggested_and_the_dashboard_is_not() {
+    fn the_template_sheet_appends_and_an_affected_sheet_only_updates() {
         let folder = TempDir::new("export-suggest");
         let (mut db, _) = setup(&folder, &HEADERS);
         let mut settings = db.master().clone();
@@ -428,20 +426,57 @@ mod tests {
         db.save_master(settings).unwrap();
 
         let start = start(&mut db, "d-1").unwrap();
-        let telematik = start
+        let sheet = |name: &str| start.sheets.iter().find(|s| s.sheet == name).unwrap();
+        assert_eq!(start.sheets[0].sheet, "Telematik", "suggested first");
+        assert!(sheet("Telematik").suggested && sheet("Telematik").append);
+        assert_eq!(sheet("Telematik").key.as_deref(), Some("Asset"));
+
+        let projekt = sheet("Projekt");
+        assert!(projekt.suggested && !projekt.append, "{projekt:?}");
+        assert_eq!(projekt.key.as_deref(), Some("TRANSPORTMITTELNR"));
+        assert_eq!(
+            projekt.aliases,
+            [MasterAlias {
+                master: "TRANSPORTMITTELNR".into(),
+                source: "Asset".into(),
+            }]
+        );
+        assert!(projekt.reason.as_deref().unwrap().contains("„Stadt“"));
+
+        assert!(!sheet("Überblick").suggested, "only the key in common");
+        assert_eq!(start.bases.len(), 1);
+    }
+
+    #[test]
+    fn an_affected_sheet_has_its_known_row_updated_and_asks_nothing() {
+        let folder = TempDir::new("export-affected");
+        let (mut db, _) = setup(&folder, &HEADERS);
+        let offered = start(&mut db, "d-1").unwrap();
+        let projekt = offered
             .sheets
             .iter()
-            .find(|s| s.sheet == "Telematik")
+            .find(|s| s.sheet == "Projekt")
             .unwrap();
-        assert!(telematik.suggested, "{telematik:?}");
-        assert!(telematik.reason.as_deref().unwrap().contains("Vorlage"));
-        let overview = start
-            .sheets
-            .iter()
-            .find(|s| s.sheet == "Überblick")
-            .unwrap();
-        assert!(!overview.suggested);
-        assert_eq!(start.bases.len(), 1, "no copy yet");
+        let choice = MasterExportChoice {
+            sheet: "Projekt".into(),
+            key: projekt.key.clone(),
+            aliases: projekt.aliases.clone(),
+            ignored: vec![],
+            append: projekt.append,
+        };
+        let run = preview(&db, &request(&db, choice)).unwrap();
+        let sheet = &run.sheets[0];
+        assert_eq!(sheet.problem, None, "{sheet:?}");
+        assert!(
+            sheet.open.is_empty(),
+            "the other document columns just stay out"
+        );
+        let city = sheet.changes.iter().find(|c| c.cell == "B2").unwrap();
+        assert_eq!(
+            (city.before.as_str(), city.after.as_str()),
+            ("Altstadt", "Neuhof")
+        );
+        assert!(sheet.line.contains("1 Zeile(n) aktualisiert, 0 angehängt"));
     }
 
     #[test]
@@ -454,11 +489,11 @@ mod tests {
         let sheet = &run.sheets[0];
         assert_eq!(sheet.problem, None, "{sheet:?}");
         assert!(sheet.open.is_empty() && sheet.conflicts.is_empty());
-        // The snapshot leaves one row: the date and the city of row 2 change,
-        // and row 3 is emptied in both written columns plus its key.
+        // Incremental: the date and the city of the known Wagen change, the
+        // other Wagen's row is not touched.
         let cells: Vec<&str> = sheet.changes.iter().map(|c| c.cell.as_str()).collect();
         assert!(cells.contains(&"C2") && cells.contains(&"D2"), "{cells:?}");
-        assert!(cells.contains(&"A3"), "{cells:?}");
+        assert!(!cells.iter().any(|cell| cell.ends_with('3')), "{cells:?}");
         let city = sheet.changes.iter().find(|c| c.cell == "D2").unwrap();
         assert_eq!(
             (city.before.as_str(), city.after.as_str()),
@@ -588,6 +623,7 @@ mod tests {
             key: None,
             aliases: vec![],
             ignored: vec![],
+            append: true,
         };
         let wanted = request(&db, choice);
         let messages = write(&mut db, &wanted, "2026-10-04")

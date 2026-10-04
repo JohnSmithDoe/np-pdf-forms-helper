@@ -16,8 +16,6 @@
 use crate::trains::builtin::shaped;
 use crate::trains::model::{FieldKind, ImportTemplate};
 
-pub const UPDATES: bool = true;
-
 pub fn claims(names: &[String]) -> bool {
     super::has_all(
         names,

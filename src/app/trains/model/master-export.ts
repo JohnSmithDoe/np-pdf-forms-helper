@@ -5,12 +5,10 @@
 // import another feature.
 // ────────────────────────────────────────────────────────────────
 
-import type { MasterMode } from './trains.types';
-
 export const EXPORT_PHASE = 'Master aktualisieren';
 export const EXPORT_STEPS = 4;
 
-export const MODE_LABELS: Record<MasterMode, string> = {
-  snapshot: 'Stand ersetzen',
-  feed: 'Fortlaufend ergänzen',
-};
+export const APPEND_LABELS = {
+  on: 'neue Zeilen werden angehängt',
+  off: 'nur vorhandene Zeilen werden aktualisiert',
+} as const;

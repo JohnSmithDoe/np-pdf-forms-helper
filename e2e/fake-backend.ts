@@ -49,9 +49,9 @@
 // file by `seed.masterDefaults`.
 //
 // The master EXPORT wizard is faked shallow. `open_master_export` offers every
-// seeded sheet, suggested ones first — those bound to the document's template —
-// and warning on an overview without a template; which sheets Rust would suggest beyond that is
-// `cargo test`'s. `preview_master_export` and `write_master_export` serve
+// seeded sheet, suggested ones first — those bound to the document's template,
+// with `append` on; which other sheets the data would affect, their key and its
+// alias are `cargo test`'s. `preview_master_export` and `write_master_export` serve
 // `seed.masterExport[sheet]` — hand-written runs with their structure and cell
 // changes — and only ECHO the request's answers back: an answered column leaves
 // `open`, nothing is pasted or diffed. The write records a new version of the
@@ -400,7 +400,6 @@ export interface FakeMasterSettings {
     sheet: string;
     templateId: string;
     kind?: 'wagenliste' | 'radsatzEinbau' | 'radsatzBestand';
-    mode: 'snapshot' | 'feed';
     key?: string;
     aliases: { master: string; source: string }[];
     ignored?: string[];
@@ -520,6 +519,7 @@ interface FakeExportRequest {
     key?: string;
     aliases: { master: string; source: string }[];
     ignored: string[];
+    append: boolean;
   }[];
   remember: boolean;
 }
@@ -762,13 +762,10 @@ export function install(seed: FakeSeed): void {
         ...choice.aliases.map((alias) => alias.source),
         ...choice.ignored,
       ]);
-      const mode =
-        state.master.bindings.find((entry) => entry.sheet === choice.sheet)
-          ?.mode ?? 'snapshot';
       return {
         ...copy(seeded),
         sheet: choice.sheet,
-        mode,
+        append: choice.append,
         key: choice.key,
         aliases: copy(choice.aliases),
         ignored: copy(choice.ignored),
@@ -1236,24 +1233,19 @@ export function install(seed: FakeSeed): void {
               const bound = state.master.bindings.find(
                 (entry) => entry.sheet === sheet.name
               );
-              const overview = bound?.kind === 'wagenliste';
               const remembered = bound?.templateId === dokument.templateId;
               return {
                 sheet: sheet.name,
                 kind: bound?.kind,
-                mode: bound?.mode ?? 'snapshot',
                 key: bound?.key,
                 aliases: copy(bound?.aliases ?? []),
                 ignored: copy(bound?.ignored ?? []),
+                append: remembered,
                 matched: state.masterExport[sheet.name]?.matched.length ?? 0,
                 suggested: remembered,
                 reason: remembered
-                  ? `zugeordnet zur Vorlage „${dokument.templateName}“`
+                  ? `Blatt der Vorlage „${dokument.templateName}“ · neue Zeilen werden angehängt`
                   : undefined,
-                warning:
-                  overview && !bound?.templateId
-                    ? 'Als Übersicht zugeordnet: Formeln und Notizen des Kunden können beim Schreiben ersetzt werden.'
-                    : undefined,
               };
             })
             .sort((a, b) => Number(b.suggested) - Number(a.suggested)),

@@ -10,17 +10,15 @@
 // names), compared normalised, first match in sheet order wins. A sheet with
 // none of them falls back to „Wagennummer“, which then simply finds nothing.
 //
-// Never SUGGESTED for writing: the dashboard is formulas over the other sheets
-// plus the customer's own notes, and pasting rows into it would replace both.
-// A pasted export of this kind is written once the user ticks it — the export
-// remembers its template, and a remembered template is suggested again.
+// The same key column is the master update's default key for such a sheet
+// (`key_column`): the update is incremental, so a dashboard only has the cells
+// of its existing rows overwritten where a column is the document's — never a
+// formula column, never a hand column, never a row removed.
 // ────────────────────────────────────────────────────────────────
 
 use crate::trains::builtin::shaped;
 use crate::trains::model::{FieldKind, ImportTemplate};
 use crate::trains::recognise::normalise;
-
-pub const UPDATES: bool = false;
 
 const KEYS: [&str; 6] = [
     "Wagennummer",
@@ -36,15 +34,19 @@ pub fn claims(names: &[String]) -> bool {
 }
 
 pub fn template(headers: &[String]) -> ImportTemplate {
-    let key = headers
-        .iter()
-        .find(|header| is_key(&normalise(header)))
-        .map_or(KEYS[0], String::as_str);
+    let key = key_column(headers).unwrap_or_else(|| KEYS[0].to_string());
     shaped(
         super::id("wagenliste"),
         "Master: Wagenliste",
-        &[(key, FieldKind::Wagennummer)],
+        &[(&key, FieldKind::Wagennummer)],
     )
+}
+
+pub fn key_column(headers: &[String]) -> Option<String> {
+    headers
+        .iter()
+        .find(|header| is_key(&normalise(header)))
+        .cloned()
 }
 
 fn is_key(name: &str) -> bool {

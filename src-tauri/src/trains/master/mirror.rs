@@ -220,8 +220,8 @@ pub(super) mod tests {
     use crate::testing::{workbook, TempDir};
     use crate::trains::commit;
     use crate::trains::model::{
-        EinbauChoice, EntityChoice, EntityDecision, EntityDecisions, EntityGroup, MasterMode,
-        Resolution, RowStatus, SheetKind,
+        EinbauChoice, EntityChoice, EntityDecision, EntityDecisions, EntityGroup, Resolution,
+        RowStatus, SheetKind,
     };
 
     const W1: &str = "218124712173";
@@ -298,7 +298,6 @@ pub(super) mod tests {
             sheet: sheet.into(),
             template_id: String::new(),
             kind: Some(kind),
-            mode: MasterMode::Snapshot,
             key: None,
             aliases: Vec::new(),
             ignored: Vec::new(),

@@ -90,9 +90,13 @@
 //
 // The master EXPORT is a wizard over one filed Dokument: `MasterExportStart`
 // offers the sheets and the base file, a `MasterExportRequest` is the user's
-// whole answer — sheets, keys, aliases — sent again on every change like
+// whole answer — sheets, keys, aliases, `append` — sent again on every change like
 // `restage_import`'s plan, and a `MasterExportRun` is the dry run or the
 // written copy, with each sheet's structure and its changed cells.
+// The update is ALWAYS incremental: rows are matched by `key`, a known key is
+// updated, nothing is deleted, and an unknown key is appended only where the
+// sheet's `append` is on. There is no replace mode any more — a `mode` left in
+// an old `master.json` is ignored on read and dropped on the next write.
 // What it writes is a new `MasterFileVersion`, its `quelle` the document.
 // `MasterSettings.file` is derived — always the current version's cleaned copy
 // (`bindings::follow`) — and the backend owns it, like `import_run`.
@@ -139,14 +143,6 @@ pub struct TrainsSettings {
     pub wagennummer: UicStyle,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum MasterMode {
-    #[default]
-    Snapshot,
-    Feed,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MasterAlias {
@@ -170,8 +166,6 @@ pub struct MasterBinding {
     pub template_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kind: Option<SheetKind>,
-    #[serde(default)]
-    pub mode: MasterMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     #[serde(default)]
@@ -272,6 +266,8 @@ pub struct MasterExportChoice {
     pub aliases: Vec<MasterAlias>,
     #[serde(default)]
     pub ignored: Vec<String>,
+    #[serde(default)]
+    pub append: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -297,17 +293,15 @@ pub struct MasterExportSheet {
     pub sheet: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kind: Option<SheetKind>,
-    pub mode: MasterMode,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     pub aliases: Vec<MasterAlias>,
     pub ignored: Vec<String>,
+    pub append: bool,
     pub matched: u32,
     pub suggested: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub warning: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -336,7 +330,7 @@ pub struct CellChange {
 #[serde(rename_all = "camelCase")]
 pub struct MasterExportSheetRun {
     pub sheet: String,
-    pub mode: MasterMode,
+    pub append: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     pub aliases: Vec<MasterAlias>,

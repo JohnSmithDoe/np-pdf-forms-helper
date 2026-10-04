@@ -10,8 +10,10 @@
 // column is open or a sheet cannot be written at all — leaving it would mean
 // the preview shows a sheet the export then refuses.
 //
-// The key select is offered on every sheet: a feed cannot run without one, and
-// on a snapshot it is what lets hand-kept cells move with their row.
+// The key select is offered on every sheet: the update is incremental and
+// matches rows by it, so a sheet without one — or with a key the document names
+// twice — cannot be written. Only a sheet that takes new rows asks about
+// columns; a sheet that is only updated takes what it shares.
 //
 // Every select re-runs the dry run (the facade), so step three always shows
 // what these answers write.
@@ -42,7 +44,7 @@ import { MasterExportFacade } from '../../../data';
 import {
   EXPORT_PHASE,
   EXPORT_STEPS,
-  MODE_LABELS,
+  APPEND_LABELS,
 } from '../../../model/master-export';
 
 const IGNORE = '\u0000nicht-uebertragen';
@@ -76,7 +78,7 @@ export class ExportStructurePage {
 
   protected readonly phase = EXPORT_PHASE;
   protected readonly steps = EXPORT_STEPS;
-  protected readonly modes = MODE_LABELS;
+  protected readonly appendLabels = APPEND_LABELS;
   protected readonly ignore = IGNORE;
   protected readonly noKey = NO_KEY;
 

@@ -4,18 +4,20 @@
 // (`bindings::sync`, one `stat` when nothing changed), never by opening sheets —
 // the real master has 28 of them.
 //
-// A sheet is SUGGESTED for one of two reasons, and says which:
+// A sheet is SUGGESTED — pre-ticked — when the document's data would change it,
+// and says why:
 //   • remembered  its binding names the document's template (or a user copy of
-//                 the same shipped one). This is the mapping the last export
-//                 stored, and what picking the file binds by default
-//   • fits        it is bound to no template yet and carries every header the
-//                 document's plan maps — `recognise`'s rule, applied backwards
-// Nothing is blocked: the user ticks, and the preview shows every cell before
-// anything is written. A sheet of the overview kind (`kinds::updates`) is only
-// never suggested by `fits` and carries a WARNING while no template is bound to
-// it — the recognition binds every sheet with a Wagen key column as that kind,
-// pasted exports included, so the kind alone cannot tell the dashboard from a
-// paste target; a remembered template can.
+//                 the same shipped one): the sheet the template's documents
+//                 live in. Only here are new rows APPENDED by default
+//   • affected    it has a key and shares at least one more column with the
+//                 document, so the incremental update writes into it. Only its
+//                 existing rows are updated: a project list must not grow every
+//                 Wagen of a telematics export
+// The KEY is the binding's, else the sheet's Wagen column (`kinds::wagen_column`
+// — Radsatz sheets name a Wagen per Radsatz, so not theirs), linked to the
+// document's Wagennummer column by an alias when the headers differ
+// (`TRANSPORTMITTELNR` ← `Asset`). Nothing is blocked: every sheet can be
+// ticked, and the preview shows every cell before anything is written.
 //
 // Suggested sheets come FIRST, the rest in workbook order: the real master has
 // 28 sheets and the two that matter must not be scrolled for.
@@ -31,8 +33,8 @@ use super::super::{bindings, kinds};
 use crate::error::{AppError, AppResult};
 use crate::trains::db::TrainsDb;
 use crate::trains::model::{
-    Dokument, FieldKind, ImportTemplate, MasterExportBase, MasterExportSheet, MasterExportStart,
-    MasterSettings,
+    Dokument, FieldKind, ImportTemplate, MasterAlias, MasterExportBase, MasterExportSheet,
+    MasterExportStart, MasterSettings, SheetKind,
 };
 
 pub fn start(db: &mut TrainsDb, dokument_id: &str) -> AppResult<MasterExportStart> {
@@ -45,8 +47,13 @@ pub fn start(db: &mut TrainsDb, dokument_id: &str) -> AppResult<MasterExportStar
     })?;
     let templates = db.templates();
     let related = related(&templates, &dokument.template_id);
-    let all = headers(&dokument, false);
-    let mapped = headers(&dokument, true);
+    let all = headers(&dokument);
+    let wagen = dokument
+        .plan
+        .columns
+        .iter()
+        .find(|column| column.field == FieldKind::Wagennummer)
+        .map(|column| column.header.trim().to_string());
 
     let sheets = scan
         .sheets
@@ -58,53 +65,75 @@ pub fn start(db: &mut TrainsDb, dokument_id: &str) -> AppResult<MasterExportStar
                 .find(|binding| binding.sheet == sheet.name)
                 .cloned()
                 .unwrap_or_else(|| bindings::default(sheet, &templates));
-            let matched = sheet
+            let has = |name: &str| sheet.headers.iter().any(|own| own.trim() == name.trim());
+            let radsatz = matches!(
+                binding.kind,
+                Some(SheetKind::RadsatzEinbau | SheetKind::RadsatzBestand)
+            );
+            let key = binding.key.clone().filter(|key| has(key)).or_else(|| {
+                (!radsatz)
+                    .then(|| kinds::wagen_column(&sheet.headers))
+                    .flatten()
+            });
+            let mut aliases = binding.aliases.clone();
+            if let (Some(key), Some(source)) = (&key, &wagen) {
+                let linked = all.iter().any(|header| header == key.trim())
+                    || aliases
+                        .iter()
+                        .any(|alias| alias.master.trim() == key.trim());
+                if !linked {
+                    aliases.push(MasterAlias {
+                        master: key.clone(),
+                        source: source.clone(),
+                    });
+                }
+            }
+            let shared: Vec<&str> = sheet
                 .headers
                 .iter()
                 .map(|header| header.trim())
                 .filter(|header| {
                     !header.is_empty()
+                        && Some(*header) != key.as_deref().map(str::trim)
                         && (all.iter().any(|source| source == header)
-                            || binding.aliases.iter().any(|alias| {
+                            || aliases.iter().any(|alias| {
                                 alias.master.trim() == *header
                                     && all.iter().any(|source| source == alias.source.trim())
                             }))
                 })
-                .count() as u32;
-            let overview = binding.kind.is_some_and(|kind| !kinds::updates(kind));
+                .collect();
             let remembered = related.contains(&binding.template_id);
-            let warning = (overview && binding.template_id.is_empty()).then(|| {
-                "Als Übersicht zugeordnet: Formeln und Notizen des Kunden können beim \
-                 Schreiben ersetzt werden — die Vorschau zeigt jede Zelle."
-                    .to_string()
-            });
-            let fits = binding.template_id.is_empty()
-                && !overview
-                && !mapped.is_empty()
-                && mapped
-                    .iter()
-                    .all(|header| sheet.headers.iter().any(|own| own.trim() == header));
+            let affected = key.is_some() && !shared.is_empty();
             let reason = if remembered {
                 Some(format!(
-                    "zugeordnet zur Vorlage „{}“",
+                    "Blatt der Vorlage „{}“ · neue Zeilen werden angehängt",
                     dokument.template_name
                 ))
-            } else if fits {
-                Some("alle zugeordneten Spalten des Dokuments vorhanden".into())
+            } else if affected {
+                let named: Vec<String> = shared
+                    .iter()
+                    .take(3)
+                    .map(|header| format!("„{header}“"))
+                    .collect();
+                Some(format!(
+                    "betroffen über {}{} · Schlüssel „{}“ · nur vorhandene Zeilen",
+                    named.join(", "),
+                    if shared.len() > 3 { " …" } else { "" },
+                    key.as_deref().unwrap_or_default()
+                ))
             } else {
                 None
             };
             MasterExportSheet {
                 sheet: sheet.name.clone(),
                 kind: binding.kind,
-                mode: binding.mode,
-                key: binding.key.clone(),
-                aliases: binding.aliases.clone(),
+                key,
+                aliases,
                 ignored: binding.ignored.clone(),
-                matched,
+                append: remembered,
+                matched: shared.len() as u32,
                 suggested: reason.is_some(),
                 reason,
-                warning,
             }
         })
         .collect::<Vec<_>>();
@@ -148,12 +177,11 @@ pub fn bases(settings: &MasterSettings) -> AppResult<(Vec<MasterExportBase>, Str
     Ok((vec![base], path))
 }
 
-fn headers(dokument: &Dokument, mapped_only: bool) -> Vec<String> {
+fn headers(dokument: &Dokument) -> Vec<String> {
     dokument
         .plan
         .columns
         .iter()
-        .filter(|column| !mapped_only || column.field != FieldKind::Ignorieren)
         .map(|column| column.header.trim().to_string())
         .filter(|header| !header.is_empty())
         .collect()

@@ -33,7 +33,7 @@ use super::{kinds, prepare};
 use crate::error::AppResult;
 use crate::trains::db::TrainsDb;
 use crate::trains::model::{
-    ColumnBinding, FieldKind, ImportTemplate, MasterBinding, MasterMode, MasterScan, MasterSheet,
+    ColumnBinding, FieldKind, ImportTemplate, MasterBinding, MasterScan, MasterSheet,
 };
 use crate::trains::recognise;
 
@@ -100,7 +100,6 @@ pub fn default(sheet: &MasterSheet, templates: &[ImportTemplate]) -> MasterBindi
         sheet: sheet.name.clone(),
         template_id: source_template(&sheet.headers, templates).unwrap_or_default(),
         kind: kinds::recognise(&sheet.headers),
-        mode: MasterMode::Snapshot,
         key: None,
         aliases: Vec::new(),
         ignored: Vec::new(),

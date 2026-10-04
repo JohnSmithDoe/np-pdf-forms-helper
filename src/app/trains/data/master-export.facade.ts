@@ -11,8 +11,11 @@
 // alias the sheet no longer fits comes back dropped, and the selects must show
 // what will actually be written.
 //
-// A document column with nowhere to go blocks Weiter until answered — an alias
-// onto a hand-kept column, or „nicht übertragen“. That is the conflict rule of
+// The update is incremental; `append` per sheet says whether a key the sheet
+// lacks becomes a new row — on, by Rust's default, only for the sheet the
+// document's template belongs to. On such a sheet a document column with
+// nowhere to go blocks Weiter until answered — an alias onto a hand-kept
+// column, or „nicht übertragen“; a sheet that is only updated asks nothing. That is the conflict rule of
 // this wizard: a value difference is the update, a structure difference is a
 // question (docs/decisions.md, „Export in die Master-Datei“).
 // ────────────────────────────────────────────────────────────────
@@ -32,6 +35,7 @@ import { TrainsStore } from './trains.store';
 export interface ExportSheetView {
   sheet: MasterExportSheet;
   ticked: boolean;
+  append: boolean;
 }
 
 export interface ColumnAnswer {
@@ -63,9 +67,11 @@ export class MasterExportFacade {
 
   readonly sheets = computed<ExportSheetView[]>(() => {
     const ticked = this.#store.ticked();
+    const choices = this.#store.choices();
     return (this.start()?.sheets ?? []).map((sheet) => ({
       sheet,
       ticked: ticked[sheet.sheet] ?? false,
+      append: choices[sheet.sheet]?.append ?? sheet.append,
     }));
   });
 
@@ -89,6 +95,7 @@ export class MasterExportFacade {
               sheet: view.sheet.sheet,
               aliases: [],
               ignored: [],
+              append: view.sheet.append,
             }
         ),
     };
@@ -121,6 +128,10 @@ export class MasterExportFacade {
 
   tick(sheet: string, on: boolean): void {
     this.#store.tick(sheet, on);
+  }
+
+  setAppend(sheet: string, append: boolean): void {
+    this.#store.choose({ ...this.#choice(sheet), append });
   }
 
   setRemember(remember: boolean): void {
@@ -180,7 +191,14 @@ export class MasterExportFacade {
   }
 
   #choice(sheet: string): MasterExportChoice {
-    return this.#store.choices()[sheet] ?? { sheet, aliases: [], ignored: [] };
+    return (
+      this.#store.choices()[sheet] ?? {
+        sheet,
+        aliases: [],
+        ignored: [],
+        append: false,
+      }
+    );
   }
 
   #answers(run: MasterExportSheetRun): ColumnAnswer[] {

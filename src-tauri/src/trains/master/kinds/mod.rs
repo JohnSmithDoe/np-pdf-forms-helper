@@ -5,9 +5,10 @@
 // customer's sheets is of which kind, so a renamed sheet is a settings change
 // and no firm or person ever appears in code.
 //
-// Each kind owns three answers, and this file only dispatches them: whether a
-// header row is OF that kind, the template its sheet is read with, and whether
-// the export may SUGGEST it (an overview is written only when ticked).
+// Each kind owns two answers, and this file only dispatches them: whether a
+// header row is OF that kind, and the template its sheet is read with.
+// `wagen_column` is the Wagen list's key finder, which the master update uses
+// as the default key of any sheet that has one.
 //
 // RECOGNITION IS BY HEADER, never by sheet name — the names are the customer's
 // and carry firms and people. The most specific kind is asked first: a fitting
@@ -61,12 +62,8 @@ fn has_all(names: &[String], wanted: &[&str]) -> bool {
         .all(|header| names.iter().any(|name| *name == normalise(header)))
 }
 
-pub fn updates(kind: SheetKind) -> bool {
-    match kind {
-        SheetKind::Wagenliste => wagenliste::UPDATES,
-        SheetKind::RadsatzEinbau => radsatz_einbau::UPDATES,
-        SheetKind::RadsatzBestand => radsatz_bestand::UPDATES,
-    }
+pub fn wagen_column(headers: &[String]) -> Option<String> {
+    wagenliste::key_column(headers)
 }
 
 fn id(slug: &str) -> String {
@@ -117,12 +114,5 @@ mod tests {
         };
         assert!(maps_position(SheetKind::RadsatzEinbau));
         assert!(!maps_position(SheetKind::RadsatzBestand));
-    }
-
-    // The dashboard is formulas over the other sheets plus the customer's own
-    // notes; pasting into it would destroy both.
-    #[test]
-    fn the_dashboard_is_never_suggested_for_writing() {
-        assert!(!updates(SheetKind::Wagenliste));
     }
 }

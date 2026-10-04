@@ -376,6 +376,8 @@ test.describe('Import ins Schattensystem', () => {
       dokumente: [DOKUMENT],
       document: STAGED_DOKUMENT,
     });
+    // „Importieren“ is behind a feature switch for now.
+    await page.addInitScript(() => localStorage.setItem('npdh.import', 'on'));
     await page.goto('/#/trains/documents');
     await step(page, 'document-list').getByTestId('documents-import').click();
 
@@ -431,7 +433,6 @@ test.describe('Import ins Schattensystem', () => {
             sheet: 'Radsätze',
             templateId: '',
             kind: 'radsatzEinbau',
-            mode: 'snapshot',
             aliases: [],
           },
         ],
@@ -505,12 +506,26 @@ test.describe('Import ins Schattensystem', () => {
     await installFakeBackend(page, {
       dokumente: [{ ...DOKUMENT, importiertAm: '2026-10-03' }],
     });
+    await page.addInitScript(() => localStorage.setItem('npdh.import', 'on'));
     await page.goto('/#/trains/documents');
     const list = step(page, 'document-list');
     await expect(list.getByTestId('documents-row')).toContainText(
       'importiert am 2026-10-03'
     );
     await expect(list.getByTestId('documents-import')).toHaveCount(0);
+  });
+
+  test('ohne Schalter zeigt die Liste weder Import noch Status', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, { dokumente: [DOKUMENT] });
+    await page.goto('/#/trains/documents');
+    const list = step(page, 'document-list');
+    await expect(list.getByTestId('documents-row')).toHaveCount(1);
+    await expect(list.getByTestId('documents-import')).toHaveCount(0);
+    await expect(
+      list.getByTestId('documents-row').locator('ion-chip')
+    ).toHaveCount(0);
   });
 
   test('ein kalter Direktaufruf eines Import-Schritts landet bei den Dokumenten', async ({

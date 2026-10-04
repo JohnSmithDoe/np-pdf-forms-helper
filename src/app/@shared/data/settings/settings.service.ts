@@ -26,6 +26,8 @@
 // `masterEnabled` is a feature toggle, not a preference: the master workbook is
 // unfinished and hidden from the UI until `npdh.master` is `on`. It has no
 // setter on purpose — the e2e and the developer set the key by hand.
+// `importEnabled` (`npdh.import`) is the same kind of switch for the document
+// list's „Importieren“ and its bereinigt/importiert chip, hidden for now.
 // ────────────────────────────────────────────────────────────────
 
 import { Injectable, signal } from '@angular/core';
@@ -34,6 +36,7 @@ import type { ViewMode } from '../../model/settings.types';
 const VIEW_MODE_KEY = 'npdh.viewMode';
 const DEFAULT_VIEW_MODE: ViewMode = 'wizard';
 const MASTER_KEY = 'npdh.master';
+const IMPORT_KEY = 'npdh.import';
 
 function isViewMode(value: unknown): value is ViewMode {
   return value === 'expert' || value === 'wizard';
@@ -63,6 +66,8 @@ export class SettingsService {
   readonly viewMode = this.#viewMode.asReadonly();
 
   readonly masterEnabled = read(MASTER_KEY) === 'on';
+
+  readonly importEnabled = read(IMPORT_KEY) === 'on';
 
   setViewMode(mode: ViewMode): void {
     this.#viewMode.set(mode);

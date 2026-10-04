@@ -186,20 +186,6 @@
           </ion-item>
           <ion-item>
             <ion-select
-              label="Art"
-              interface="popover"
-              [value]="binding.mode"
-              (ionChange)="onMode(index, $event)"
-            >
-              @for (mode of modes; track mode.value) {
-                <ion-select-option [value]="mode.value">{{
-                  mode.label
-                }}</ion-select-option>
-              }
-            </ion-select>
-          </ion-item>
-          <ion-item>
-            <ion-select
               label="Schlüsselspalte"
               interface="popover"
               [value]="binding.key ?? noKey"
@@ -215,14 +201,9 @@
           </ion-item>
           <ion-item lines="none">
             <ion-note class="ion-text-wrap">
-              @if (binding.mode === 'feed') {
-                Neue Schlüssel werden angehängt, bekannte aktualisiert; gelöscht
-                wird nichts. Dafür ist eine Schlüsselspalte nötig.
-              } @else {
-                Die Zeilen werden durch den Stand des Dokuments ersetzt. Mit
-                einer Schlüsselspalte wandern von Hand gepflegte Spalten mit
-                ihrer Zeile.
-              }
+              Aktualisiert wird über die Schlüsselspalte: bekannte Zeilen werden
+              überschrieben, gelöscht wird nichts. Ohne Angabe nimmt die
+              Aktualisierung die Wagennummer-Spalte des Blatts.
             </ion-note>
           </ion-item>
 

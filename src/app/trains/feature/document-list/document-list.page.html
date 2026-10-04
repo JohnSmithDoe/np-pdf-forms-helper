@@ -123,7 +123,7 @@
                   Master aktualisieren
                 </ion-button>
               }
-              @if (!dokument.importiertAm) {
+              @if (importEnabled && !dokument.importiertAm) {
                 <ion-button
                   size="small"
                   fill="clear"
@@ -136,12 +136,14 @@
               }
             </p>
           </ion-label>
-          <ion-chip
-            slot="end"
-            [color]="dokument.importiertAm ? 'success' : 'primary'"
-          >
-            {{ dokument.importiertAm ? 'importiert' : 'bereinigt' }}
-          </ion-chip>
+          @if (importEnabled) {
+            <ion-chip
+              slot="end"
+              [color]="dokument.importiertAm ? 'success' : 'primary'"
+            >
+              {{ dokument.importiertAm ? 'importiert' : 'bereinigt' }}
+            </ion-chip>
+          }
         </ion-item>
       }
     </ion-list>

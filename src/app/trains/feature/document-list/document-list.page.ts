@@ -20,6 +20,8 @@
 //
 // An imported document offers no „Importieren“, and that is only the
 // explanation: `stage_document` and `commit_document` refuse it themselves.
+// „Importieren“ and the bereinigt/importiert chip are hidden for now behind
+// `importEnabled` (`npdh.import`); the walk itself is unchanged.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -44,6 +46,7 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/angular/standalone';
+import { SettingsService } from '../../../@shared/data/settings/settings.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import {
@@ -82,6 +85,7 @@ export class DocumentListPage {
   readonly #export = inject(MasterExportFacade);
   readonly #reports = inject(ReportPresenterService);
   readonly #router = inject(Router);
+  protected readonly importEnabled = inject(SettingsService).importEnabled;
 
   protected readonly dokumente = computed(() =>
     [...(this.trains.dokumente() ?? [])].sort(

@@ -86,8 +86,6 @@ export interface TrainsSettings {
   wagennummer: UicStyle;
 }
 
-export type MasterMode = 'snapshot' | 'feed';
-
 export interface MasterAlias {
   master: string;
   source: string;
@@ -99,7 +97,6 @@ export interface MasterBinding {
   sheet: string;
   templateId: string;
   kind?: SheetKind;
-  mode: MasterMode;
   key?: string;
   aliases: MasterAlias[];
   ignored?: string[];
@@ -162,6 +159,7 @@ export interface MasterExportChoice {
   key?: string;
   aliases: MasterAlias[];
   ignored: string[];
+  append: boolean;
 }
 
 export interface MasterExportRequest {
@@ -179,14 +177,13 @@ export interface MasterExportBase {
 export interface MasterExportSheet {
   sheet: string;
   kind?: SheetKind;
-  mode: MasterMode;
   key?: string;
   aliases: MasterAlias[];
   ignored: string[];
+  append: boolean;
   matched: number;
   suggested: boolean;
   reason?: string;
-  warning?: string;
 }
 
 export interface MasterExportStart {
@@ -209,7 +206,7 @@ export interface CellChange {
 
 export interface MasterExportSheetRun {
   sheet: string;
-  mode: MasterMode;
+  append: boolean;
   key?: string;
   aliases: MasterAlias[];
   ignored: string[];

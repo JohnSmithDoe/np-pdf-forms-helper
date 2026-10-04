@@ -83,13 +83,11 @@ const seed = (telematik: FakeExportSheetRun): FakeSeed => ({
         sheet: 'Überblick',
         templateId: '',
         kind: 'wagenliste',
-        mode: 'snapshot',
         aliases: [],
       },
       {
         sheet: 'Telematik',
         templateId: 't-telematik',
-        mode: 'snapshot',
         key: 'Asset',
         aliases: [],
       },
@@ -128,10 +126,15 @@ test.describe('Master aktualisieren', () => {
     );
     const rows = sheets.getByTestId('export-sheet');
     await expect(rows).toHaveCount(2);
-    // Suggested first, the overview after it — warned about, not disabled.
+    // The template's sheet first, pre-ticked, taking new rows; the other one
+    // can still be ticked.
     await expect(rows.nth(0)).toContainText('Telematik');
-    await expect(rows.nth(0)).toContainText('Vorschlag');
-    await expect(rows.nth(1)).toContainText('Als Übersicht zugeordnet');
+    await expect(rows.nth(0)).toContainText('betroffen');
+    await expect(rows.nth(0)).toContainText('neue Zeilen werden angehängt');
+    await expect(sheets.getByTestId('export-sheet-append')).toHaveCount(1);
+    await expect(
+      sheets.getByTestId('export-sheet-append').locator('ion-toggle')
+    ).toHaveAttribute('aria-checked', 'true');
     await expect(rows.nth(1).locator('ion-checkbox')).not.toHaveAttribute(
       'aria-disabled',
       'true'
@@ -168,11 +171,15 @@ test.describe('Master aktualisieren', () => {
       (call) => call.command === 'write_master_export'
     );
     const request = write?.args['request'] as {
-      sheets: { sheet: string; key?: string }[];
+      sheets: { sheet: string; key?: string; append: boolean }[];
       remember: boolean;
     };
     expect(request.sheets).toEqual([
-      expect.objectContaining({ sheet: 'Telematik', key: 'Asset' }),
+      expect.objectContaining({
+        sheet: 'Telematik',
+        key: 'Asset',
+        append: true,
+      }),
     ]);
     expect(request.remember).toBe(true);
 

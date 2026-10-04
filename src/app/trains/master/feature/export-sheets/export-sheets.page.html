@@ -36,23 +36,29 @@
             <ion-label class="ion-text-wrap">
               <h2>{{ view.sheet.sheet }}</h2>
               <p>
-                {{ modes[view.sheet.mode] }} ·
-                {{ view.sheet.matched }} Spalte(n) wie im Dokument
                 @if (view.sheet.reason) {
-                  · {{ view.sheet.reason }}
+                  {{ view.sheet.reason }}
+                } @else {
+                  {{ view.sheet.matched }} gemeinsame Spalte(n)
                 }
               </p>
-              @if (view.sheet.warning) {
-                <p>
-                  <ion-note color="warning">{{ view.sheet.warning }}</ion-note>
-                </p>
-              }
             </ion-label>
           </ion-checkbox>
           @if (view.sheet.suggested) {
-            <ion-chip slot="end" color="success">Vorschlag</ion-chip>
+            <ion-chip slot="end" color="success">betroffen</ion-chip>
           }
         </ion-item>
+        @if (view.ticked) {
+          <ion-item lines="none" data-testid="export-sheet-append">
+            <ion-toggle
+              justify="space-between"
+              [checked]="view.append"
+              (ionChange)="onAppend(view.sheet.sheet, $event)"
+            >
+              Neue Zeilen anhängen
+            </ion-toggle>
+          </ion-item>
+        }
       }
     </ion-list>
   }

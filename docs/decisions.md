@@ -771,3 +771,34 @@ only thing right now“.
   solange eine Kunden-Master übernommen ist — nicht mehr hinter dem Schalter `npdh.master`. Der
   Schalter versteckt weiter Kachel und Hinweis des Master-Imports auf dem Dashboard.
 
+## Die Master-Aktualisierung ist immer inkrementell (appended 2026-10-04)
+
+Ersetzt „Two modes, the two shapes a sender file comes in“, „Modus bleibt der der Bindung“ und „Kein Blatt
+ist gesperrt, Vorschläge stehen oben“. Entschieden mit Martin am 2026-10-04: „for the master it's always
+incremental“; vorausgewählt wird jedes Blatt, „that would be affected by the data“.
+
+- **Kein Ersetzen mehr.** `MasterMode` ist weg, aus Bindung, Assistent und `/trains/master`. Zeilen werden
+  über die Schlüsselspalte zugeordnet: eine bekannte Zeile bekommt die Werte der gemeinsamen Spalten,
+  Formel- und Handspalten derselben Zeile bleiben, gelöscht wird nie (`paste::incremental`). Ein `mode`
+  in einer alten `master.json` wird beim Lesen ignoriert.
+- **Wagennummern vergleichen über ihre Ziffern** (`paste::match_key`): die bereinigte Kopie schreibt die
+  gewählte Schreibweise (`3385 0659 152-2`), die Master hält meist die Zahl.
+- **Doppelte Schlüssel im Dokument sperren das Blatt** mit einer Meldung, statt die letzte Zeile still
+  gewinnen zu lassen (die Werkstattaufträge nennen einen Wagen mehrfach — dort muss im Abgleich eine
+  eindeutige Schlüsselspalte gewählt werden). Doppelte Schlüssel im Blatt: die erste Zeile wird
+  aktualisiert, das wird gesagt.
+- **„Betroffen“ heißt: Schlüssel plus mindestens eine weitere gemeinsame Spalte.** Schlüssel ist der der
+  Bindung, sonst die Wagen-Spalte des Blatts (`kinds::wagen_column`; Radsatzblätter nicht, dort steht ein
+  Wagen je Radsatz). Heißt sie anders als die Wagennummer-Spalte des Dokuments, verknüpft ein Alias beide
+  (`TRANSPORTMITTELNR` ← `Asset`). Dazu jedes Blatt, dessen Bindung die Vorlage des Dokuments nennt.
+- **Anhängen nur im Blatt der Vorlage** (`append`, je Blatt umschaltbar). Ein nur betroffenes Blatt
+  bekommt seine vorhandenen Zeilen aktualisiert — sonst wüchse eine Projektliste um jeden Wagen eines
+  Telematik-Exports. Nur ein Blatt mit `append` fragt im Abgleich nach Spalten ohne Gegenstück; „Merken“
+  setzt die Vorlage nur auf Blätter mit `append`.
+- **Der gelbe Übersichts-Hinweis ist weg**: er warnte davor, dass Ersetzen Formeln und Notizen löscht, und
+  das Ersetzen gibt es nicht mehr.
+
+Nebenbei, auf Martins Wunsch: „Importieren“ und der Status-Chip in der Dokumentliste sind vorerst hinter
+dem Schalter `npdh.import` versteckt (`SettingsService.importEnabled`); der Import-Weg selbst ist
+unverändert.
+
