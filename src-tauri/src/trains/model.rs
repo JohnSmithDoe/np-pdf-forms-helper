@@ -93,12 +93,14 @@
 // whole answer — sheets, keys, aliases — sent again on every change like
 // `restage_import`'s plan, and a `MasterExportRun` is the dry run or the
 // written copy, with each sheet's structure and its changed cells.
-// `MasterSettings.last_export` is the copy the next export builds on; the
-// backend owns it, like `import_run`.
+// What it writes is a new `MasterFileVersion`, its `quelle` the document.
+// `MasterSettings.file` is derived — always the current version's cleaned copy
+// (`bindings::follow`) — and the backend owns it, like `import_run`.
 //
-// The MASTER FILE is a different thing from all of the above: the customer's
-// workbook itself, copied in and cleaned of what nothing reads — never a formula,
-// never a moved row. `MasterFile.versions` is newest first, so the current one is
+// The MASTER FILE is the customer's workbook itself and the only master: copied
+// in and cleaned of what nothing reads — never a formula, never a moved row — or
+// written by an export (`quelle` set). Everything above reads its current
+// version. `MasterFile.versions` is newest first, so the current one is
 // `versions[0]`; `pending` is a cleaned version not yet taken over.
 //
 // `master_import_run` rides on every whole-list answer, and only while a master
@@ -211,8 +213,6 @@ pub struct MasterSettings {
     pub import_run: Option<MasterImportRun>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scan: Option<MasterScan>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub last_export: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -289,7 +289,6 @@ pub struct MasterExportRequest {
 pub struct MasterExportBase {
     pub path: String,
     pub name: String,
-    pub copy: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1099,6 +1098,8 @@ pub struct MasterFileVersion {
     pub bereinigt_am: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uebernommen_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quelle: Option<String>,
     pub report: MasterFileReport,
 }
 

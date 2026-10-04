@@ -55,9 +55,14 @@
       <ion-card-header>
         <ion-card-title>{{ current.name }}</ion-card-title>
         <ion-card-subtitle>
-          Aktuelle Fassung · bereinigt am {{ current.bereinigtAm }}
-          @if (current.uebernommenAm) {
-            · übernommen am {{ current.uebernommenAm }}
+          @if (current.quelle) {
+            Aktuelle Fassung · aktualisiert mit „{{ current.quelle }}“ am
+            {{ current.bereinigtAm }}
+          } @else {
+            Aktuelle Fassung · bereinigt am {{ current.bereinigtAm }}
+            @if (current.uebernommenAm) {
+              · übernommen am {{ current.uebernommenAm }}
+            }
           }
         </ion-card-subtitle>
       </ion-card-header>
@@ -66,14 +71,22 @@
           <ion-button fill="clear" (click)="onOpenFolder(current.folder)">
             Ordner öffnen
           </ion-button>
-          <ion-button fill="clear" (click)="onOpen(current.original)">
-            Original
-          </ion-button>
-          <ion-button fill="clear" (click)="onOpen(current.cleaned)">
-            Bereinigte Datei
-          </ion-button>
+          @if (current.quelle) {
+            <ion-button fill="clear" (click)="onOpen(current.cleaned)">
+              Datei öffnen
+            </ion-button>
+          } @else {
+            <ion-button fill="clear" (click)="onOpen(current.original)">
+              Original
+            </ion-button>
+            <ion-button fill="clear" (click)="onOpen(current.cleaned)">
+              Bereinigte Datei
+            </ion-button>
+          }
         </p>
-        <app-master-file-report [report]="current.report" />
+        @if (!current.quelle) {
+          <app-master-file-report [report]="current.report" />
+        }
       </ion-card-content>
     </ion-card>
   } @else if (!facade.pending()) {
@@ -92,7 +105,14 @@
         <ion-item>
           <ion-label class="ion-text-wrap">
             <h2>{{ version.name }}</h2>
-            <p>bereinigt am {{ version.bereinigtAm }}</p>
+            <p>
+              @if (version.quelle) {
+                aktualisiert mit „{{ version.quelle }}“ am
+                {{ version.bereinigtAm }}
+              } @else {
+                bereinigt am {{ version.bereinigtAm }}
+              }
+            </p>
           </ion-label>
           <ion-button
             slot="end"

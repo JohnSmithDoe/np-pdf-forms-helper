@@ -6,9 +6,13 @@
 // meaning for — which is why it has a module of its own and is not an export.
 //
 //   export    Schattensystem → master: one filed document into the sheets the
-//             user ticks, previewed cell by cell, written into a DATED COPY;
-//             the original is never written. The main goal while the customer
-//             still works in Excel.
+//             user ticks, previewed cell by cell, written as a NEW VERSION of
+//             the client master (`master_file`); no version is ever written
+//             over. The main goal while the customer still works in Excel.
+//
+// The workbook is always the client master's current version — `master_file`
+// takes it in, `bindings::follow` points everything here at it. There is no
+// second master picked anywhere else.
 //   mirror    master → Schattensystem: every bound sheet imported, the facts
 //             rebuilt from scratch each run, for checking against the customer.
 //

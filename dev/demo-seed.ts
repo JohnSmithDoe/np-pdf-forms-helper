@@ -1143,7 +1143,7 @@ export function committedEvent(row: number): FakeInstandhaltung {
 }
 
 const master: FakeMasterSettings = {
-  file: 'C:\\Daten\\Wagenmut Übersicht.xlsx',
+  file: 'C:\\Daten\\masterdatei\\m-2026-09\\Wagenmut Übersicht bereinigt.xlsx',
   bindings: [
     {
       sheet: 'Alle Wagen',
@@ -1414,7 +1414,6 @@ export const DEMO_SEED: FakeSeed = {
     versions: [masterFileVersion('m-2026-09', '2026-09-15', '2026-09-15')],
   },
   masterFilePick: masterFileVersion('m-2026-10', '2026-10-04'),
-  masterPicker: 'C:\\Daten\\Wagenmut Übersicht.xlsx',
   masterSheets: [
     { name: 'Alle Wagen', headers: ['Wagen-Nr.', 'Status', 'Bemerkung'] },
     {

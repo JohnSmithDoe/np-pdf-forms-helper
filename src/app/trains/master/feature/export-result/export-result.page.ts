@@ -1,11 +1,11 @@
 // ─── why ────────────────────────────────────────────────────────
-// The last step: the copy that was written, and per sheet which cells changed —
-// the summary the user checks the copy against before switching to it. Read
+// The last step: the new version of the client master that was written, and per
+// sheet which cells changed — the summary of the update. Read
 // from the written run rather than the preview, because the write ran the
 // paste again and this is what it did.
 //
 // „Fertig“ leads back to the document list, where the next document starts the
-// next export; that one builds on this copy by default.
+// update; that one builds on this version, because it is now the current one.
 // ────────────────────────────────────────────────────────────────
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';

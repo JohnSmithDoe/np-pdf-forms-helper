@@ -43,8 +43,10 @@
 // that is a rule the UI is built around, not a property of bytes.
 //
 // The master workbook is `seed.masterSheets` — its sheet names and header rows,
-// which is all `get_master` reads of it — and `seed.masterPicker` the path the
-// file picker returns.
+// which is all `get_master` reads of it. Its file is never picked: like
+// `bindings::follow`, `follow()` points `master.file` at the client master's
+// current version (`seed.masterFile.versions[0].cleaned`) and binds a fresh
+// file by `seed.masterDefaults`.
 //
 // The master EXPORT wizard is faked shallow. `open_master_export` offers every
 // seeded sheet, suggested ones first — those bound to the document's template —
@@ -52,10 +54,11 @@
 // `cargo test`'s. `preview_master_export` and `write_master_export` serve
 // `seed.masterExport[sheet]` — hand-written runs with their structure and cell
 // changes — and only ECHO the request's answers back: an answered column leaves
-// `open`, nothing is pasted or diffed. The write records `lastExport`.
+// `open`, nothing is pasted or diffed. The write records a new version of the
+// client master, `quelle` the document — it is the current one afterwards.
 // Recognising a sheet by its header row is `kinds::recognise`'s too, so the
-// defaults are SEEDED (`seed.masterDefaults`): a picked new path and
-// `reset_master_bindings` apply them, the same path keeps what is bound.
+// defaults are SEEDED (`seed.masterDefaults`): a client master taken over with
+// nothing bound and `reset_master_bindings` apply them.
 //
 // The master IMPORT is faked at the same depth. `start_master_import` empties
 // the facts and records the run over the bindings that have a `kind`;
@@ -71,6 +74,9 @@
 // cleaned version `clean_master_file` answers in place of picker + cleaning —
 // what the cleaning changes is `master_file::clean`'s and proved by `cargo
 // test`. The pick lands as `pending`; accept puts it first, discard drops it.
+// A seed that names `master.file` and no `masterFile` gets a client master at
+// that path (`clientMaster`, applied in `installFakeBackend` because `install`
+// is serialised), since the file can no longer exist without one.
 // ────────────────────────────────────────────────────────────────
 
 import type { Page } from '@playwright/test';
@@ -401,7 +407,6 @@ export interface FakeMasterSettings {
     auto?: boolean;
   }[];
   importRun?: { startedAt: string; sheets: string[]; done: string[] };
-  lastExport?: string;
 }
 
 export interface FakeMasterFileVersion {
@@ -414,6 +419,7 @@ export interface FakeMasterFileVersion {
   cleanedHash: string;
   bereinigtAm: string;
   uebernommenAm?: string;
+  quelle?: string;
   report: {
     sheets: {
       sheet: string;
@@ -454,6 +460,37 @@ export interface FakeMasterFileVersion {
 export interface FakeMasterFile {
   versions: FakeMasterFileVersion[];
   pending?: FakeMasterFileVersion;
+}
+
+/** A client master taken over as one version whose cleaned copy is `path`. */
+export function clientMaster(path: string): FakeMasterFile {
+  const name = path.split(/[\\/]/).pop() ?? path;
+  return {
+    versions: [
+      {
+        id: 'mv-1',
+        name,
+        folder: path.slice(0, path.length - name.length - 1),
+        original: path,
+        cleaned: path,
+        originalHash: 'mv-1',
+        cleanedHash: 'mv-1',
+        bereinigtAm: '2026-10-01',
+        uebernommenAm: '2026-10-01',
+        report: {
+          sheets: [],
+          totals: {
+            rowsCut: 0,
+            tailRowsCut: 0,
+            trimmed: 0,
+            numbers: 0,
+            dates: 0,
+            notes: 0,
+          },
+        },
+      },
+    ],
+  };
 }
 
 export interface FakeExportSheetRun {
@@ -523,9 +560,7 @@ export interface FakeSeed {
   master?: FakeMasterSettings;
   /** The master workbook's sheets with their header rows. */
   masterSheets?: FakeMasterSheet[];
-  /** What the master file picker hands back. `null` = cancelled. */
-  masterPicker?: string | null;
-  /** The bindings recognition would produce — `pick_master_file` on a new path and `reset_master_bindings` apply them. */
+  /** The bindings recognition would produce — a fresh client master and `reset_master_bindings` apply them. */
   masterDefaults?: FakeMasterSettings['bindings'];
   /** What `stage_master_sheet` stages, whatever sheet; falls back to `document`, then `staging`. */
   masterStaging?: FakeStaging | null;
@@ -551,7 +586,10 @@ export async function installFakeBackend(
   page: Page,
   seed: FakeSeed = {}
 ): Promise<void> {
-  await page.addInitScript(install, seed);
+  const masterFile =
+    seed.masterFile ??
+    (seed.master?.file ? clientMaster(seed.master.file) : undefined);
+  await page.addInitScript(install, { ...seed, masterFile });
 }
 
 /** Every invoke the app made, in order — for asserting what was SENT. */
@@ -593,7 +631,6 @@ export function install(seed: FakeSeed): void {
     settings: { wagennummer: string };
     master: FakeMasterSettings;
     masterSheets: FakeMasterSheet[];
-    masterPicker: string | null;
     masterDefaults: FakeMasterSettings['bindings'];
     masterStaging: FakeStaging | null;
     masterSheetViews: Record<string, FakeMasterSheetView>;
@@ -624,7 +661,6 @@ export function install(seed: FakeSeed): void {
     settings: seed.settings ?? { wagennummer: 'compact' },
     master: seed.master ?? { bindings: [] },
     masterSheets: seed.masterSheets ?? [],
-    masterPicker: seed.masterPicker ?? null,
     masterDefaults: seed.masterDefaults ?? [],
     masterStaging: seed.masterStaging ?? null,
     masterSheetViews: seed.masterSheetViews ?? {},
@@ -679,6 +715,19 @@ export function install(seed: FakeSeed): void {
     return run && run.sheets.some((sheet) => !run.done.includes(sheet))
       ? copy(run)
       : undefined;
+  };
+
+  const follow = () => {
+    const current = state.masterFile.versions[0]?.cleaned;
+    if (state.master.file === current) return;
+    state.master = {
+      ...state.master,
+      file: current,
+      bindings:
+        current && !state.master.bindings.length
+          ? copy(state.masterDefaults)
+          : state.master.bindings,
+    };
   };
 
   const masterView = () => {
@@ -1077,16 +1126,8 @@ export function install(seed: FakeSeed): void {
       return {};
     },
 
-    get_master: () => masterView(),
-
-    pick_master_file: () => {
-      if (!state.masterPicker) return {};
-      const fresh = state.master.file !== state.masterPicker;
-      state.master = {
-        ...state.master,
-        file: state.masterPicker,
-        bindings: fresh ? copy(state.masterDefaults) : state.master.bindings,
-      };
+    get_master: () => {
+      follow();
       return masterView();
     },
 
@@ -1099,6 +1140,7 @@ export function install(seed: FakeSeed): void {
       const run = state.master.importRun;
       state.master = {
         ...copy(args['settings'] as unknown as FakeMasterSettings),
+        file: state.master.file,
         importRun: run,
       };
       return masterView();
@@ -1175,22 +1217,20 @@ export function install(seed: FakeSeed): void {
           messages: ['Das Dokument gibt es nicht mehr.'],
         });
       }
+      follow();
       const file = state.master.file;
       if (!file) {
         return Promise.reject({
-          messages: ['Es ist noch keine Master-Datei gewählt.'],
+          messages: ['Es ist noch keine Master-Datei übernommen.'],
         });
       }
-      const bases = [{ path: file, name: baseName(file), copy: false }];
-      const last = state.master.lastExport;
-      if (last) bases.push({ path: last, name: baseName(last), copy: true });
       return {
         masterExportStart: {
           dokumentId: dokument.id,
           dokument: dokument.name,
           template: dokument.templateName,
-          bases,
-          base: last ?? file,
+          bases: [{ path: file, name: baseName(file) }],
+          base: file,
           sheets: state.masterSheets
             .map((sheet) => {
               const bound = state.master.bindings.find(
@@ -1226,14 +1266,55 @@ export function install(seed: FakeSeed): void {
     }),
 
     write_master_export: (args) => {
-      const run = exportRun(args['request'] as unknown as FakeExportRequest);
-      const file = state.master.file ?? '';
-      const folder = file.replace(/[\\/][^\\/]*$/, '');
-      const target = `${folder}/Master 2026-10-04.xlsx`;
-      state.master = { ...state.master, lastExport: target };
+      const request = args['request'] as unknown as FakeExportRequest;
+      const run = exportRun(request);
+      const current = state.masterFile.versions[0];
+      if (!current || request.base !== state.master.file) {
+        return Promise.reject({
+          messages: [
+            'Die gewählte Ausgangsdatei gehört nicht zur Master-Datei.',
+          ],
+        });
+      }
+      const id = `mv-${state.masterFile.versions.length + 1}`;
+      const folder = `data/trains/masterdatei/${id}`;
+      const target = `${folder}/${current.name}`;
+      const dokument = state.dokumente.find(
+        (entry) => entry.id === request.dokumentId
+      );
+      state.masterFile = {
+        ...state.masterFile,
+        versions: [
+          {
+            id,
+            name: current.name,
+            folder,
+            original: target,
+            cleaned: target,
+            originalHash: id,
+            cleanedHash: id,
+            bereinigtAm: '2026-10-04',
+            uebernommenAm: '2026-10-04',
+            quelle: dokument?.name,
+            report: {
+              sheets: [],
+              totals: {
+                rowsCut: 0,
+                tailRowsCut: 0,
+                trimmed: 0,
+                numbers: 0,
+                dates: 0,
+                notes: 0,
+              },
+            },
+          },
+          ...state.masterFile.versions,
+        ],
+      };
       return {
         masterExport: { ...run, target, folder },
         ...masterView(),
+        masterFile: copy(state.masterFile),
       };
     },
 
@@ -1263,6 +1344,7 @@ export function install(seed: FakeSeed): void {
           ...state.masterFile.versions,
         ],
       };
+      follow();
       return { masterFile: copy(state.masterFile) };
     },
 

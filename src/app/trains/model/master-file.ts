@@ -1,15 +1,17 @@
 // ─── why ────────────────────────────────────────────────────────
 // The mirror of the master FILE types in `src-tauri/src/trains/model.rs` —
-// the customer's workbook copied in and cleaned, in versions. Kept apart from
-// `trains.types.ts` because it shares nothing with the master bindings, mirror
-// or export there. Change one, change the other, and `e2e/fake-backend.ts`.
+// the customer's workbook copied in and cleaned, in versions; the only master,
+// which bindings, mirror and export all read. Change one, change the other,
+// and `e2e/fake-backend.ts`.
 //
 // `tailRowsCut` is counted apart from `rowsCut` because those rows held
 // formulas (or `0`/`#NV`) — the one place the cleaning removes a formula, so
 // the report names it on its own.
 //
 // `versions` is newest first: `versions[0]` IS the current master. `pending`
-// is a cleaned version the user has not taken over yet.
+// is a cleaned version the user has not taken over yet. A version with `quelle`
+// was written by the master update from that document, not cleaned: its
+// `original` and `cleaned` are the same file and its report is empty.
 // ────────────────────────────────────────────────────────────────
 
 export interface MasterFile {
@@ -27,6 +29,7 @@ export interface MasterFileVersion {
   cleanedHash: string;
   bereinigtAm: string;
   uebernommenAm?: string;
+  quelle?: string;
   report: MasterFileReport;
 }
 

@@ -8,10 +8,11 @@
 // has five (its folder, two copies to open, an import and a master export to start). A second
 // kind of row in the shell would be the shell growing a mode.
 //
-// „In Master übertragen“ opens the master export wizard for one document, the
-// replacement of the one-click master refresh. It is offered for every
-// document, imported or not: the master and the Schattensystem are separate
-// targets. Hidden unless `masterEnabled` — the master workbook is unfinished.
+// „Master aktualisieren“ opens the master update wizard for one document:
+// sheets, columns, a cell-by-cell preview to approve, then the summary. It is
+// offered for every document, imported or not — the master and the
+// Schattensystem are separate targets — and only while a client master has been
+// taken over, because the result is that master's next version.
 //
 // The customer's MASTER FILE is pinned on top, apart from the documents: there
 // is only ever one, it is never imported by the walk nor exported into itself,
@@ -43,7 +44,6 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/angular/standalone';
-import { SettingsService } from '../../../@shared/data/settings/settings.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import {
@@ -82,7 +82,6 @@ export class DocumentListPage {
   readonly #export = inject(MasterExportFacade);
   readonly #reports = inject(ReportPresenterService);
   readonly #router = inject(Router);
-  protected readonly masterEnabled = inject(SettingsService).masterEnabled;
 
   protected readonly dokumente = computed(() =>
     [...(this.trains.dokumente() ?? [])].sort(

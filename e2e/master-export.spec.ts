@@ -1,6 +1,6 @@
 // ─── why ────────────────────────────────────────────────────────
-// The master export wizard, as shallow as the rest: it reaches its four steps
-// from the document list, ticks what the backend suggested, renders the cell
+// The master update wizard, as shallow as the rest: it reaches its four steps
+// from the document list — offered only while a client master exists — ticks what the backend suggested, renders the cell
 // changes it was sent and keeps Weiter dead while a column is unanswered.
 //
 // Which sheets are suggested, what a structural conflict is and which cells a
@@ -105,8 +105,6 @@ const seed = (telematik: FakeExportSheetRun): FakeSeed => ({
 const step = (page: Page, name: string) => page.locator(`app-page-${name}`);
 
 async function open(page: Page): Promise<void> {
-  // The master UI is behind a feature toggle until it is finished.
-  await page.addInitScript(() => localStorage.setItem('npdh.master', 'on'));
   await page.goto('/#/trains/documents');
   await step(page, 'document-list')
     .getByTestId('documents-export-master')
@@ -114,7 +112,7 @@ async function open(page: Page): Promise<void> {
   await expect(page).toHaveURL(/#\/trains\/master\/export\/sheets$/);
 }
 
-test.describe('Export in die Master-Datei', () => {
+test.describe('Master aktualisieren', () => {
   test('führt vom Dokument über Vorschau zur Zusammenfassung', async ({
     page,
   }) => {
@@ -123,7 +121,10 @@ test.describe('Export in die Master-Datei', () => {
 
     const sheets = step(page, 'export-sheets');
     await expect(sheets.getByTestId('wizard-phase')).toContainText(
-      'Export in die Master-Datei'
+      'Master aktualisieren'
+    );
+    await expect(sheets.getByTestId('export-base')).toContainText(
+      'Übersicht.xlsx'
     );
     const rows = sheets.getByTestId('export-sheet');
     await expect(rows).toHaveCount(2);
@@ -153,11 +154,11 @@ test.describe('Export in die Master-Datei', () => {
     await expect(preview.getByTestId('cell-change').first()).toContainText(
       'Neuhof'
     );
-    await preview.getByRole('button', { name: 'Exportieren' }).click();
+    await preview.getByRole('button', { name: 'Übernehmen' }).click();
 
     const result = step(page, 'export-result');
     await expect(result.getByTestId('export-result')).toContainText(
-      'Master 2026-10-04.xlsx'
+      'Neue Fassung „Übersicht.xlsx“'
     );
     await expect(result.getByTestId('export-result-sheet')).toContainText(
       '2 Zelle(n) aktualisiert'
@@ -177,6 +178,20 @@ test.describe('Export in die Master-Datei', () => {
 
     await result.getByRole('button', { name: 'Fertig' }).click();
     await expect(page).toHaveURL(/#\/trains\/documents$/);
+    // The written version is the current master now, named after its document.
+    await expect(
+      step(page, 'document-list').getByTestId('documents-master-row')
+    ).toContainText('aktualisiert mit „assets.xlsx“');
+  });
+
+  test('ohne Master-Datei gibt es nichts zu aktualisieren', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, { dokumente: [DOKUMENT] });
+    await page.goto('/#/trains/documents');
+    const list = step(page, 'document-list');
+    await expect(list.getByTestId('documents-row')).toHaveCount(1);
+    await expect(list.getByTestId('documents-export-master')).toHaveCount(0);
   });
 
   test('eine Spalte ohne Gegenstück hält den Abgleich an', async ({ page }) => {

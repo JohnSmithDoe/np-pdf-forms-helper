@@ -1,7 +1,7 @@
 // ─── why ────────────────────────────────────────────────────────
 // The master export wizard's own state: what the backend offered, which sheets
 // are ticked, the per-sheet answers (key, aliases, ignored columns), the base
-// file, and the two runs — the dry run being looked at and the written one.
+// file (the current master version, sent back so a newer one is refused), and the two runs — the dry run being looked at and the written one.
 //
 // Like the import walk, nothing survives leaving the wizard: the answers are
 // cheap to give again, and the ones worth keeping are remembered on the master
@@ -68,10 +68,6 @@ export const MasterExportStore = signalStore(
         ticked: { ...store.ticked(), [sheet]: on },
         preview: undefined,
       });
-    },
-
-    setBase(base: string): void {
-      patchState(store, { base, preview: undefined });
     },
 
     setRemember(remember: boolean): void {

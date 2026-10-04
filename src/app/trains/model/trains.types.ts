@@ -56,8 +56,9 @@
 // its columns and rows and decides nothing about them.
 //
 // The master EXPORT wizard sends a `MasterExportRequest` WHOLE on every change
-// and gets a `MasterExportRun` back — the dry run, or after writing the copy,
-// the same shape plus `target`. Per sheet, `open` are the document columns that
+// and gets a `MasterExportRun` back — the dry run, or after writing a new
+// version of the client master, the same shape plus `target`. `file` is derived
+// in Rust: always the client master's current version, never set from here. Per sheet, `open` are the document columns that
 // still need an answer (an alias onto one of `targets`, or `ignored`);
 // `conflicts` are remembered answers the sheet no longer fits, already dropped.
 //
@@ -121,7 +122,6 @@ export interface MasterSettings {
   bindings: MasterBinding[];
   importRun?: MasterImportRun;
   scan?: MasterScan;
-  lastExport?: string;
 }
 
 export interface MasterSheet {
@@ -174,7 +174,6 @@ export interface MasterExportRequest {
 export interface MasterExportBase {
   path: string;
   name: string;
-  copy: boolean;
 }
 
 export interface MasterExportSheet {

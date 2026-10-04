@@ -5,7 +5,7 @@
   phaseColor="secondary"
   [step]="3"
   [stepCount]="steps"
-  nextLabel="Exportieren"
+  nextLabel="Übernehmen"
   nextColor="success"
   [nextDisabled]="!facade.writable()"
   (back)="onBack()"
@@ -58,8 +58,8 @@
   </ion-list>
 
   <ion-note>
-    Erst mit „Exportieren“ wird geschrieben — als neue Kopie mit Datum neben der
-    Master-Datei. Das Original bleibt unverändert.
+    Erst mit „Übernehmen“ wird geschrieben — als neue Fassung der Master-Datei.
+    Die jetzige Fassung bleibt unverändert erhalten.
   </ion-note>
 </app-wizard-shell>
 

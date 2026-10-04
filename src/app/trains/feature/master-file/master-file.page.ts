@@ -11,7 +11,9 @@
 // pick the latest version and the previous ones history.
 //
 // No import and no export here: the master is never walked into the
-// Schattensystem as a Dokument, nor pasted into itself.
+// Schattensystem as a Dokument, nor pasted into itself. A version the master
+// update wrote (`quelle`) shows up here too — it is the same master, one
+// document further — and has no cleaning report, so it shows the file alone.
 // ────────────────────────────────────────────────────────────────
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';

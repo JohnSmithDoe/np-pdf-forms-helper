@@ -1,6 +1,6 @@
 <app-wizard-shell
   class="ion-page"
-  heading="Export abgeschlossen"
+  heading="Master aktualisiert"
   [phase]="phase"
   phaseColor="secondary"
   [step]="steps"
@@ -13,8 +13,13 @@
   @if (facade.result(); as result) {
     @if (result.target) {
       <section data-testid="export-result">
-        <h2>Geschrieben als „{{ name(result.target) }}“</h2>
-        <p><ion-note>Das Original ist unverändert.</ion-note></p>
+        <h2>Neue Fassung „{{ name(result.target) }}“</h2>
+        <p>
+          <ion-note>
+            Sie ist jetzt die aktuelle Master-Datei; die vorige bleibt unter
+            „Fassungen“ erhalten.
+          </ion-note>
+        </p>
         <ion-button fill="outline" (click)="onOpenFile(result.target)">
           <ion-icon slot="start" name="document-outline" aria-hidden="true" />
           Datei öffnen

@@ -20,11 +20,13 @@
 // steps are guarded in `intake.guards.ts`.
 //
 // `master-file` is the customer's master workbook taken in as a FILE — picked,
-// cleaned, kept in versions — and shares nothing with `master/*` below.
+// cleaned, kept in versions. It is the only master: `master/*` below reads its
+// current version.
 //
-// `master/export/*` is the third walk: one filed document into the customer's
-// master workbook — sheets, column check, preview, result — started from the
-// document list.
+// `master/export/*` is the third walk, „Master aktualisieren“: one filed
+// document into the client master — sheets, column check, preview to approve,
+// result — started from the document list, written as the master's next
+// version.
 //
 // The entry load hangs on a PATHLESS parent so every route below it shares one
 // resolver run. Any of the six can be the first one reached, and the alternative
@@ -211,7 +213,7 @@ const pages: Routes = [
       },
       {
         path: 'result',
-        title: 'Export abgeschlossen',
+        title: 'Master aktualisiert',
         canActivate: [masterExportResultGuard],
         loadComponent: () =>
           import('../master/feature/export-result/export-result.page').then(

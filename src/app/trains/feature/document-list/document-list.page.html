@@ -19,7 +19,14 @@
       <ion-item data-testid="documents-master-row">
         <ion-label class="ion-text-wrap">
           <h2>{{ master.name }}</h2>
-          <p>Aktuelle Fassung · bereinigt am {{ master.bereinigtAm }}</p>
+          <p>
+            @if (master.quelle) {
+              Aktuelle Fassung · aktualisiert mit „{{ master.quelle }}“ am
+              {{ master.bereinigtAm }}
+            } @else {
+              Aktuelle Fassung · bereinigt am {{ master.bereinigtAm }}
+            }
+          </p>
           @if (master.report.totals.tailRowsCut) {
             <p>
               {{ master.report.totals.tailRowsCut }} Formelzeilen am Ende
@@ -34,19 +41,21 @@
             >
               Ordner öffnen
             </ion-button>
-            <ion-button
-              size="small"
-              fill="clear"
-              (click)="onOpen(master.original)"
-            >
-              Original
-            </ion-button>
+            @if (!master.quelle) {
+              <ion-button
+                size="small"
+                fill="clear"
+                (click)="onOpen(master.original)"
+              >
+                Original
+              </ion-button>
+            }
             <ion-button
               size="small"
               fill="clear"
               (click)="onOpen(master.cleaned)"
             >
-              Bereinigte Datei
+              {{ master.quelle ? 'Datei öffnen' : 'Bereinigte Datei' }}
             </ion-button>
             <ion-button size="small" fill="clear" (click)="onMasterFile()">
               Fassungen
@@ -103,7 +112,7 @@
               >
                 Bereinigte Datei
               </ion-button>
-              @if (masterEnabled) {
+              @if (masterFile.current()) {
                 <ion-button
                   size="small"
                   fill="clear"
@@ -111,7 +120,7 @@
                   (click)="onExport(dokument.id)"
                   data-testid="documents-export-master"
                 >
-                  In Master übertragen
+                  Master aktualisieren
                 </ion-button>
               }
               @if (!dokument.importiertAm) {

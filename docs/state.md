@@ -80,10 +80,10 @@ front of a screen, or a piece of the migration that does not exist yet. Settled 
 - **The master write path has run against the real master only from a test.** The former one-click
   refresh pasted `Telematik`, `aktuelleNodepit` and `ECHO_Eingänge` of the real workbook straight from
   the three sender files (1.9 s, only those three sheets changed, every dashboard key still found), and
-  Excel opened umya's write cleanly. Its replacement, the EXPORT WIZARD (2026-10-04, `master/export/`,
-  `/trains/master/export/*`), runs the same `paste` and is covered by `cargo test` and Playwright
+  Excel opened umya's write cleanly. Its replacement, the „Master aktualisieren“ wizard (2026-10-04, `master/export/`,
+  `/trains/master/export/*`, writing a new client-master version), runs the same `paste` and is covered by `cargo test` and Playwright
   only: it has never run against the real master. Worth measuring there first: a dry run deserialises
-  every ticked sheet of the ORIGINAL on every answer, so a sheet filled to row 1,048,576 makes each
+  every ticked sheet of the current version on every answer, so a sheet filled to row 1,048,576 makes each
   preview cost what the read copy was built to avoid — and a sheet that size is refused by the grid's
   row limit in the first place. Also unrun: the pages in `tauri:dev`. Every sheet recognised by a Wagen
   key column is bound as the overview kind; the wizard no longer blocks those, it only refuses to

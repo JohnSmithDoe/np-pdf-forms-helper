@@ -742,3 +742,32 @@ Code: `trains/master_file/`, Seite `/trains/master-file`, oben angeheftet in der
 
 Bewusst offen: Bindungen, Spiegel und Export lesen weiter `MasterSettings.file`, nicht die übernommene
 Fassung — sie werden abgelöst, nicht angeschlossen.
+
+## Die Kunden-Master ist die einzige Master (appended 2026-10-04)
+
+Ersetzt den offenen Punkt am Ende von „Die Master-Datei als Datei“ und Teile von „Export in die
+Master-Datei“. Entschieden mit Martin am 2026-10-04: „get rid of our own master … client master is the
+only thing right now“.
+
+- **Keine zweite Datei.** `/trains/master` wählt keine Datei mehr (`pick_master_file` ist weg).
+  `MasterSettings.file` ist abgeleitet: `bindings::follow`, als erstes in jedem `sync`, zeigt es auf
+  die bereinigte Kopie der aktuellen Fassung und ist der einzige Schreiber. Bindungen, Spiegel,
+  Blattansichten und Aktualisierung lesen damit alle dieselbe Datei. Ohne übernommene Fassung gibt es
+  keine Master.
+- **Eine neue Fassung behält die Bindungen.** Sie ist dieselbe Arbeitsmappe noch einmal: Bindungen
+  bleiben nach Blattname, neue Blätter bekommen die Standardzuordnung, nur Scan und Lesekopie werden
+  neu gelesen — beim Übernehmen (`accept_master_file` ruft `sync`) bzw. beim nächsten Leser.
+  `save_master` kann `file` nicht setzen.
+- **„Master aktualisieren“ schreibt eine neue Fassung, keine datierte Kopie.** Der Assistent pro
+  Dokument (Blätter → Spalten → Vorschau mit „Übernehmen“ → Zusammenfassung) baut immer auf der
+  aktuellen Fassung auf; das Ergebnis wird über `master_file::updated` als neue `versions[0]`
+  gespeichert, unter dem Dateinamen der Kunden-Master, mit `quelle` = Dokumentname. `last_export` und
+  die Wahl der Ausgangsdatei sind weg — die Kette mehrerer Dokumente entsteht dadurch, dass jede
+  geschriebene Fassung die aktuelle wird. Die Anfrage nennt die Ausgangsdatei weiterhin, damit eine
+  zwischen Vorschau und Schreiben übernommene Fassung abgelehnt statt überschrieben wird. Das hebt
+  „Unsere datierten Export-Kopien gehören ausdrücklich nicht dazu“ auf: es gibt keine solchen Kopien
+  mehr.
+- **Die Aktion steht nur da, wo sie geht.** „Master aktualisieren“ erscheint in der Dokumentliste nur,
+  solange eine Kunden-Master übernommen ist — nicht mehr hinter dem Schalter `npdh.master`. Der
+  Schalter versteckt weiter Kachel und Hinweis des Master-Imports auf dem Dashboard.
+

@@ -1,7 +1,7 @@
 // ─── why ────────────────────────────────────────────────────────
 // The master export wizard's API: one filed Dokument into the sheets of the
 // master the user ticks — Blätter, Abgleich, Vorschau, Ergebnis — written as a
-// new dated copy. Rust decides everything about the sheets (which to suggest,
+// new version of the client master. Rust decides everything about the sheets (which to suggest,
 // what a column conflict is, which cells change); this only holds the answers
 // and sends them WHOLE, like the import walk sends its plan.
 //
@@ -121,10 +121,6 @@ export class MasterExportFacade {
 
   tick(sheet: string, on: boolean): void {
     this.#store.tick(sheet, on);
-  }
-
-  setBase(base: string): void {
-    this.#store.setBase(base);
   }
 
   setRemember(remember: boolean): void {

@@ -111,10 +111,6 @@ export class TrainsFacade {
     this.#store.applyTrainsData(await this.#backend.loadMaster());
   }
 
-  async pickMasterFile(): Promise<void> {
-    this.#store.applyTrainsData(await this.#backend.pickMasterFile());
-  }
-
   async resetMasterBindings(): Promise<void> {
     this.#store.applyTrainsData(await this.#backend.resetMasterBindings());
   }

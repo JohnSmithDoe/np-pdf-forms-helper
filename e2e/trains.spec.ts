@@ -206,9 +206,11 @@ test.describe('Master-Datei', () => {
     await installFakeBackend(page, master);
     await page.goto('/#/trains/master');
     const screen = page.locator('app-page-trains-master');
-    await expect(screen.getByTestId('master-file')).toHaveText(
-      'C:/Daten/Übersicht.xlsx'
+    // The client master's current version, by name — not a path picked here.
+    await expect(screen.getByTestId('master-file')).toContainText(
+      'Übersicht.xlsx'
     );
+    await expect(screen.getByRole('link', { name: 'Fassungen' })).toBeVisible();
     await expect(screen.getByTestId('master-binding')).toHaveCount(1);
     await expect(
       screen.getByTestId('master-binding').getByText('Telematik').first()
@@ -220,7 +222,7 @@ test.describe('Master-Datei', () => {
     await page.goto('/#/trains/master');
     const screen = page.locator('app-page-trains-master');
     await expect(
-      screen.getByText('Noch keine Master-Datei gewählt')
+      screen.getByText('Noch keine Master-Datei übernommen')
     ).toBeVisible();
     await expect(screen.getByTestId('master-import')).toHaveAttribute(
       'disabled',

@@ -25,10 +25,10 @@
   <p>
     Die Blätter der Master-Datei, in die bisher Exporte von Hand eingefügt
     werden, füllt das Programm aus den bereinigten Dokumenten: unter „Dokumente“
-    je Dokument mit „In Master übertragen“ — Blätter wählen, Vorschau prüfen,
-    schreiben. Geschrieben wird eine Kopie mit Datum daneben; das Original
-    bleibt unverändert. Die Vorlage je Blatt ist die gemerkte Zuordnung, mit der
-    der Export Blätter vorschlägt.
+    je Dokument mit „Master aktualisieren“ — Blätter wählen, Vorschau prüfen,
+    übernehmen. Jede Aktualisierung wird eine neue Fassung der Master-Datei. Die
+    Vorlage je Blatt ist die gemerkte Zuordnung, mit der die Aktualisierung
+    Blätter vorschlägt.
   </p>
   <p>
     „Importieren“ liest umgekehrt jedes Blatt mit einem Inhalt ins
@@ -36,9 +36,9 @@
     geleert und aus der Master-Datei neu aufgebaut, Blatt für Blatt.
   </p>
   <p>
-    Zugeordnet wird beim Wählen der Datei von selbst: jedes Blatt nach seiner
-    Kopfzeile. Blätter, deren Inhalt das Schattensystem noch nicht kennt, sind
-    „nur Ansicht“.
+    Zugeordnet wird beim Übernehmen einer Fassung von selbst: jedes Blatt nach
+    seiner Kopfzeile. Blätter, deren Inhalt das Schattensystem noch nicht kennt,
+    sind „nur Ansicht“.
   </p>
 
   @if (open().length) {
@@ -69,15 +69,16 @@
     </ion-list-header>
     <ion-item>
       <ion-label class="ion-text-wrap" data-testid="master-file">
-        @if (settings().file; as file) {
-          {{ file }}
+        @if (masterFile.current(); as current) {
+          {{ current.name }}
+          <p>Aktuelle Fassung vom {{ current.bereinigtAm }}</p>
         } @else {
-          <ion-note>Noch keine Master-Datei gewählt</ion-note>
+          <ion-note>Noch keine Master-Datei übernommen</ion-note>
         }
       </ion-label>
-      <ion-button slot="end" fill="clear" (click)="onPick()">
+      <ion-button slot="end" fill="clear" routerLink="/trains/master-file">
         <ion-icon slot="start" name="folder-open-outline" aria-hidden="true" />
-        Wählen …
+        {{ masterFile.current() ? 'Fassungen' : 'Master-Datei wählen' }}
       </ion-button>
     </ion-item>
     @if (view()?.problem; as problem) {

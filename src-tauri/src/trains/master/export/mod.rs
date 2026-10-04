@@ -1,6 +1,6 @@
 // ─── why ────────────────────────────────────────────────────────
 // One filed Dokument into the sheets of the master the user ticked, written as
-// a new dated copy. It replaced the one-click refresh (every binding from the
+// a new version of the client master. It replaced the one-click refresh (every binding from the
 // latest document of its template): the user now sees what goes where before
 // anything is written. See `docs/decisions.md`, „Export in die Master-Datei“.
 //
@@ -18,11 +18,14 @@
 // dropped and SAID (`conflicts`), never silently re-pointed. A sheet that cannot
 // be written at all — no shared column, a feed without key — is a `problem`.
 //
-// THE ORIGINAL IS NEVER WRITTEN, as for every master write: the copy is
-// `<Original> <Datum>.xlsx` beside the original (`free_path` for a second run the
-// same day), recorded as `last_export` so the next document builds on it
-// (`suggest::bases`). The cleaned copy is the source and refused when edited
-// since filing (`source::load`). `.xlsm` is refused: umya has no VBA story.
+// THE RESULT IS A NEW VERSION OF THE CLIENT MASTER (`master_file::updated`),
+// never a write into the current one and never a loose copy beside it: there is
+// one master, and its versions are the history of what changed it. The base is
+// always the current version (`suggest::bases`); the request still names it, so
+// a version taken over between preview and write is refused rather than
+// overwritten. The document's cleaned copy is the source and refused when
+// edited since filing (`source::load`). `.xlsm` is refused: umya has no VBA
+// story.
 // ────────────────────────────────────────────────────────────────
 
 mod diff;
@@ -62,31 +65,17 @@ pub fn write(
                 .collect(),
         ));
     }
-    let original = original(db.master())?.to_path_buf();
-    let folder = original.parent().unwrap_or_else(|| Path::new("."));
-    let stem = original.file_stem().map_or_else(
-        || "Master".into(),
-        |stem| stem.to_string_lossy().into_owned(),
-    );
-    let target = crate::doc::free_path(folder, &format!("{stem} {today}.xlsx"));
-    crate::doc::write_book(
-        &book,
-        &target,
-        format!(
-            "Die Master-Datei {} konnte nicht geschrieben werden.",
-            crate::doc::file_name(&target)
-        ),
-    )?;
+    let source = dokument(db, &request.dokument_id)?;
+    let (quelle, template) = (source.name.clone(), source.template_id.clone());
+    let version = crate::trains::master_file::updated(db, &book, &quelle, today)?;
 
-    let mut settings = db.master().clone();
-    settings.last_export = Some(target.to_string_lossy().into_owned());
     if request.remember {
-        let template = dokument(db, &request.dokument_id)?.template_id.clone();
+        let mut settings = db.master().clone();
         remember(&mut settings, &db.templates(), &template, &run);
+        db.save_master(settings)?;
     }
-    db.save_master(settings)?;
-    run.folder = Some(folder.to_string_lossy().into_owned());
-    run.target = Some(target.to_string_lossy().into_owned());
+    run.folder = Some(version.folder);
+    run.target = Some(version.cleaned);
     Ok(run)
 }
 
@@ -96,10 +85,9 @@ pub(super) fn dokument<'a>(db: &'a TrainsDb, id: &str) -> AppResult<&'a Dokument
 }
 
 pub(super) fn original(settings: &MasterSettings) -> AppResult<&Path> {
-    let path =
-        settings.file.as_deref().map(Path::new).ok_or_else(|| {
-            AppError::Report(vec!["Es ist noch keine Master-Datei gewählt.".into()])
-        })?;
+    let path = settings.file.as_deref().map(Path::new).ok_or_else(|| {
+        AppError::Report(vec!["Es ist noch keine Master-Datei übernommen.".into()])
+    })?;
     if path.is_file() {
         Ok(path)
     } else {
@@ -379,11 +367,7 @@ mod tests {
         let mut db = TrainsDb::load(&folder.config()).unwrap();
         let file = master(folder);
         filed(folder, &mut db, headers, "Neuhof");
-        db.save_master(MasterSettings {
-            file: Some(file.to_string_lossy().into_owned()),
-            ..MasterSettings::default()
-        })
-        .unwrap();
+        crate::testing::client_master(&mut db, &file);
         crate::trains::master::bindings::sync(&mut db, false).unwrap();
         let mut settings = db.master().clone();
         for binding in &mut settings.bindings {
@@ -486,7 +470,7 @@ mod tests {
     }
 
     #[test]
-    fn the_write_is_a_dated_copy_the_next_export_builds_on() {
+    fn the_write_is_a_new_version_the_next_export_builds_on() {
         let folder = TempDir::new("export-write");
         let (mut db, file) = setup(&folder, &HEADERS);
         let before = std::fs::read(&file).unwrap();
@@ -494,21 +478,40 @@ mod tests {
         let wanted = request(&db, telematik());
         let run = write(&mut db, &wanted, "2026-10-04").unwrap();
         let target = PathBuf::from(run.target.unwrap());
-        assert_eq!(crate::doc::file_name(&target), "Übersicht 2026-10-04.xlsx");
-        assert_eq!(std::fs::read(&file).unwrap(), before, "original untouched");
-        assert_eq!(db.master().last_export.as_deref(), target.to_str());
+        assert_eq!(crate::doc::file_name(&target), "Übersicht.xlsx");
+        assert_ne!(target, file);
+        assert_eq!(
+            std::fs::read(&file).unwrap(),
+            before,
+            "previous version untouched"
+        );
 
+        let current = &db.master_file().versions[0];
+        assert_eq!(current.cleaned, target.to_string_lossy());
+        assert_eq!(current.quelle.as_deref(), Some("assets.xlsx"));
+        assert_eq!(db.master_file().versions.len(), 2);
+
+        crate::trains::master::bindings::sync(&mut db, false).unwrap();
         let (bases, base) = suggest::bases(db.master()).unwrap();
-        assert_eq!(bases.len(), 2);
+        assert_eq!(bases.len(), 1);
         assert_eq!(
             base,
             target.to_string_lossy(),
-            "the newer copy is the default"
+            "the new version is the base"
         );
 
         let book = umya_spreadsheet::reader::xlsx::read(&target).unwrap();
         let sheet = book.sheet_by_name("Telematik").unwrap();
         assert_eq!(sheet.cell((4u32, 2u32)).unwrap().value(), "Neuhof");
+    }
+
+    #[test]
+    fn without_a_client_master_there_is_no_export() {
+        let folder = TempDir::new("export-no-master");
+        let mut db = TrainsDb::load(&folder.config()).unwrap();
+        filed(&folder, &mut db, &HEADERS, "Neuhof");
+        let messages = start(&mut db, "d-1").unwrap_err().into_messages();
+        assert!(messages[0].contains("übernommen"), "{messages:?}");
     }
 
     #[test]
@@ -591,7 +594,7 @@ mod tests {
             .unwrap_err()
             .into_messages();
         assert!(messages[0].contains("kein Blatt"), "{messages:?}");
-        assert_eq!(db.master().last_export, None);
+        assert_eq!(db.master_file().versions.len(), 1);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 // ─── why ────────────────────────────────────────────────────────
-// Step one of the master export: which sheets the document goes into, and which
-// file to build on. The ticks start on Rust's suggestion — the sheets the
+// Step one of the master update: which sheets the document goes into. The base
+// is always the client master's current version, so it is named, not offered. The ticks start on Rust's suggestion — the sheets the
 // template was exported to before, or that carry every mapped column — and say
 // why, so a pre-ticked sheet is never a mystery.
 //
@@ -11,10 +11,6 @@
 //
 // The label sits INSIDE `ion-checkbox`, so the whole row toggles it; a separate
 // `ion-label` beside a slotted checkbox leaves only the box itself clickable.
-//
-// The base choice appears only when there is one to make — a copy an earlier
-// export wrote. Rust picked the default (the copy while it is newer than the
-// original); the page only shows it.
 // ────────────────────────────────────────────────────────────────
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
@@ -27,8 +23,6 @@ import {
   IonList,
   IonListHeader,
   IonNote,
-  IonRadio,
-  IonRadioGroup,
 } from '@ionic/angular/standalone';
 import { ReportPresenterService } from '../../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../../@shared/ui/busy-overlay/busy-overlay.component';
@@ -53,8 +47,6 @@ import {
     IonList,
     IonListHeader,
     IonNote,
-    IonRadio,
-    IonRadioGroup,
     WizardShellComponent,
   ],
 })
@@ -72,11 +64,6 @@ export class ExportSheetsPage {
       sheet,
       (event as CustomEvent<{ checked: boolean }>).detail.checked
     );
-  }
-
-  protected onBase(event: Event): void {
-    const base = (event as CustomEvent<{ value?: string }>).detail.value;
-    if (base) this.facade.setBase(base);
   }
 
   protected async onBack(): Promise<void> {

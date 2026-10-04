@@ -6,7 +6,9 @@
 // `clean_master_file` is a picker AND seconds of work, so it is
 // `#[tauri::command(async)]` on a sync fn, and it lets go of the store while the
 // workbook is read: the lock is taken for the duplicate check and again for
-// `hold`, never across the cleaning. The decision is a free fn over `&AppState`
+// `hold`, never across the cleaning. `accept_master_file` reads the taken-over
+// version's headers once (`bindings::sync`), so the master settings page and the
+// export open on it without a second wait. The decision is a free fn over `&AppState`
 // (`clean_picked`) so a test can walk a file in without a window.
 // ────────────────────────────────────────────────────────────────
 
@@ -42,6 +44,7 @@ pub fn clean_master_file(
 pub fn accept_master_file(state: State<'_, AppState>) -> AppResult<TrainsData> {
     let mut db = state.trains();
     super::accept(&mut db, &today_iso())?;
+    crate::trains::master::bindings::sync(&mut db, false)?;
     Ok(TrainsData::nothing().master_file(db.master_file().clone()))
 }
 

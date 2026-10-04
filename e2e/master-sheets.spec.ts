@@ -10,6 +10,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import {
+  clientMaster,
   installFakeBackend,
   recordedCalls,
   type FakeMasterSettings,
@@ -163,11 +164,11 @@ test.describe('Master-Zuordnung', () => {
   ];
   const masterPage = (page: Page) => page.locator('app-page-trains-master');
 
-  test('das Wählen der Datei ordnet jedes Blatt von selbst zu', async ({
+  test('eine übernommene Master-Datei ordnet jedes Blatt von selbst zu', async ({
     page,
   }) => {
     await installFakeBackend(page, {
-      masterPicker: 'C:\\Daten\\Übersicht.xlsx',
+      masterFile: clientMaster('C:\\Daten\\Übersicht.xlsx'),
       masterDefaults: DEFAULTS,
       masterSheets: [
         { name: 'Alle Wagen', headers: ['Wagennummer'] },
@@ -175,7 +176,9 @@ test.describe('Master-Zuordnung', () => {
       ],
     });
     await page.goto('/#/trains/master');
-    await masterPage(page).getByRole('button', { name: 'Wählen …' }).click();
+    await expect(masterPage(page).getByTestId('master-file')).toContainText(
+      'Übersicht.xlsx'
+    );
 
     const rows = masterPage(page).getByTestId('master-binding');
     await expect(rows).toHaveCount(2);

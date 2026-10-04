@@ -1,9 +1,13 @@
 // ─── why ────────────────────────────────────────────────────────
-// The customer's master workbook: which file it is, and how each of its sheets
-// is bound — what it IS, and which template's documents the export wizard
+// The customer's master workbook: which version is current, and how each of
+// its sheets is bound — what it IS, and which template's documents the export wizard
 // suggests for it, with the key and aliases that export remembered. Writing
-// happens in that wizard, started per document from the document list; the
-// original is never written, and the page says so.
+// happens in that wizard, started per document from the document list; each
+// write is a new version of the client master, and the page says so.
+//
+// The file is NOT chosen here. The client master (`/trains/master-file`) is the
+// only master, and Rust points everything on this page at its current version
+// (`bindings::follow`); the row links to its versions instead of a picker.
 //
 // Every change sends the WHOLE `MasterSettings` back, like `restage_import`
 // takes the whole plan: the backend answers with a fresh `MasterView`, and the
@@ -31,13 +35,14 @@
 // each of 28 sheets would make the list unreadable, and most bindings are
 // never edited by hand.
 //
-// Nobody has to bind anything: picking the file binds EVERY sheet by its
+// Nobody has to bind anything: taking a version over binds EVERY sheet by its
 // header row (Rust, `kinds::recognise`), and „Standardzuordnung“ restores
 // those defaults. A binding the user changes is marked `auto: false` here —
 // the page is the only place a hand edit happens — and its row says
 // „von Hand angepasst“, because that is exactly what a reset would throw away.
-// Reading the file costs seconds on the real master, which is why only the
-// pick, the reset and the import touch it; the busy overlay covers all three.
+// Reading the file costs seconds on the real master, which is why only taking a
+// version over, opening this page on a new one, the reset and the import touch
+// it; the busy overlay covers them.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -81,7 +86,7 @@ import {
 import { OverlayService } from '../../../@shared/data/overlays/overlay.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
-import { ImportWalkFacade, TrainsFacade } from '../../data';
+import { ImportWalkFacade, MasterFileFacade, TrainsFacade } from '../../data';
 import type {
   MasterBinding,
   MasterMode,
@@ -154,6 +159,7 @@ const KINDS: readonly KindOption[] = [
 })
 export class TrainsMasterPage {
   protected readonly facade = inject(TrainsFacade);
+  protected readonly masterFile = inject(MasterFileFacade);
   readonly #walk = inject(ImportWalkFacade);
   readonly #reports = inject(ReportPresenterService);
   readonly #overlays = inject(OverlayService);
@@ -236,10 +242,6 @@ export class TrainsMasterPage {
         ?.plan.columns.map((column) => column.header)
         .filter((header) => header.trim() !== '') ?? []
     );
-  }
-
-  protected onPick(): void {
-    void this.#reports.run(() => this.facade.pickMasterFile());
   }
 
   protected async onReset(): Promise<void> {

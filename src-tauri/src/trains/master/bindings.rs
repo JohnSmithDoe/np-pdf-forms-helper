@@ -8,9 +8,9 @@
 // sheets not bound yet, and `auto` marks the ones nobody touched.
 //
 // ONLY MAPPING, IMPORT, EXPORT AND A SHEET VIEW READ THE FILE. `sync` runs when
-// a file is picked, on „Standardzuordnung“, when an import starts, when the
-// export wizard opens and when a sheet view opens — never for the settings page, which answers from what the last
-// read stored (`MasterSettings.scan`).
+// a version is taken over or written, on „Standardzuordnung“, when an import
+// starts, when the export wizard opens, when a sheet view opens, and for the
+// settings page — where it is one `stat` unless the version is new.
 // Reading a header means deserialising the whole sheet — umya has no partial
 // read — and five of the customer's sheets are filled down to row 1,048,576
 // (up to 72 MB of XML each). So the read that takes the headers also writes the
@@ -18,12 +18,13 @@
 // occasions it is skipped while the file's modification time matches the
 // stored one and the copy is still there. „Standardzuordnung“ on an unchanged
 // file rebinds from the stored headers without opening the workbook at all.
-// The stored scan says nothing about WHICH file it was taken from, so picking a
-// different one drops it (`pick_master_file`) rather than trusting an mtime.
 //
-// A DIFFERENT file starts over: bindings belong to the workbook they were made
-// for, so `reset` replaces them all with the defaults, and so does picking a new
-// path. The same file read again keeps every binding the user set.
+// THE FILE IS THE CLIENT MASTER, never one picked here: `follow` points
+// `MasterSettings.file` at the cleaned copy of `MasterFile.versions[0]` and is
+// the only writer of that field. No version, no master. A new version is the
+// same workbook again, so the bindings stay — matched by sheet name, and a sheet
+// it gained is bound by default — while the scan belongs to the old path and
+// goes, which is what makes the next `sync` read the new one.
 // ────────────────────────────────────────────────────────────────
 
 use std::path::Path;
@@ -36,7 +37,23 @@ use crate::trains::model::{
 };
 use crate::trains::recognise;
 
+pub fn follow(db: &mut TrainsDb) -> AppResult<()> {
+    let current = db
+        .master_file()
+        .versions
+        .first()
+        .map(|version| version.cleaned.clone());
+    if db.master().file == current {
+        return Ok(());
+    }
+    let mut settings = db.master().clone();
+    settings.file = current;
+    settings.scan = None;
+    db.save_master(settings)
+}
+
 pub fn sync(db: &mut TrainsDb, reset: bool) -> AppResult<()> {
+    follow(db)?;
     let mut settings = db.master().clone();
     let Some(path) = settings.file.as_deref().map(Path::new) else {
         return Ok(());
@@ -113,7 +130,7 @@ fn source_template(headers: &[String], templates: &[ImportTemplate]) -> Option<S
 mod tests {
     use super::*;
     use crate::testing::{workbook, TempDir};
-    use crate::trains::model::{MasterSettings, SheetKind};
+    use crate::trains::model::SheetKind;
 
     fn master(folder: &TempDir) -> TrainsDb {
         let file = workbook(
@@ -135,11 +152,7 @@ mod tests {
             ],
         );
         let mut db = TrainsDb::load(&folder.config()).unwrap();
-        db.save_master(MasterSettings {
-            file: Some(file.to_string_lossy().into_owned()),
-            ..MasterSettings::default()
-        })
-        .unwrap();
+        crate::testing::client_master(&mut db, &file);
         db
     }
 

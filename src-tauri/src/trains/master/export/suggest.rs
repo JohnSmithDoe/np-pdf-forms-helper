@@ -20,15 +20,12 @@
 // Suggested sheets come FIRST, the rest in workbook order: the real master has
 // 28 sheets and the two that matter must not be scrolled for.
 //
-// THE BASE is the last copy an export wrote, while it is at least as new as the
-// original: a run of documents then accumulates in one file. Once the customer
-// saves the original again, building on the copy would drop their edits, so
-// the original is the default again. Both are offered; nothing else is, and
-// `run` refuses any other path.
+// THE BASE is the current version of the client master and nothing else: a run
+// of documents accumulates because each written version becomes the current
+// one. `bindings::sync` has pointed the settings at it before anything is read.
 // ────────────────────────────────────────────────────────────────
 
 use std::collections::HashSet;
-use std::path::Path;
 
 use super::super::{bindings, kinds};
 use crate::error::{AppError, AppResult};
@@ -40,8 +37,8 @@ use crate::trains::model::{
 
 pub fn start(db: &mut TrainsDb, dokument_id: &str) -> AppResult<MasterExportStart> {
     let dokument = super::dokument(db, dokument_id)?.clone();
-    super::original(db.master())?;
     bindings::sync(db, false)?;
+    super::original(db.master())?;
     let settings = db.master();
     let scan = settings.scan.as_ref().ok_or_else(|| {
         AppError::Report(vec!["Die Master-Datei wurde noch nicht gelesen.".into()])
@@ -143,26 +140,12 @@ pub fn related(templates: &[ImportTemplate], template_id: &str) -> HashSet<Strin
 
 pub fn bases(settings: &MasterSettings) -> AppResult<(Vec<MasterExportBase>, String)> {
     let original = super::original(settings)?;
-    let entry = |path: &Path, copy| MasterExportBase {
-        path: path.to_string_lossy().into_owned(),
-        name: crate::doc::file_name(path),
-        copy,
+    let base = MasterExportBase {
+        path: original.to_string_lossy().into_owned(),
+        name: crate::doc::file_name(original),
     };
-    let mut bases = vec![entry(original, false)];
-    let mut base = bases[0].path.clone();
-    if let Some(copy) = settings
-        .last_export
-        .as_deref()
-        .map(Path::new)
-        .filter(|copy| copy.is_file() && *copy != original)
-    {
-        bases.push(entry(copy, true));
-        let newer = crate::doc::file_mtime_ms(copy)? >= crate::doc::file_mtime_ms(original)?;
-        if newer {
-            base = bases[1].path.clone();
-        }
-    }
-    Ok((bases, base))
+    let path = base.path.clone();
+    Ok((vec![base], path))
 }
 
 fn headers(dokument: &Dokument, mapped_only: bool) -> Vec<String> {

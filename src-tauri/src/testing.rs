@@ -140,6 +140,22 @@ pub fn workbook(folder: &TempDir, name: &str, sheets: &[(&str, &[&[&str]])]) -> 
     path
 }
 
+/// Takes `file` over as the client master's current version, which is what
+/// every master reader follows (`bindings::follow`).
+pub fn client_master(db: &mut crate::trains::db::TrainsDb, file: &Path) {
+    let path = file.to_string_lossy().into_owned();
+    db.save_master_file(crate::trains::model::MasterFile {
+        versions: vec![crate::trains::model::MasterFileVersion {
+            name: crate::doc::file_name(file),
+            original: path.clone(),
+            cleaned: path,
+            ..Default::default()
+        }],
+        pending: None,
+    })
+    .unwrap();
+}
+
 // ─── model builders ───────────────────────────────────────────────
 // Named arguments would be nicer, but every test here cares about two or three
 // fields at most, so the builders take what varies and default the rest.

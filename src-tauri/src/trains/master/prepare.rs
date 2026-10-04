@@ -20,13 +20,13 @@
 // The copy is INTERNAL, under `data/trains/master/`, never beside the
 // customer's file — a second workbook in their folder would be opened, edited
 // and lost. One copy at a time: the folder is emptied before a new one is
-// written, so a newly chosen file leaves no copy of the old one behind. It is
+// written, so a new version leaves no copy of the old one behind. It is
 // called „Lesekopie“ and not „bereinigt“, because Bereinigen is the cleaning
 // walk and this is not one.
 //
 // Only READERS use the copy — the import's `stage_sheet` and the sheet views.
-// The export writes a dated copy of the ORIGINAL (or of its own last copy) and
-// must carry every row the customer has, so it never opens this one; provenance keeps naming the
+// The export builds a new version from the CURRENT VERSION itself and must carry
+// every row the customer has, so it never opens this one; provenance keeps naming the
 // original file and the customer's sheet.
 // ────────────────────────────────────────────────────────────────
 
@@ -46,17 +46,16 @@ pub fn copy_path(db: &TrainsDb, original: &Path) -> PathBuf {
 }
 
 pub fn existing(db: &TrainsDb) -> AppResult<PathBuf> {
-    let original =
-        db.master().file.as_deref().map(Path::new).ok_or_else(|| {
-            AppError::Report(vec!["Es ist noch keine Master-Datei gewählt.".into()])
-        })?;
+    let original = db.master().file.as_deref().map(Path::new).ok_or_else(|| {
+        AppError::Report(vec!["Es ist noch keine Master-Datei übernommen.".into()])
+    })?;
     let copy = copy_path(db, original);
     if copy.is_file() {
         return Ok(copy);
     }
     Err(AppError::Report(vec![
         "Die Master-Datei ist noch nicht eingelesen.".into(),
-        "Bitte die Master-Datei in den Master-Einstellungen erneut wählen.".into(),
+        "Bitte die Master-Einstellungen einmal öffnen, dann wird sie eingelesen.".into(),
     ]))
 }
 

@@ -1,9 +1,10 @@
 // ─── why ────────────────────────────────────────────────────────
 // The customer's master workbook as a FILE the app owns: picked, copied in,
-// cleaned, and kept as versions. Deliberately separate from everything else
-// called master — `trains/master/` binds, mirrors and exports into the
-// workbook; this module only takes it in. It shares no state with it, and no
-// Dokument: a master is never imported by the walk nor exported into itself.
+// cleaned, and kept as versions. It is THE master — `trains/master/` binds,
+// mirrors and exports against its current version (`bindings::follow`), and an
+// export's result comes back here as a new version (`updated`), its `quelle`
+// the document. Still no Dokument: a master is never imported by the walk nor
+// exported into itself.
 //
 // ONLY ONE EXISTS. The customer produces it again and again, so each pick is a
 // new VERSION of the one master, not a second master; `versions[0]` is the
@@ -163,6 +164,7 @@ fn clean_adopted(adopted: &dokument::Adopted, stamp: &str) -> AppResult<MasterFi
         cleaned_hash: dokument::hash_of(&cleaned)?,
         bereinigt_am: stamp.to_string(),
         uebernommen_am: None,
+        quelle: None,
         report: MasterFileReport { sheets, totals },
     })
 }
@@ -202,6 +204,56 @@ pub fn accept(db: &mut TrainsDb, stamp: &str) -> AppResult<()> {
     version.uebernommen_am = Some(stamp.to_string());
     file.versions.insert(0, version);
     db.save_master_file(file)
+}
+
+pub fn updated(
+    db: &mut TrainsDb,
+    book: &umya_spreadsheet::Workbook,
+    quelle: &str,
+    stamp: &str,
+) -> AppResult<MasterFileVersion> {
+    let name = db
+        .master_file()
+        .versions
+        .first()
+        .map(|version| version.name.clone())
+        .ok_or_else(|| {
+            AppError::Report(vec!["Es ist noch keine Master-Datei übernommen.".into()])
+        })?;
+    let id = uuid::Uuid::new_v4().to_string();
+    let folder = db.master_file_folder().join(&id);
+    std::fs::create_dir_all(&folder).map_err(|error| AppError::io(&folder, error))?;
+    let path = folder.join(&name);
+    let written = (|| {
+        crate::doc::write_book(
+            book,
+            &path,
+            format!("Die Master-Datei {name} konnte nicht geschrieben werden."),
+        )?;
+        let hash = dokument::hash_of(&path)?;
+        let file = path.to_string_lossy().into_owned();
+        let version = MasterFileVersion {
+            id,
+            name: name.clone(),
+            folder: folder.to_string_lossy().into_owned(),
+            original: file.clone(),
+            cleaned: file,
+            original_hash: hash.clone(),
+            cleaned_hash: hash,
+            bereinigt_am: stamp.to_string(),
+            uebernommen_am: Some(stamp.to_string()),
+            quelle: Some(quelle.to_string()),
+            report: MasterFileReport::default(),
+        };
+        let mut master = db.master_file().clone();
+        master.versions.insert(0, version.clone());
+        db.save_master_file(master)?;
+        Ok(version)
+    })();
+    if written.is_err() {
+        dokument::discard(&folder);
+    }
+    written
 }
 
 pub fn discard(db: &mut TrainsDb) -> AppResult<()> {

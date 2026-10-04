@@ -559,29 +559,8 @@ pub fn create_trains_export(state: State<'_, AppState>) -> AppResult<TrainsData>
 
 #[tauri::command(async)]
 pub fn get_master(state: State<'_, AppState>) -> AppResult<TrainsData> {
-    let db = state.trains();
-    Ok(TrainsData::nothing().master(master::view(db.master())))
-}
-
-#[tauri::command(async)]
-pub fn pick_master_file(
-    window: tauri::WebviewWindow,
-    state: State<'_, AppState>,
-) -> AppResult<TrainsData> {
-    let Some(file) = picker::file(&window, "Master-Datei wählen", None, Some(picker::EXCEL))
-    else {
-        return Ok(TrainsData::nothing());
-    };
     let mut db = state.trains();
-    let mut settings = db.master().clone();
-    let file = file.to_string_lossy().into_owned();
-    let changed = settings.file.as_deref() != Some(file.as_str());
-    if changed {
-        settings.scan = None;
-    }
-    settings.file = Some(file);
-    db.save_master(settings)?;
-    master::bindings::sync(&mut db, changed)?;
+    master::bindings::sync(&mut db, false)?;
     Ok(TrainsData::nothing().master(master::view(db.master())))
 }
 
@@ -596,9 +575,9 @@ pub fn reset_master_bindings(state: State<'_, AppState>) -> AppResult<TrainsData
 pub fn save_master(settings: MasterSettings, state: State<'_, AppState>) -> AppResult<TrainsData> {
     let mut db = state.trains();
     let settings = MasterSettings {
+        file: db.master().file.clone(),
         import_run: db.master().import_run.clone(),
         scan: db.master().scan.clone(),
-        last_export: db.master().last_export.clone(),
         ..settings
     };
     db.save_master(settings.clone())?;
@@ -658,7 +637,8 @@ pub fn write_master_export(
     let run = master::export::write(&mut db, &request, &crate::trains::clock::today_iso())?;
     Ok(TrainsData::nothing()
         .master_export(run)
-        .master(master::view(db.master())))
+        .master(master::view(db.master()))
+        .master_file(db.master_file().clone()))
 }
 
 fn read_and_stage(path: &Path, sheet: Option<&str>, state: &AppState) -> AppResult<TrainsData> {

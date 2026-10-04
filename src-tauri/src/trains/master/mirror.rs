@@ -167,7 +167,7 @@ fn master_file(settings: &MasterSettings) -> AppResult<&Path> {
         .file
         .as_deref()
         .map(Path::new)
-        .ok_or_else(|| AppError::Report(vec!["Es ist noch keine Master-Datei gewählt.".into()]))
+        .ok_or_else(|| AppError::Report(vec!["Es ist noch keine Master-Datei übernommen.".into()]))
 }
 
 fn bound<'a>(settings: &'a MasterSettings, sheet: &str) -> AppResult<&'a MasterBinding> {
@@ -309,8 +309,9 @@ pub(super) mod tests {
     pub(in crate::trains::master) fn bound(folder: &TempDir) -> TrainsDb {
         let file = master(folder);
         let mut db = TrainsDb::load(&folder.config()).unwrap();
+        crate::testing::client_master(&mut db, &file);
         db.save_master(MasterSettings {
-            file: Some(file.to_string_lossy().into_owned()),
+            file: None,
             bindings: vec![
                 binding("Übersicht", SheetKind::Wagenliste),
                 binding("Einbauliste", SheetKind::RadsatzEinbau),
@@ -318,7 +319,6 @@ pub(super) mod tests {
             ],
             import_run: None,
             scan: None,
-            last_export: None,
         })
         .unwrap();
         super::super::bindings::sync(&mut db, false).unwrap();
@@ -620,12 +620,12 @@ pub(super) mod tests {
             )],
         );
         let mut db = TrainsDb::load(&folder.config()).unwrap();
+        crate::testing::client_master(&mut db, &file);
         db.save_master(MasterSettings {
-            file: Some(file.to_string_lossy().into_owned()),
+            file: None,
             bindings: vec![binding("Einbauliste", SheetKind::RadsatzEinbau)],
             import_run: None,
             scan: None,
-            last_export: None,
         })
         .unwrap();
         super::super::bindings::sync(&mut db, false).unwrap();

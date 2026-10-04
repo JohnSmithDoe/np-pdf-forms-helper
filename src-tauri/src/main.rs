@@ -89,7 +89,6 @@ fn main() {
             trains::commands::reset_trains,
             trains::commands::create_trains_export,
             trains::commands::get_master,
-            trains::commands::pick_master_file,
             trains::commands::save_master,
             trains::commands::open_master_export,
             trains::commands::preview_master_export,
