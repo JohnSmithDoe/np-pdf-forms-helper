@@ -24,6 +24,11 @@ uuid = { version = "1", features = ["v4"] }
 umya-spreadsheet = "3.1.0"
 lopdf = { version = "0.36.0", default-features = false }
 
+# umya unoptimised parses the master's fill-down sheets far too slowly for
+# `tauri dev`; only dependencies are optimised, the app crate stays quick to build.
+[profile.dev.package."*"]
+opt-level = 3
+
 [profile.release]
 codegen-units = 1
 lto = true
