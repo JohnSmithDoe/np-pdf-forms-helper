@@ -59,6 +59,13 @@
 // staging would have read from the original — a second reading of the same cell
 // would be a second answer.
 //
+// THE MASTER is read by two rules of its own (`master`): a `0` in a DATE column
+// is the empty result of a VLOOKUP, not 1899-12-30, so it reads as empty — in an
+// amount column a `0` is a real amount and stays; and a Fehler in ANY mapped
+// cell rejects the row rather than importing it with a hole, because the mirror
+// is checked against the customer's sheet and a silently shortened row would
+// pass for a correct one. The rejected row is listed, never dropped quietly.
+//
 // `AppError` is reserved for what stops the whole gesture — the layout does not
 // fit the sheet, or no required field is mapped. Everything else is a `CellIssue`
 // on a row that still arrives.
@@ -70,7 +77,7 @@ use super::db::TrainsDb;
 use super::hash;
 use super::model::{
     CellIssue, ColumnBinding, FieldKind, ImportPlan, Resolution, RowStatus, Severity, StagedCell,
-    StagedImport, StagedRow, StagedSummary,
+    StagedImport, StagedRow, StagedSummary, StagingOrigin,
 };
 use super::reading::{read_column, Confirmed, Interpretation, Question};
 use super::resolve;
@@ -123,6 +130,7 @@ pub struct StageInput<'a> {
     pub grid: &'a Grid,
     pub plan: &'a ImportPlan,
     pub db: &'a TrainsDb,
+    pub master: bool,
 }
 
 pub fn stage(input: StageInput<'_>) -> AppResult<Staged> {
@@ -153,7 +161,7 @@ pub fn stage(input: StageInput<'_>) -> AppResult<Staged> {
             candidates: input.candidates,
             rows,
             summary,
-            dokument_id: None,
+            origin: StagingOrigin::Datei,
             entities: None,
         },
         values,
@@ -203,6 +211,9 @@ fn stage_row(
         let cell = input.grid.cell(binding.index, row);
         let raw = cell.map(|cell| cell.text.clone()).unwrap_or_default();
 
+        let cell = cell.filter(|cell| !(input.master && is_master_blank(binding.field, cell)));
+        let raw = if cell.is_none() { String::new() } else { raw };
+
         let Some(read) = interpretations.get(position).and_then(Option::as_ref) else {
             cells.push(StagedCell {
                 column: binding.index,
@@ -233,7 +244,7 @@ fn stage_row(
                 values.push((binding.field, value));
             }
             Err(message) => {
-                if binding.field.required() {
+                if binding.field.required() || input.master {
                     rejected = true;
                 }
                 issues.push(issue(row, binding, &raw, message, Severity::Fehler));
@@ -355,6 +366,14 @@ pub(super) fn parse_cell(
         FieldKind::Ignorieren => text::parse(""),
         _ => text::parse(raw),
     }
+}
+
+fn is_master_blank(field: FieldKind, cell: &super::sheet::grid::RawCell) -> bool {
+    let date = matches!(
+        field,
+        FieldKind::Datum | FieldKind::EingebautAm | FieldKind::AusgebautAm
+    );
+    date && cell.number == Some(0.0)
 }
 
 fn is_serial(interpretation: &Interpretation, serial: f64) -> bool {
@@ -533,6 +552,7 @@ mod tests {
             grid,
             plan,
             db,
+            master: false,
         })
     }
 

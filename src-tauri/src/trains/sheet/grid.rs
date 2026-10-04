@@ -57,11 +57,22 @@
 // and roughly double the peak memory, on the one file whose loss would end the
 // project.
 //
+// `from_master` is the one reader that DOES trim, and only for the customer's
+// master workbook: its pasted exports are filled down to row 1,048,576, the tail
+// is never data, and the file is the customer's working copy rather than a
+// sender's to be told off. The zero tail is cut at the last row holding anything
+// but `0`, and the cut is returned so the import can say so. A cached formula
+// ERROR — `#N/A` from a failed VLOOKUP — reads as an empty cell there: it is the
+// workbook saying "nothing found", not a value. The strict path keeps both rules
+// it had; a sender's file still gets the message instead of a silent cut.
+//
 // `heads` is for RECOGNISING a file, not importing it: every sheet's top
 // `HEAD_ROWS` rows from ONE open of the workbook. Opening it once per sheet
 // re-parsed the shared strings every time — a folder holding the 28-sheet
 // workbook took a minute and a half to scan. Each sheet is dropped again once
-// its head is taken, so peak memory is one sheet, not the whole book. Sixty rows
+// its head is taken, so peak memory is one sheet, not the whole book — which
+// holds only through `sheet_mut(index)`: `sheet_collection_mut()` deserialises
+// every sheet before it answers, the trap `trains/master` measured. Sixty rows
 // cover the header search (`MAX_HEADER_ROW`) plus the data rows its scoring
 // looks at below it.
 //
@@ -240,22 +251,61 @@ pub fn heads(path: &Path) -> AppResult<Vec<Grid>> {
             book.read_sheet(index);
             Ok::<_, std::convert::Infallible>(())
         })?;
-        let worksheet = &mut book.sheet_collection_mut()[index];
-        grids.push(build(worksheet, Some(HEAD_ROWS))?);
+        let worksheet = book
+            .sheet_mut(index)
+            .map_err(|error| AppError::detail(headline(), error))?;
+        grids.push(build(worksheet, Some(HEAD_ROWS), Mode::Strict)?.0);
         *worksheet = umya_spreadsheet::Worksheet::default();
     }
     Ok(grids)
 }
 
 pub fn from_worksheet(worksheet: &umya_spreadsheet::Worksheet) -> AppResult<Grid> {
-    build(worksheet, None)
+    build(worksheet, None, Mode::Strict).map(|(grid, _)| grid)
 }
 
-fn build(worksheet: &umya_spreadsheet::Worksheet, limit: Option<u32>) -> AppResult<Grid> {
+pub fn from_master(worksheet: &umya_spreadsheet::Worksheet) -> AppResult<(Grid, Option<u32>)> {
+    build(worksheet, None, Mode::Master)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Strict,
+    Master,
+}
+
+const ERRORS: [&str; 15] = [
+    "#N/A",
+    "#NV",
+    "#DIV/0!",
+    "#REF!",
+    "#BEZUG!",
+    "#VALUE!",
+    "#WERT!",
+    "#NAME?",
+    "#NULL!",
+    "#NUM!",
+    "#ZAHL!",
+    "#SPILL!",
+    "#CALC!",
+    "#GETTING_DATA",
+    "#FIELD!",
+];
+
+pub fn is_error(text: &str) -> bool {
+    ERRORS.contains(&text.trim())
+}
+
+fn build(
+    worksheet: &umya_spreadsheet::Worksheet,
+    limit: Option<u32>,
+    mode: Mode,
+) -> AppResult<(Grid, Option<u32>)> {
     let cells: Vec<_> = worksheet
         .cells()
         .into_iter()
         .filter(|cell| limit.is_none_or(|limit| cell.coordinate().row_num() <= limit))
+        .filter(|cell| mode == Mode::Strict || !is_error(&cell.value()))
         .collect();
 
     let mut rows = 0_u32;
@@ -275,6 +325,11 @@ fn build(worksheet: &umya_spreadsheet::Worksheet, limit: Option<u32>) -> AppResu
         }
     }
 
+    let mut cut = None;
+    if mode == Mode::Master && last_not_zero < rows {
+        cut = Some(last_not_zero + 1);
+        rows = last_not_zero;
+    }
     if limit.is_none() {
         check_rows(worksheet.name(), rows, last_not_zero)?;
     }
@@ -297,12 +352,15 @@ fn build(worksheet: &umya_spreadsheet::Worksheet, limit: Option<u32>) -> AppResu
         };
     }
 
-    Ok(Grid {
-        sheet: worksheet.name().to_string(),
-        rows,
-        cols,
-        cells: grid,
-    })
+    Ok((
+        Grid {
+            sheet: worksheet.name().to_string(),
+            rows,
+            cols,
+            cells: grid,
+        },
+        cut,
+    ))
 }
 
 fn check_rows(sheet: &str, rows: u32, last_not_zero: u32) -> AppResult<()> {

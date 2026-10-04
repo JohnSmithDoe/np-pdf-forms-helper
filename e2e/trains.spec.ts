@@ -174,6 +174,73 @@ test.describe('Zug-Import', () => {
   });
 });
 
+test.describe('Master-Datei', () => {
+  const master: FakeSeed = {
+    templates: [
+      {
+        id: 't-telematik',
+        name: 'Telematik-Export',
+        plan: STAGING.plan,
+        builtin: false,
+        createdAt: '2026-10-03',
+      },
+    ],
+    master: {
+      file: 'C:/Daten/Übersicht.xlsx',
+      bindings: [
+        {
+          sheet: 'Telematik',
+          templateId: 't-telematik',
+          mode: 'snapshot',
+          aliases: [],
+        },
+      ],
+    },
+    masterSheets: [
+      { name: 'Überblick', headers: ['Wagennummer'] },
+      { name: 'Telematik', headers: ['Asset', 'Stadt'] },
+    ],
+  };
+
+  test('zeigt die Datei und ihre Zuordnungen', async ({ page }) => {
+    await installFakeBackend(page, master);
+    await page.goto('/#/trains/master');
+    const screen = page.locator('app-page-trains-master');
+    await expect(screen.getByTestId('master-file')).toHaveText(
+      'C:/Daten/Übersicht.xlsx'
+    );
+    await expect(screen.getByTestId('master-binding')).toHaveCount(1);
+    await expect(
+      screen.getByTestId('master-binding').getByText('Telematik').first()
+    ).toBeVisible();
+  });
+
+  test('ohne Datei lässt sich nichts aktualisieren', async ({ page }) => {
+    await installFakeBackend(page);
+    await page.goto('/#/trains/master');
+    const screen = page.locator('app-page-trains-master');
+    await expect(
+      screen.getByText('Noch keine Master-Datei gewählt')
+    ).toBeVisible();
+    await expect(screen.getByTestId('master-refresh')).toHaveAttribute(
+      'disabled',
+      ''
+    );
+  });
+
+  test('die Aktualisierung meldet sich mit ihrem Bericht', async ({ page }) => {
+    await installFakeBackend(page, master);
+    await page.goto('/#/trains/master');
+    await page
+      .locator('app-page-trains-master')
+      .getByTestId('master-refresh')
+      .click();
+    await expect(
+      page.getByText('Master-Datei wurde aktualisiert')
+    ).toBeVisible();
+  });
+});
+
 test.describe('Zug-Listen', () => {
   const wagen = [
     {
@@ -296,6 +363,42 @@ test.describe('Radsätze', () => {
       'RS4711',
     ]);
     await expect(page.getByText('eingebaut in 21 81 2471 217-3')).toBeVisible();
+  });
+
+  test('ein Wagen zeigt seine eingebauten Radsätze, ohne Position zuletzt', async ({
+    page,
+  }) => {
+    // A master radsatz sheet without positions adds a second open Einbau.
+    const unplaced = {
+      id: 'm2',
+      radsatzId: 'r2',
+      wagenId: 'w1',
+      eingebautAm: '2026-06-19',
+      source: {
+        file: 'Übersicht.xlsx',
+        sheet: 'Radsätze',
+        row: 7,
+        importedAt: '2026-10-04',
+      },
+    };
+    await installFakeBackend(page, {
+      wagen,
+      radsaetze,
+      einbauten: [unplaced, ...einbauten],
+    });
+    await page.goto('/#/trains/wagen');
+    await expect(page.getByTestId('wagen-fitted-count')).toHaveText(
+      '2 Radsätze eingebaut'
+    );
+    await expect(page.getByTestId('wagen-fitted')).toHaveCount(0);
+
+    await page.getByTestId('list-row-title').click();
+    const fitted = page.getByTestId('wagen-fitted');
+    await expect(fitted).toHaveCount(2);
+    await expect(fitted.first()).toContainText('Position 1 · RS4711');
+    await expect(fitted.first()).toContainText('Tabelle1, Zeile 2');
+    await expect(fitted.last()).toContainText('ohne Position · RS0815');
+    await expect(fitted.last()).toContainText('Radsätze, Zeile 7');
   });
 
   test('ein Radsatz ohne offenen Einbau gilt als ausgebaut', async ({

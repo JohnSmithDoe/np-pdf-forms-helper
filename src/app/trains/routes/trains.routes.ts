@@ -155,6 +155,20 @@ const pages: Routes = [
     ],
   },
   {
+    path: 'master',
+    title: 'Master-Datei',
+    loadComponent: () =>
+      import('../feature/master/master.page').then((m) => m.TrainsMasterPage),
+  },
+  {
+    path: 'master/sheets/:sheet',
+    title: 'Master-Blatt',
+    loadComponent: () =>
+      import('../master/feature/master-sheet/master-sheet.page').then(
+        (m) => m.MasterSheetPage
+      ),
+  },
+  {
     path: 'wagen',
     title: 'Wagen',
     loadComponent: () =>

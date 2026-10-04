@@ -19,6 +19,32 @@
     übernommen wurde, neben dem führenden System und ohne es zu verändern.
   </p>
 
+  @if (openSheets().length) {
+    <ion-list data-testid="dashboard-master-open">
+      <ion-item lines="none">
+        <ion-icon
+          slot="start"
+          name="warning-outline"
+          color="warning"
+          aria-hidden="true"
+        />
+        <ion-label class="ion-text-wrap">
+          Master-Import unvollständig:
+          {{
+            openSheets().length === 1
+              ? '1 Blatt fehlt'
+              : openSheets().length + ' Blätter fehlen'
+          }}
+          noch ({{ openSheets().join(', ') }}). Die Zahlen unten zeigen nur
+          einen Teil der Master-Datei.
+        </ion-label>
+        <ion-button slot="end" (click)="onMaster()"
+          >Zur Master-Datei</ion-button
+        >
+      </ion-item>
+    </ion-list>
+  }
+
   <ion-card
     class="dashboard__action"
     [button]="true"

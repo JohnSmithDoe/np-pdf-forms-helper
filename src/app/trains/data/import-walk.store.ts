@@ -1,7 +1,8 @@
 // ─── why ────────────────────────────────────────────────────────
-// The import walk's own state: which document is being walked, which are
-// queued behind it, one decision per entity GROUP, the rows the user dropped or
-// took back, and the commit's report.
+// The import walk's own state: which source is being walked — a document or a
+// master sheet — which are queued behind it, one decision per entity GROUP, the
+// master's Einbau date answers, the rows the user dropped or took back, and the
+// commit's report.
 //
 // Nothing here survives leaving the walk — a deliberate fresh start. The
 // decisions are cheap to give again and a half-answered walk restored days
@@ -15,20 +16,23 @@
 
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import type { ClientReport } from '../../@shared/model/client.types';
+import type { WalkSource } from '../model/import-walk';
 import type { EntityDecision } from '../model/trains.types';
 
 type ImportWalkState = {
-  dokumentId: string | undefined;
-  queue: string[];
+  source: WalkSource | undefined;
+  queue: WalkSource[];
   decisions: Record<string, EntityDecision | undefined>;
+  einbau: Record<string, boolean | undefined>;
   included: Record<number, boolean | undefined>;
   report: ClientReport | null;
 };
 
 const initial: ImportWalkState = {
-  dokumentId: undefined,
+  source: undefined,
   queue: [],
   decisions: {},
+  einbau: {},
   included: {},
   report: null,
 };
@@ -37,8 +41,14 @@ export const ImportWalkStore = signalStore(
   { providedIn: 'root' },
   withState(initial),
   withMethods((store) => ({
-    begin(dokumentId: string, queue: string[]): void {
-      patchState(store, { ...initial, dokumentId, queue });
+    begin(source: WalkSource, queue: WalkSource[]): void {
+      patchState(store, { ...initial, source, queue });
+    },
+
+    takeEinbau(keys: string[], uebernehmen: boolean): void {
+      const einbau = { ...store.einbau() };
+      for (const key of keys) einbau[key] = uebernehmen;
+      patchState(store, { einbau });
     },
 
     decide(slot: string, decision: EntityDecision): void {

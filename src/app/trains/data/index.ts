@@ -32,6 +32,7 @@ export type { FileOutcome, FileResult } from './intake.store';
 export type {
   BulkAnswer,
   BulkCounts,
+  EinbauView,
   EntryView,
   GroupView,
   PlanCount,

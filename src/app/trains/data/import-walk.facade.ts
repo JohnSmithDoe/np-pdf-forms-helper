@@ -31,16 +31,27 @@
 //
 // `commit` is `silent` and its report PARKED: the result step renders it, and
 // a toast saying the same over it would be noise. `next` walks the queue a
-// batch summary handed over with „Alle importieren“, one document per walk.
+// batch summary handed over with „Alle importieren“, one document per walk —
+// or the master import's sheets, one sheet per walk, in binding order.
+//
+// The staging is matched by its ORIGIN against the walk's source, so a staging
+// left over from the mapper or another walk is never answered by this one.
+//
+// The master's EINBAU conflicts — a Radsatz already fitted on the same Wagen
+// under another date — default to keeping the stored date, so they never block
+// a step: keeping is the answer that writes nothing.
 // ────────────────────────────────────────────────────────────────
 
 import { computed, inject, Injectable } from '@angular/core';
 import { BackendService } from '../../@shared/data/backend/backend.service';
+import type { WalkSource } from '../model/import-walk';
 import type {
+  EinbauKonflikt,
   EntityChoice,
   EntityDecision,
   EntityGroup,
   EntityKind,
+  StagedImport,
   StagedRow,
 } from '../model/trains.types';
 import { ImportWalkStore } from './import-walk.store';
@@ -57,6 +68,11 @@ export interface EntryView {
   gone: boolean;
   included: boolean;
   writes: string[];
+}
+
+export interface EinbauView {
+  konflikt: EinbauKonflikt;
+  uebernehmen: boolean;
 }
 
 export type BulkAnswer = 'create' | 'suggestion' | 'skip';
@@ -83,6 +99,13 @@ const LABELS: Record<EntityKind, string> = {
   wagen: 'Wagen',
   radsatz: 'Radsätze',
 };
+
+function fromSource(staging: StagedImport, source: WalkSource): boolean {
+  const origin = staging.origin;
+  return source.kind === 'dokument'
+    ? origin.kind === 'dokument' && origin.id === source.id
+    : origin.kind === 'master' && origin.sheet === source.sheet;
+}
 
 function slotOf(group: EntityGroup): string {
   return `${group.kind}|${group.key}`;
@@ -119,15 +142,34 @@ export class ImportWalkFacade {
   readonly report = this.#store.report;
   readonly queue = this.#store.queue;
 
+  readonly source = this.#store.source;
+
   readonly staging = computed(() => {
     const staging = this.#trains.staging();
-    const id = this.#store.dokumentId();
-    return id && staging?.dokumentId === id ? staging : undefined;
+    const source = this.#store.source();
+    return staging && source && fromSource(staging, source)
+      ? staging
+      : undefined;
   });
 
   readonly dokument = computed(() => {
-    const id = this.#store.dokumentId();
-    return id ? this.#trains.dokumentById().get(id) : undefined;
+    const source = this.#store.source();
+    return source?.kind === 'dokument'
+      ? this.#trains.dokumentById().get(source.id)
+      : undefined;
+  });
+
+  readonly masterSheet = computed(() => {
+    const source = this.#store.source();
+    return source?.kind === 'master' ? source.sheet : undefined;
+  });
+
+  readonly einbauten = computed<EinbauView[]>(() => {
+    const answers = this.#store.einbau();
+    return (this.staging()?.entities?.einbauten ?? []).map((konflikt) => ({
+      konflikt,
+      uebernehmen: answers[konflikt.key] ?? false,
+    }));
   });
 
   readonly walking = computed(() => this.staging() !== undefined);
@@ -245,15 +287,20 @@ export class ImportWalkFacade {
     );
   }
 
-  async start(dokumentId: string, queue: string[] = []): Promise<void> {
-    const data = await this.#backend.stageDocument(dokumentId);
-    this.#trains.applyTrainsData(data);
-    this.#store.begin(dokumentId, queue);
+  async start(dokumentId: string): Promise<void> {
+    await this.#begin({ kind: 'dokument', id: dokumentId }, []);
   }
 
   async startQueue(ids: string[]): Promise<void> {
-    const [first, ...rest] = ids;
-    if (first) await this.start(first, rest);
+    await this.#walkQueue(ids.map((id) => ({ kind: 'dokument', id })));
+  }
+
+  async startMaster(sheets: string[]): Promise<void> {
+    await this.#walkQueue(sheets.map((sheet) => ({ kind: 'master', sheet })));
+  }
+
+  takeEinbau(keys: string[], uebernehmen: boolean): void {
+    this.#store.takeEinbau(keys, uebernehmen);
   }
 
   async next(): Promise<boolean> {
@@ -261,8 +308,22 @@ export class ImportWalkFacade {
     this.#store.reset();
     this.#trains.clearStaging();
     if (queue.length === 0) return false;
-    await this.startQueue(queue);
+    await this.#walkQueue(queue);
     return true;
+  }
+
+  async #walkQueue(sources: WalkSource[]): Promise<void> {
+    const [first, ...rest] = sources;
+    if (first) await this.#begin(first, rest);
+  }
+
+  async #begin(source: WalkSource, queue: WalkSource[]): Promise<void> {
+    const data =
+      source.kind === 'dokument'
+        ? await this.#backend.stageDocument(source.id)
+        : await this.#backend.stageMasterSheet(source.sheet);
+    this.#trains.applyTrainsData(data);
+    this.#store.begin(source, queue);
   }
 
   decide(group: EntityGroup, decision: EntityDecision): void {
@@ -286,6 +347,10 @@ export class ImportWalkFacade {
         partner: choices(this.partner()),
         wagen: choices(this.wagen()),
         radsaetze: choices(this.radsaetze()),
+        einbauten: this.einbauten().map((view) => ({
+          key: view.konflikt.key,
+          uebernehmen: view.uebernehmen,
+        })),
         rows: this.takenRows(),
       },
       { silent: true }

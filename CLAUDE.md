@@ -29,9 +29,13 @@ The Rust half now has unit tests (`pnpm run rust:test`); what they cannot reach 
 itself and the real window. See [docs/state.md](docs/state.md).
 
 The migration plan lives outside the repo, in the session plan file referenced from Claude's project
-memory. Renamed from `np-pdf-forms-helper` / "npAusfüllhilfe" on 2026-08-15; the old product name
-still appears in `docs/installations-anleitung.md`, which documents the _shipped_ v115 zip and gets
-rewritten when the Tauri installer replaces it.
+memory. Renamed from `np-pdf-forms-helper` / "npAusfüllhilfe" on 2026-08-15; the GitHub remote still
+carries the old repo name.
+
+**Users get the PORTABLE exe, one copy per user on their home drive** — they work in Citrix Windows
+11 desktops, where a pooled desktop wipes `%LOCALAPPDATA%` (the NSIS install's home) at logoff.
+`docs/installations-anleitung.md` is written for that, and never one shared copy: `data.db` is
+rewritten whole, so the last save wins silently.
 
 ## Commands
 
@@ -140,8 +144,11 @@ static import would be hoisted and bootstrap before the transport exists.
 across two documents, two profiles. Trains: Wagen with computed UIC check digits, a partner in two
 roles, a sender-scoped Radsatz alias, a closed Einbau beside the open ones, an Instandhaltung with no
 date and one against a Radsatz — the cases every screen needs one of and no clean file produces.
+Master: three bindings (a Wagen list and a Radsatz list with a kind, a refresh-only sheet without
+one), an import run left HALF done so both „unvollständig“ banners show, and two hand-written sheet
+views — the third sheet has none, so the fake's headers-only answer has a sheet to show on.
 
-Four commands are answered in `dev/main.mock.ts` rather than by the fake, always for the same
+Five commands are answered in `dev/main.mock.ts` rather than by the fake, always for the same
 reason — the real answer comes from something a browser does not have:
 
 - **`add_documents`** — the native picker. `file` invents its next document; the batch sources are
@@ -151,6 +158,8 @@ reason — the real answer comes from something a browser does not have:
   file of a session and nothing after it. Every pick re-arms `demoStaging()`.
 - **`stage_document`** — the same re-arming, with `demoDocument()`: the commit lets go of the
   staging. It carries hand-written entity groups covering every resolution the walk renders.
+- **`stage_master_sheet`** — the same again, per sheet of a master run, with `demoMasterStaging()`:
+  the Mai walk plus one Einbau conflict, the card no other file produces.
 - **`commit_document`** — the gates live in `trains/commit.rs` and are proved by `cargo test`, so the
   fake must not grow a second implementation. But a commit that changes nothing visible reads as a
   broken button, so the dev shell invents one Instandhaltung per taken row and lets the fake answer
@@ -175,15 +184,26 @@ Two source roots, two builds:
 
 **Three domains — `filler`, `trains`, `info` — plus `@shared`**, on the np-commlink layer axis. They
 are sealed from each other and none may import another; anything two need moves to `@shared`.
-`sheriff.config.ts` still names no domain: `src/app/<domain>/<type>` and `domain:*` are generic, so a
-domain costs a folder and not a config change.
+`src/app/<domain>/<type>` and `domain:*` are generic, so a domain costs a folder and not a config
+change; `sheriff.config.ts` names `trains` only for its `master` submodule (below).
 
 ```
 src/app/@shared/{model,ui,util,data,smart-ui,feature}
 src/app/filler/{routes,feature,smart-ui,ui,data,util,model}
 src/app/info/{routes,feature,data,model}
 src/app/trains/{routes,feature,smart-ui,data,util,model}
+src/app/trains/master/{feature,ui,util}
 ```
+
+**`trains/master` is a submodule, not a fourth domain**: it renders trains' data, and a sealed domain
+could not reach it. Sheriff patterns form a tree, so `sheriff.config.ts` names `trains/<type>` beside
+`trains/master/<type>`; without it every other trains module falls back to the shell. It holds the
+**master sheet views** (`/trains/master/sheets/:sheet`): one read-only view per bound sheet, the
+Schattensystem's entities laid out in that sheet's columns, to be compared by eye against the
+workbook. **Backend for frontend:** `get_master_sheet` returns the whole view — columns (full header
+row, `filled` per column), rows as display strings — built in Rust from the same rebind the master
+import runs. Angular decides nothing about rows or formatting; a column with `filled: false` is shown
+empty on purpose.
 
 `trains` reads spreadsheets somebody else authored, maps their columns onto Wagen, Partner, Radsätze
 and Instandhaltungen, and writes sanitised data back out. The mapping is trivial; the mapping **UX**
@@ -314,6 +334,8 @@ Four things make the routing work, all argued in the files named:
 The exception that proves the rule is the Schattensystem's own settings (`TrainsSettings`,
 `data/trains/einstellungen.json`, page `/trains/settings`): the Wagennummer spelling changes what
 Rust WRITES into cleaned copies and exports, so the backend has to hold it.
+The master workbook's bindings (`MasterSettings`, `data/trains/master.json`, page `/trains/master`)
+are the same kind of thing for the same reason.
 There is no `settings.db` and no `ionic-storage`. The reason is the mode redirect above: it resolves
 before any resolver or initializer could have answered, so the read has to be **synchronous**, and
 losing a view-mode preference costs one re-toggle. `sortDirection` and the `autoMapFields` default
@@ -440,17 +462,18 @@ the guarantee the copy used to buy now holds by construction. Do not reintroduce
 | `trains/model.rs`     | the trains wire contract. `DecimalStyle`/`DateOrder` are properties of the SENDER'S FILE — nothing in `trains` may consult a system locale, or one file parses differently on two desks                                                                                                                                                                       |
 | `trains/sanitise/`    | raw cell text → a typed value or a German line. `Err` is a Fehler, `Ok` with a `warning` is a Warnung, so severity is the result's SHAPE and not a field to keep in step. The one part of trains with unit tests, because being wrong here is invisible: `1.234` read as `1.234` instead of `1234` looks equally plausible in a preview                       |
 | `trains/sanitise/column.rs` | the decimal style and date order, inferred over the WHOLE column. A per-cell guess flips independently per row and silently mixes both readings; the column has evidence the cell does not. Where nothing is conclusive the default is flagged, which is what lets the preview offer one control that re-reads the column                               |
-| `trains/db.rs`        | seven JSON stores under `data/trains/` (`wagen`, `partner`, `instandhaltungen`, `radsaetze`, `einbauten`, `templates`, `dokumente`), split so saving a partner does not rewrite the Instandhaltungen. `transaction` is the API, not a convention: an import is a handful of writes, not one per row, and a failed flush rolls memory back. Five indexes — Wagennummer, match key incl. aliases, dedupe key, Radsatznummer, original content hash. `reset` also removes the owned files |
-| `trains/commit.rs`    | the only module that writes ENTITIES. Re-checks EVERY gate server-side: the frontend's ticks are an input, never the authority. Confirming a partner learns the raw spelling as an alias, which is what makes the second file from a sender free. A staging from a document marks it imported in the same transaction and is refused if it already was |
+| `trains/db.rs`        | seven JSON stores under `data/trains/` (`wagen`, `partner`, `instandhaltungen`, `radsaetze`, `einbauten`, `templates`, `dokumente`), split so saving a partner does not rewrite the Instandhaltungen. `transaction` is the API, not a convention: an import is a handful of writes, not one per row, and a failed flush rolls memory back. Five indexes — Wagennummer, match key incl. aliases, dedupe key, Radsatznummer, original content hash. `reset` also removes the owned files. `clear_mirror` is the master import's narrow wipe — facts go, Partner, templates and Dokumente stay (Dokumente reopened) — and a write that CLEARS a store must `reindex` after it, or `event_exists` keeps stale keys |
+| `trains/commit.rs`    | the only module that writes ENTITIES. Re-checks EVERY gate server-side: the frontend's ticks are an input, never the authority. Confirming a partner learns the raw spelling as an alias, which is what makes the second file from a sender free. A staging from a document marks it imported in the same transaction and is refused if it already was. A `StagingOrigin::Master` staging commits without a document; on that path a Radsatz already open on the SAME Wagen under another date is corrected in place (`einbau_uebernehmen`) or left — never closed |
 | `trains/dokument.rs`  | the app OWNS what it cleans: `adopt` copies the original into `dokumente/<id>/` before it is read, the cleaned copy and a `protokoll.json` sidecar go beside it, `importable` refuses an imported document or a cleaned copy edited since. Identity is `hash::bytes` of the original |
-| `trains/entities.rs`  | a staging grouped per entity for the import walk — Partner by role + match key, Wagen by canonical number, Radsatz by number + the sender STAGING used (deliberately not the walk's Partner answer) — with each group's protocol lines; `expand` turns one answer per group back into the per-row decisions `commit` runs on. Missing answer = skip |
+| `trains/entities.rs`  | a staging grouped per entity for the import walk — Partner by role + match key, Wagen by canonical number, Radsatz by number + the sender STAGING used (deliberately not the walk's Partner answer) — with each group's protocol lines; `expand` turns one answer per group back into the per-row decisions `commit` runs on. Missing answer = skip. `einbau_konflikte` finds the master's disputed Einbau dates against the STORE (keyed by Radsatz id); `expand` hands each answer to its rows |
 | `trains/template.rs`  | the two template writes outside an import: `learned` (what a FILED cleaning teaches, returned so it lands in the document's transaction) and `save` (the mapper's only exit; a name is required) |
 | `trains/recognise.rs` | which template a header row belongs to: every MAPPED template header present, extra columns ignored. Several matches are a question, never a pick. `rebind` carries bindings over BY HEADER, because an index is positional. Replaced the exact `fingerprint` hash, which failed the first time an export grew a column |
-| `trains/builtin.rs`   | the shipped templates, in Rust so a typo is a compile error. Read-only; confirming a reading against one writes a user copy (`origin`) that shadows it — `TrainsDb::templates` merges them at read time and never stores them |
+| `trains/builtin.rs`   | the shipped templates, in Rust so a typo is a compile error. Read-only; confirming a reading against one writes a user copy (`origin`) that shadows it — `TrainsDb::templates` merges them at read time and never stores them. `shaped` builds a template for the master's sheet kinds too, which are deliberately NOT in `all()` — offered to recognition they would make ordinary files ambiguous |
 | `trains/scan.rs`      | a dropped/picked set of paths → one `ScanFile` per file with a status. Top level only, every sheet asked, Excel's `~$` owner files skipped. Reads headers, never stages. Bytes already owned — or repeated in the same drop — are `Vorhanden` |
 | `trains/reading.rs`   | how ONE column is read — decimal style, date order — decided once, for `stage` and `clean` alike, so the preview and the cleaned copy cannot read a file two ways. A saved reading the file conclusively contradicts is a question again; a question exists only if some cell actually reads differently under the alternative, and staging warns on exactly those rows |
 | `trains/clean/`       | the original read 1:1 through staging's own `parse_cell` and `reading`, every change sorted into Fehler / Deutung / Format; `write.rs` writes the copy (full read, text cells via `export::fill`, `doc::write_book`) with its `Änderungsprotokoll` into the document's folder. The confirmed plan is stored on the `Dokument` and the copy is staged with it at import — canonical values read the same under any reading, so it asks nothing again |
-| `trains/sheet/grid.rs` | the only trains file that knows umya on the read side. Coordinates are `(col, row)` numbers, never strings, so `address.rs`'s panic cannot recur. Bounds come from cells that hold something — `highest_column_and_row()` counts styled blanks; only the chosen sheet is parsed (`lazy_read`)                                                                                                              |
+| `trains/master/` | the customer's master workbook, both directions; its own module because it is the CUSTOMER'S file, not an export. `refresh` writes paste-target sheets from the latest filed `Dokument` per binding into a DATED COPY — the original is never written; columns by header, keys typed as numbers because every VLOOKUP is keyed on them, formula columns re-emitted per row (`paste`, `source`). `mirror` imports the other way: `start` empties the facts and records `import_run`, `stage_sheet` reads one bound sheet (`grid::from_master`) with its kind's template rebound onto row 1 and stages it with `StagingOrigin::Master` — no `Dokument` is filed, or the next refresh would paste the master into itself. `kinds/` is one module per sheet KIND (template, written back or not); the customer's sheet names live only in `master.json`. `sheet_view` builds a bound sheet whole for display (backend-for-frontend), its column→field map the same `rebind` the import runs. `book`: `lazy_read` + `sheet_mut(index)` only — `sheet_collection_mut()` deserialises every sheet (footguns.md). See decisions.md, „Der Master wird gespiegelt“ |
+| `trains/sheet/grid.rs` | the only trains file that knows umya on the read side. Coordinates are `(col, row)` numbers, never strings, so `address.rs`'s panic cannot recur. Bounds come from cells that hold something — `highest_column_and_row()` counts styled blanks; only the chosen sheet is parsed (`lazy_read`). `from_master` is the one reader that trims: the master's zero tail is cut and cached formula errors (`#N/A`) read as empty; the strict path still names the row instead |
 
 The whole backend is ported. `cargo check`, `cargo clippy --all-targets` and `cargo fmt --check` are
 **warning-free**, and every module above carries its own `#[cfg(test)] mod tests`.

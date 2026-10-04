@@ -1,0 +1,29 @@
+<ion-card data-testid="einbau-konflikt">
+  <ion-card-header>
+    <ion-card-subtitle>Wagen {{ konflikt().wagen }}</ion-card-subtitle>
+    <ion-card-title data-testid="einbau-konflikt-title">{{
+      konflikt().radsatz
+    }}</ion-card-title>
+  </ion-card-header>
+  <ion-card-content>
+    <ion-radio-group
+      [value]="uebernehmen() ? 'neu' : 'bisher'"
+      (ionChange)="onChoose($event)"
+    >
+      <ion-item lines="none">
+        <ion-radio value="bisher" justify="start" labelPlacement="end">
+          <ion-label class="ion-text-wrap">
+            Bisheriges Datum behalten: {{ bisher() }}
+          </ion-label>
+        </ion-radio>
+      </ion-item>
+      <ion-item lines="none">
+        <ion-radio value="neu" justify="start" labelPlacement="end">
+          <ion-label class="ion-text-wrap">
+            Neues Datum übernehmen: {{ neu() }}
+          </ion-label>
+        </ion-radio>
+      </ion-item>
+    </ion-radio-group>
+  </ion-card-content>
+</ion-card>

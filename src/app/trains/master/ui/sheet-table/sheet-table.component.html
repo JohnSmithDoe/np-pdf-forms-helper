@@ -1,0 +1,32 @@
+<div class="sheet-table">
+  <table data-testid="sheet-table">
+    <thead>
+      <tr>
+        @for (column of columns(); track column.index) {
+          <th scope="col" data-testid="sheet-column">
+            <ion-note>{{ letter(column.index) }}</ion-note>
+            <div class="sheet-table__header">{{ column.header }}</div>
+            @if (!column.filled) {
+              <ion-note>nicht im Schattensystem</ion-note>
+            }
+          </th>
+        }
+        <th scope="col">
+          <ion-note>Quelle</ion-note>
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track $index) {
+        <tr data-testid="sheet-row">
+          @for (cell of row.cells; track $index) {
+            <td>{{ cell }}</td>
+          }
+          <td>
+            <ion-note>{{ row.source }}</ion-note>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>

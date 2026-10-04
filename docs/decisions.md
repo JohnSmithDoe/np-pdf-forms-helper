@@ -258,9 +258,8 @@ typo'd waggon number created silently becomes a phantom every later import match
 same question about the same workshop every month and stops using the import.
 
 **Export is two asymmetric halves.** The ERP workbook is ours: generated from scratch, disposable.
-The master is the user's: updated in place by header name, never rebuilt, never a row deleted, `.xlsm`
-refused rather than silently stripped of its macros, and a timestamped `.bak` before the first write.
-XLSX and not CSV, because CSV reopens the encoding question this project already closed — Excel renders
+The master is the user's — and how it is written was replaced once a real master arrived, see "The
+master is refreshed sheet by sheet, into a copy" below. XLSX and not CSV, because CSV reopens the encoding question this project already closed — Excel renders
 BOM-less UTF-8 as mojibake.
 
 **Store migration is deferred.** The trains stores write `version: 1` and do not read it, exactly as
@@ -543,3 +542,104 @@ them, so nothing that matches on a number is affected by switching.
   for the parsers' own messages, which run before any setting is in reach.
 - **Existing cleaned copies are not rewritten.** The setting also changes what counts as a Format
   change: in a compact Schattensystem a compact number is already clean.
+
+## The master is refreshed sheet by sheet, into a copy (appended 2026-10-03)
+
+The first real master (`data/`, never committed) is not a list the app could own rows in. It is a
+**hub**: one dashboard sheet of ~9,000 `VLOOKUP`s keyed on the Wagennummer, over about fifteen sheets
+that people fill by **pasting portal exports** into them — the telematics portal, the wheelset
+monitoring, the workshop orders, the revision plan. The three sender files analysed so far are exactly
+three of those exports. So the app feeds the master the way a person does: it refreshes the paste
+targets and leaves the dashboard, the curated sheets and everything else alone.
+The old `Wartungen` upsert keyed on our own `Id` was written before any real master existed and is gone.
+
+- **One binding per sheet, sheet ← template** (`data/trains/master.json`, `MasterSettings`). The source
+  is the template's LATEST filed `Dokument`, read from its cleaned copy — every mapped value there is
+  canonical, so one fixed reading types it exactly. Sheet names are the customer's, so the bindings are
+  user data and never `builtin.rs`.
+- **The original is never written.** The result is `<Name> <Datum>.xlsx` beside it. That replaces the
+  `.bak`: the user compares and switches, and the one file whose loss ends the project cannot be lost
+  here. With nothing written there is also no reason left for `MASTER_FILE` in `.npconfig`; the file
+  is picked in the app, which a Citrix desk can do and `.npconfig` editing it cannot.
+- **Columns by header, positions untouched.** The dashboard's lookups are positional (`A:K,10` is
+  "Stadt" only because Stadt is the tenth column), so values go into the master's columns found by
+  header text, and an alias maps a renamed one (`Empfangsdatum` ← `empf_datum`).
+- **Two modes, the two shapes a sender file comes in.** *Stand ersetzen* (snapshot: the telematics
+  list, the wheelset monitoring) clears rows 2… and writes the file; hand-kept columns travel by key if
+  one is named. *Fortlaufend ergänzen* (feed: the order list) upserts by key and never deletes — the
+  same split as "Workshop orders are a feed" and "Snapshots of fitted radsaetze" above.
+- **Types follow the master, because the keys do.** The exports deliver `"3385 0659 152-2"`,
+  `"180028676"`, `"6715.0"` as text; the pasted sheets hold numbers, and a text key misses a number in
+  every VLOOKUP. Wagennummer, dates and amounts are typed from the field; any other plain decimal goes
+  in as a number where most of the master column already holds numbers — never the other way round.
+- **Formula columns are re-emitted as plain per-row formulas** (umya's `set_coordinate` shifts them).
+  Excel's shared-formula groups do not survive clearing a snapshot's stale rows. Cached results are
+  left stale on purpose: the written book carries an older `calcId`, and Excel recalculates on open.
+- **umya `lazy_read` is the writer, measured, not assumed** — see `footguns.md`, "Writing a workbook
+  back". On the real 20 MB master the three-sheet refresh takes 1.9 s, and only the three bound sheets
+  change. The fallback, a part-level zip patch with the `zip` crate, stays unbuilt unless Excel ever
+  refuses a copy.
+
+Deliberately not done here: importing the master's own sheets into the Schattensystem. They are listed
+as candidates in `fachdomaene.md` §10. **Superseded 2026-10-04** by „Der Master wird gespiegelt“ below;
+the module moved from `trains/export/master/` to `trains/master/` and `export/` keeps only the ERP file.
+
+## Der Master wird gespiegelt (appended 2026-10-04)
+
+Die Gegenrichtung zum Refresh: die Master-Datei des Kunden wird ins Schattensystem gelesen. Entschieden
+in einem Drill mit Martin am 2026-10-04; die Analyse aller 28 Blätter liegt lokal in
+`data/Übersicht KundS.struktur.md` (echte Namen, nie im Repo).
+
+- **Wiederkehrend, und ein SPIEGEL, kein Merge.** Bis zur Umstellung pflegt der Kunde in Excel; die App
+  hat keine Bearbeitung. Jeder Lauf leert die FAKTEN (Wagen, Radsatz, Einbau, Instandhaltung) und baut
+  sie aus der Kundendatei neu auf. Ein Merge müsste zwischen zwei Werten des Kunden selbst entscheiden;
+  ein Spiegel nie. Damit ist auch die Echo-Schleife weg: liest der nächste Import eine vom Refresh
+  geschriebene Fassung, wird der Spiegel ersetzt, nicht um eigene Werte „ergänzt“. Das Schattensystem
+  als führendes System ist v3. Hauptziel bleibt der Refresh: den Master aktuell halten.
+- **Identität bleibt, Fakten gehen** (`TrainsDb::clear_mirror`). Partner mit gelernten Aliasen, Vorlagen
+  mit gelernten Lesarten und die abgelegten Dokumente (Quelle des Refresh) überleben; Dokumente werden
+  wieder importierbar. Kein separates `PartnerAlias`: ein Alias ist ein Zeiger und überlebt nur mit
+  seinem Ziel. Radsätze werden bewusst NICHT behalten — innerhalb des Masters ist RadsatzID ↔
+  Radsatznummer 1:1 und es gibt einen Absender, also entsteht keine Mehrdeutigkeit.
+- **Kein Dokument für Master-Blätter.** Der Refresh nimmt je Vorlage das neueste Dokument; ein abgelegtes
+  Master-Blatt würde zur Quelle, die der nächste Refresh in den Master zurückschreibt. Die Staging trägt
+  stattdessen `StagingOrigin::Master { sheet }` — das öffnet `commit` für sie und hält das Gate „nur
+  bereinigte Dokumente“ für jede andere Datei geschlossen.
+- **Ein Modul je Blatt-ART, nie je Blatt** (`trains/master/kinds/`). Die Blattnamen des Kunden enthalten
+  Firmen- und Personennamen und stehen nur in `master.json`, gebunden an eine Art. Die Vorlagen der
+  Arten sind NICHT in `builtin::all()`: der Bestand ohne Position würde jede Datei mit Position
+  ebenfalls treffen und sie in Bereinigen `Mehrdeutig` machen.
+- **Blatt für Blatt, der Nutzer entscheidet Konflikte, die App wählt keine Quelle.** AllERADSätzE und
+  AL-ECHO-Üsicht sind derselbe Portalbericht zu zwei Zeitpunkten, keine SVERWEISE. Gefragt wird nur
+  (a): derselbe Radsatz am SELBEN Wagen mit anderem Einbaudatum — ein Einbau mit strittigem Datum,
+  keine Bewegung. „Übernehmen“ korrigiert das Datum an Ort und Stelle, ohne Antwort bleibt das
+  gespeicherte. Nie wird dabei ein Einbau geschlossen: das hätte Phantom-Ausbauten erzeugt. Ein Radsatz,
+  den nur der Bestand kennt, kommt als zusätzlicher offener Einbau „ohne Position“ — sichtbar zur
+  Sichtprüfung, nicht weggeraten.
+- **Keine Achszahl**, weder modelliert noch abgeleitet: aus offenen Einbauten abgeleitet machte sie die
+  57 Wagen mit nie ausgebuchten Altsätzen zu 5- bis 8-Achsern.
+- **`ausbau_am`/`aus_wagen` der Radsatz-Exporte gehören zum VORIGEN Einbau** und bleiben unverknüpft.
+- **Lesen im Master-Pfad** (`grid::from_master`, `stage` mit `master`): der bis Zeile 1.048.576 gefüllte
+  Null-Schwanz wird abgeschnitten statt abgelehnt; zwischengespeicherte Formelfehler (`#N/A`) sind leer;
+  `0` in einer DATUMS-Spalte ist leer (in einer Betragsspalte bleibt `0` ein Betrag); ein Fehler in
+  IRGENDEINER zugeordneten Zelle verwirft die Zeile und listet sie — eine still verkürzte Zeile ginge
+  bei der Sichtprüfung als korrekt durch. Der strenge Bereinigen-Pfad bleibt unverändert.
+- **Ein abgebrochener Lauf ist sichtbar unvollständig** (`MasterSettings.import_run`, vom Backend
+  verwaltet; `save_master` übernimmt ihn nie von der Seite).
+- **Fälligkeiten werden gezeigt, nicht berechnet.** Zyklusregeln je Fristart zu besitzen ist v3.
+- **Bestellnummer + Wagennummer verknüpfen ungefragt**, die Bestellnummer allein nie (Sammelbestellung).
+- **Nichts wird ausgelassen.** Der Kunde disponiert Wagen und prüft Rechnungen selbst; jedes Blatt, das er
+  pflegt, dient einem dieser Jobs. Die Phasen folgen seinen drei Jobs — wo ist der Wagen / stimmt die
+  Rechnung / wer muss wann in die Werkstatt — nicht den Entitäten.
+- **Blattansicht als Backend-for-Frontend** (`master::sheet_view`, Command `get_master_sheet`): Rust baut
+  jede Ansicht vollständig — Spalten in Blattreihenfolge inkl. leerer Köpfe, je Spalte ob die App sie
+  füllt, fertig formatierte Zeilen. Die Spalte→Feld-Zuordnung ist derselbe `rebind` wie beim Import,
+  also kann die Ansicht ein Blatt nicht anders lesen als der Import, der sie füllt.
+
+Gemessen am echten Master (lokal, 2026-10-04): 405 Wagen, 1.207 Einbauten mit Position, 13
+Datumskonflikte, 533 zusätzliche Radsätze ohne Position, 0 verworfene Zeilen; drei Blätter in 3,5 s,
+Spitze ~750 MB.
+
+Deliberately not done here (Phasen 2–5 im Plan): Wagenmeldung inkl. der Handfarben des Dashboards,
+Telematik-Gerät, Werkstattauftrag, Rechnungsaufteilung (Matrix-Leser), Leistungskatalog, Frist,
+Werkstattbedarf, Standorte, Bauteile, Radsatz-Messwerte, Wagen-Stammdaten.

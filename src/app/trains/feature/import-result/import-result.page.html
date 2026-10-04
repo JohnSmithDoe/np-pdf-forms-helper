@@ -6,7 +6,13 @@
   [step]="steps"
   [stepCount]="steps"
   [showBack]="false"
-  [nextLabel]="hasNext() ? 'Nächstes Dokument' : 'Fertig'"
+  [nextLabel]="
+    hasNext()
+      ? facade.masterSheet()
+        ? 'Nächstes Blatt'
+        : 'Nächstes Dokument'
+      : 'Fertig'
+  "
   nextColor="success"
   (next)="onNext()"
 >

@@ -74,13 +74,21 @@ front of a screen, or a piece of the migration that does not exist yet. Settled 
   Playwright covers the screens against a faked transport — but no XLSX has gone in one end of the
   real binary and come out the other. The first `pnpm run tauri:dev` pass should: import a real
   workshop file; check one column of each type against the source in Excel cell by cell; save a
-  template and re-import a second file from the same sender; commit; open the master and confirm a
-  hand-added column and its formatting survived; and corrupt one cell to confirm the row is reported
+  template and re-import a second file from the same sender; commit; refresh the master and confirm
+  a hand-kept column travelled with its key; and corrupt one cell to confirm the row is reported
   rather than the run aborting.
-- **The master workbook is the first user document this app writes into.** `export/master.rs` takes a
-  timestamped `.bak` before its first write and refuses `.xlsm`, but neither has been exercised
-  outside tests. `MASTER_FILE` in `.npconfig` decides which file it is; with no file there the export
-  skips that half and says so.
+- **The master refresh writes a dated copy and has run against the real master only from a test.**
+  `trains/master/` refreshed `Telematik`, `aktuelleNodepit` and `ECHO_Eingänge` of the real workbook
+  straight from the three sender files (1.9 s, only those three sheets changed, every dashboard key
+  still found), and Excel opened umya's write cleanly. What has not run: the page at `/trains/master`
+  in `tauri:dev`, the native picker, and a refresh from documents filed through the cleaning walk.
+- **The master IMPORT (Phase 1: Wagen, Halter, Radsatz, Einbau) has run against the real master only
+  from a temporary test**, 2026-10-04, through `mirror::start` / `stage_sheet` / `commit` with every
+  group answered „neu anlegen“: dashboard, fitting list and stock in 3.5 s, peak ~750 MB for the test
+  process (sheet view included); 405 Wagen, 1,207 Einbauten with position, 13 Einbau date conflicts,
+  533 Radsätze only the stock knows (open, without position), 0 rejected rows. The ~750 MB is worth
+  watching on the Citrix desktops. What has not run: the page and the walk in `tauri:dev`, and any
+  phase after the first — see the plan and `decisions.md`, „Der Master wird gespiegelt“.
 
 ## Known limitations — not work, and not fixable here
 

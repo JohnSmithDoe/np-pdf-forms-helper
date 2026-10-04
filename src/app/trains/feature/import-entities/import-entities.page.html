@@ -14,6 +14,11 @@
   @if (facade.dokument(); as dokument) {
     <ion-note data-testid="import-document">{{ dokument.name }}</ion-note>
   }
+  @if (facade.masterSheet(); as sheet) {
+    <ion-note data-testid="import-master-sheet"
+      >Master-Blatt „{{ sheet }}“</ion-note
+    >
+  }
   <p>{{ config.intro }}</p>
 
   @if (open()) {
@@ -64,6 +69,31 @@
     }
   } @empty {
     <ion-note data-testid="import-empty">{{ config.empty }}</ion-note>
+  }
+
+  @if (einbauten().length) {
+    <ion-list-header>
+      <ion-label>Einbaudatum strittig ({{ einbauten().length }})</ion-label>
+    </ion-list-header>
+    <p>
+      Dieser Radsatz ist schon an demselben Wagen eingebaut, mit einem anderen
+      Datum. Es ist derselbe Einbau — gefragt ist nur, welches Datum gilt.
+    </p>
+    <div class="import-entities__bulk" data-testid="einbau-bulk">
+      <ion-button fill="outline" (click)="onTakeAll(false)">
+        Alle bisherigen behalten
+      </ion-button>
+      <ion-button fill="outline" (click)="onTakeAll(true)">
+        Alle neuen übernehmen
+      </ion-button>
+    </div>
+    @for (view of einbauten(); track view.konflikt.key) {
+      <app-einbau-konflikt
+        [konflikt]="view.konflikt"
+        [uebernehmen]="view.uebernehmen"
+        (take)="onTake(view, $event)"
+      />
+    }
   }
 </app-wizard-shell>
 

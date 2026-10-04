@@ -1,0 +1,25 @@
+:host {
+  display: block;
+}
+
+.sheet-table {
+  overflow-x: auto;
+}
+
+.sheet-table table {
+  border-collapse: collapse;
+}
+
+.sheet-table th,
+.sheet-table td {
+  padding: 0.25rem 0.75rem 0.25rem 0;
+  text-align: start;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.sheet-table__header {
+  min-width: 4rem;
+  max-width: 14rem;
+  white-space: pre-line;
+}

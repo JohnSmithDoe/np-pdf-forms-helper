@@ -420,6 +420,85 @@ test.describe('Import ins Schattensystem', () => {
     });
   });
 
+  test('ein Master-Blatt wird mit Einbau-Konflikt bis zum Ergebnis importiert', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      master: {
+        file: 'C:\\Daten\\Übersicht.xlsx',
+        bindings: [
+          {
+            sheet: 'Radsätze',
+            templateId: '',
+            kind: 'radsatzEinbau',
+            mode: 'snapshot',
+            aliases: [],
+          },
+        ],
+        // A run left open is what „Fortsetzen“ walks — no confirm alert to
+        // drive, unlike „Importieren“, which also empties the store.
+        importRun: { startedAt: '2026-10-04', sheets: ['Radsätze'], done: [] },
+      },
+      masterSheets: [{ name: 'Radsätze', headers: ['Wagen', 'Radsatz'] }],
+      masterStaging: {
+        ...STAGED_DOKUMENT,
+        entities: {
+          ...STAGED_DOKUMENT.entities!,
+          einbauten: [
+            {
+              key: 'rs-1',
+              radsatz: 'RS-0815',
+              wagen: '218124712173',
+              bisher: '2026-02-02',
+              bisherQuelle: 'Radsätze, Zeile 2',
+              neu: '2026-06-19',
+              rows: [2],
+            },
+          ],
+        },
+      },
+    });
+    await page.goto('/#/trains/master');
+    await step(page, 'trains-master')
+      .getByTestId('master-import-open')
+      .getByRole('button', { name: 'Fortsetzen' })
+      .click();
+
+    for (const name of ['partners', 'wagons', 'wheelsets']) {
+      await expect(page).toHaveURL(new RegExp(`#/trains/import/${name}$`));
+      const entities = step(page, 'import-entities').last();
+      await expect(entities.getByTestId('import-master-sheet')).toContainText(
+        'Radsätze'
+      );
+      if (name === 'wheelsets') {
+        await expect(entities.getByTestId('einbau-konflikt-title')).toHaveText(
+          'RS-0815'
+        );
+      }
+      await entities.getByRole('button', { name: 'Weiter' }).click();
+    }
+
+    await step(page, 'import-entries')
+      .getByRole('button', { name: '1 Zeile(n) übernehmen' })
+      .click();
+    await step(page, 'import-summary')
+      .getByRole('button', { name: 'Importieren' })
+      .click();
+    await expect(
+      step(page, 'import-result').getByRole('heading', {
+        name: 'Import wurde erfolgreich übernommen',
+      })
+    ).toBeVisible();
+
+    // Nothing ticked: the stored date is kept, and that is sent explicitly.
+    const commit = (await recordedCalls(page)).find(
+      (call) => call.command === 'commit_document'
+    );
+    expect(commit?.args).toMatchObject({
+      decisions: { einbauten: [{ key: 'rs-1', uebernehmen: false }] },
+    });
+  });
+
   test('ein importiertes Dokument bietet keinen Import mehr an', async ({
     page,
   }) => {

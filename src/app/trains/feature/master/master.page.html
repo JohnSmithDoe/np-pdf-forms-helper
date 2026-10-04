@@ -1,0 +1,267 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/trains" text="Zurück" />
+    </ion-buttons>
+    <ion-title>Master-Datei</ion-title>
+    <ion-buttons slot="end">
+      <ion-button
+        [disabled]="!importReady()"
+        (click)="onImport()"
+        data-testid="master-import"
+      >
+        <ion-icon
+          slot="start"
+          name="cloud-download-outline"
+          aria-hidden="true"
+        />
+        Importieren
+      </ion-button>
+      <ion-button
+        [disabled]="!ready()"
+        (click)="onRefresh()"
+        data-testid="master-refresh"
+      >
+        <ion-icon slot="start" name="refresh-outline" aria-hidden="true" />
+        Aktualisieren
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <p>
+    Die Blätter der Master-Datei, in die bisher Exporte von Hand eingefügt
+    werden, füllt das Programm aus den bereinigten Dokumenten — je Blatt aus dem
+    neuesten Dokument der zugeordneten Vorlage. Geschrieben wird eine Kopie mit
+    Datum daneben; das Original bleibt unverändert.
+  </p>
+  <p>
+    „Importieren“ liest umgekehrt jedes Blatt mit einem Inhalt ins
+    Schattensystem: Wagen, Radsätze, Einbauten und Instandhaltungen werden dafür
+    geleert und aus der Master-Datei neu aufgebaut, Blatt für Blatt.
+  </p>
+
+  @if (open().length) {
+    <ion-list data-testid="master-import-open">
+      <ion-item lines="none">
+        <ion-icon
+          slot="start"
+          name="warning-outline"
+          color="warning"
+          aria-hidden="true"
+        />
+        <ion-label class="ion-text-wrap">
+          Master-Import unvollständig: {{ open().length }} von
+          {{ settings().importRun?.sheets?.length }} Blättern fehlen noch ({{
+            open().join(', ')
+          }}). Bis dahin zeigt das Schattensystem nur einen Teil der
+          Master-Datei.
+        </ion-label>
+        <ion-button slot="end" (click)="onContinue()">Fortsetzen</ion-button>
+      </ion-item>
+    </ion-list>
+  }
+
+  <ion-list>
+    <ion-list-header>
+      <ion-label>Datei</ion-label>
+    </ion-list-header>
+    <ion-item>
+      <ion-label class="ion-text-wrap" data-testid="master-file">
+        @if (settings().file; as file) {
+          {{ file }}
+        } @else {
+          <ion-note>Noch keine Master-Datei gewählt</ion-note>
+        }
+      </ion-label>
+      <ion-button slot="end" fill="clear" (click)="onPick()">
+        <ion-icon slot="start" name="folder-open-outline" aria-hidden="true" />
+        Wählen …
+      </ion-button>
+    </ion-item>
+    @if (view()?.problem; as problem) {
+      <ion-item lines="none" data-testid="master-problem">
+        <ion-icon
+          slot="start"
+          name="warning-outline"
+          color="warning"
+          aria-hidden="true"
+        />
+        <ion-label class="ion-text-wrap">{{ problem }}</ion-label>
+      </ion-item>
+    }
+  </ion-list>
+
+  @for (binding of settings().bindings; track $index; let index = $index) {
+    <ion-list data-testid="master-binding">
+      <ion-list-header>
+        <ion-label>{{ binding.sheet || 'Blatt wählen' }}</ion-label>
+        <ion-button
+          fill="clear"
+          [routerLink]="['/trains/master/sheets', binding.sheet]"
+          [disabled]="!binding.sheet"
+          aria-label="Blatt ansehen"
+          data-testid="master-view-sheet"
+        >
+          <ion-icon slot="icon-only" name="eye-outline" aria-hidden="true" />
+        </ion-button>
+        <ion-button
+          color="danger"
+          fill="clear"
+          (click)="onRemove(index)"
+          aria-label="Zuordnung entfernen"
+        >
+          <ion-icon slot="icon-only" name="trash-outline" aria-hidden="true" />
+        </ion-button>
+      </ion-list-header>
+      <ion-item>
+        <ion-select
+          label="Blatt"
+          interface="popover"
+          [value]="binding.sheet"
+          (ionChange)="onSheet(index, $event)"
+        >
+          @for (sheet of view()?.sheets ?? []; track sheet) {
+            <ion-select-option [value]="sheet">{{ sheet }}</ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+      <ion-item>
+        <ion-select
+          label="Inhalt"
+          interface="popover"
+          [value]="binding.kind ?? noKind"
+          (ionChange)="onKind(index, $event)"
+          data-testid="master-kind"
+        >
+          <ion-select-option [value]="noKind"
+            >nicht importieren</ion-select-option
+          >
+          @for (kind of kinds; track kind.value) {
+            <ion-select-option [value]="kind.value">{{
+              kind.label
+            }}</ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+      <ion-item>
+        <ion-select
+          label="Vorlage"
+          interface="popover"
+          [value]="binding.templateId"
+          (ionChange)="onTemplate(index, $event)"
+        >
+          <ion-select-option value=""
+            >keine (nicht aktualisieren)</ion-select-option
+          >
+          @for (template of templates(); track template.id) {
+            <ion-select-option [value]="template.id">{{
+              template.name
+            }}</ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+      <ion-item>
+        <ion-select
+          label="Art"
+          interface="popover"
+          [value]="binding.mode"
+          (ionChange)="onMode(index, $event)"
+        >
+          @for (mode of modes; track mode.value) {
+            <ion-select-option [value]="mode.value">{{
+              mode.label
+            }}</ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+      <ion-item>
+        <ion-select
+          label="Schlüsselspalte"
+          interface="popover"
+          [value]="binding.key ?? noKey"
+          (ionChange)="onKey(index, $event)"
+        >
+          <ion-select-option [value]="noKey">keine</ion-select-option>
+          @for (header of headersOf(binding.sheet); track header) {
+            <ion-select-option [value]="header">{{ header }}</ion-select-option>
+          }
+        </ion-select>
+      </ion-item>
+      <ion-item lines="none">
+        <ion-note class="ion-text-wrap">
+          @if (binding.mode === 'feed') {
+            Neue Schlüssel werden angehängt, bekannte aktualisiert; gelöscht
+            wird nichts. Dafür ist eine Schlüsselspalte nötig.
+          } @else {
+            Die Zeilen werden durch den Stand des Dokuments ersetzt. Mit einer
+            Schlüsselspalte wandern von Hand gepflegte Spalten mit ihrer Zeile.
+          }
+        </ion-note>
+      </ion-item>
+
+      @for (alias of binding.aliases; track $index; let at = $index) {
+        <ion-item>
+          <ion-select
+            label="Spalte im Blatt"
+            labelPlacement="stacked"
+            interface="popover"
+            [value]="alias.master"
+            (ionChange)="onAlias(index, at, 'master', $event)"
+          >
+            @for (header of headersOf(binding.sheet); track header) {
+              <ion-select-option [value]="header">{{
+                header
+              }}</ion-select-option>
+            }
+          </ion-select>
+          <ion-select
+            label="kommt aus"
+            labelPlacement="stacked"
+            interface="popover"
+            [value]="alias.source"
+            (ionChange)="onAlias(index, at, 'source', $event)"
+          >
+            @for (header of sourceHeadersOf(binding.templateId); track header) {
+              <ion-select-option [value]="header">{{
+                header
+              }}</ion-select-option>
+            }
+          </ion-select>
+          <ion-button
+            slot="end"
+            color="medium"
+            fill="clear"
+            (click)="onRemoveAlias(index, at)"
+            aria-label="Spaltenzuordnung entfernen"
+          >
+            <ion-icon
+              slot="icon-only"
+              name="trash-outline"
+              aria-hidden="true"
+            />
+          </ion-button>
+        </ion-item>
+      }
+      <ion-item lines="none">
+        <ion-button fill="clear" (click)="onAddAlias(index)">
+          <ion-icon slot="start" name="add-outline" aria-hidden="true" />
+          Umbenannte Spalte zuordnen
+        </ion-button>
+      </ion-item>
+    </ion-list>
+  }
+
+  <ion-button
+    color="success"
+    [disabled]="!settings().file"
+    (click)="onAdd()"
+    data-testid="master-add"
+  >
+    <ion-icon slot="start" name="add-outline" aria-hidden="true" />
+    Blatt zuordnen
+  </ion-button>
+</ion-content>
+
+<app-busy-overlay [busy]="facade.busy()" />

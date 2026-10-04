@@ -58,7 +58,6 @@ impl TempDir {
             output_path: self.join("data/out"),
             db_file: self.join("data/data.db"),
             profile_file: self.join("data/profiles.db"),
-            master_file: self.join("data/trains/master.xlsx"),
         };
         for folder in [&config.data_path, &config.cache_path, &config.output_path] {
             std::fs::create_dir_all(folder).expect("data folders");

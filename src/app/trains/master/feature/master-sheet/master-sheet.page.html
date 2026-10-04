@@ -1,0 +1,60 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/trains/master" text="Zurück" />
+    </ion-buttons>
+    <ion-title>{{ sheet() }}</ion-title>
+    @if (view(); as view) {
+      <ion-chip slot="end" data-testid="sheet-count">
+        {{ rows().length }} {{ view.rowLabel || 'Zeilen' }}
+      </ion-chip>
+    }
+  </ion-toolbar>
+  @if (sheets().length > 1) {
+    <ion-toolbar>
+      <ion-segment scrollable [value]="sheet()" (ionChange)="onSheet($event)">
+        @for (name of sheets(); track name) {
+          <ion-segment-button [value]="name">
+            <ion-label>{{ name }}</ion-label>
+          </ion-segment-button>
+        }
+      </ion-segment>
+    </ion-toolbar>
+  }
+  <ion-toolbar>
+    <ion-searchbar
+      placeholder="Wagennummer oder Radsatznummer"
+      [debounce]="250"
+      (ionInput)="onSearch($event)"
+      data-testid="sheet-search"
+    />
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  @if (view(); as view) {
+    @if (view.problem) {
+      <ion-item lines="none" data-testid="sheet-problem">
+        <ion-icon
+          slot="start"
+          name="warning-outline"
+          color="warning"
+          aria-hidden="true"
+        />
+        <ion-label class="ion-text-wrap">{{ view.problem }}</ion-label>
+      </ion-item>
+    }
+    @if (view.columns.length > 0) {
+      <app-sheet-table [columns]="view.columns" [rows]="rows()" />
+      @if (view.rows.length === 0) {
+        <p>
+          <ion-note>
+            Für dieses Blatt hält das Schattensystem noch keine Zeilen.
+          </ion-note>
+        </p>
+      }
+    }
+  }
+</ion-content>
+
+<app-busy-overlay [busy]="facade.busy()" />

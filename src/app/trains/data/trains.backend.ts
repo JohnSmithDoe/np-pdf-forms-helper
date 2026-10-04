@@ -22,6 +22,7 @@ import type {
   CleanDecisions,
   EntityDecisions,
   ImportPlan,
+  MasterSettings,
   Partner,
   TrainsData,
   TrainsSettings,
@@ -53,6 +54,13 @@ export type TrainsCommand =
   | { command: 'save_trains_settings'; payload: { settings: TrainsSettings } }
   | { command: 'reset_trains'; payload: Record<string, never> }
   | { command: 'create_trains_export'; payload: Record<string, never> }
+  | { command: 'get_master'; payload: Record<string, never> }
+  | { command: 'pick_master_file'; payload: Record<string, never> }
+  | { command: 'save_master'; payload: { settings: MasterSettings } }
+  | { command: 'refresh_master'; payload: Record<string, never> }
+  | { command: 'get_master_sheet'; payload: { sheet: string } }
+  | { command: 'start_master_import'; payload: Record<string, never> }
+  | { command: 'stage_master_sheet'; payload: { sheet: string } }
   | { command: 'open_output_folder'; payload: { folder: string } }
   | { command: 'open_file'; payload: { filename: string } }
   | { command: 'pick_import_folder'; payload: Record<string, never> }
@@ -69,6 +77,10 @@ export type TrainsCommand =
 @Injectable({ providedIn: 'root' })
 export class TrainsBackend {
   readonly #backend = inject(BackendService);
+
+  getMasterSheet(sheet: string): Promise<TrainsData> {
+    return this.#call({ command: 'get_master_sheet', payload: { sheet } });
+  }
 
   #call(command: TrainsCommand, options?: CallOptions): Promise<TrainsData> {
     return this.#backend.call<TrainsData>(command, options);
@@ -212,6 +224,30 @@ export class TrainsBackend {
       { command: 'create_trains_export', payload: {} },
       options
     );
+  }
+
+  loadMaster(): Promise<TrainsData> {
+    return this.#call({ command: 'get_master', payload: {} });
+  }
+
+  pickMasterFile(): Promise<TrainsData> {
+    return this.#call({ command: 'pick_master_file', payload: {} });
+  }
+
+  saveMaster(settings: MasterSettings): Promise<TrainsData> {
+    return this.#call({ command: 'save_master', payload: { settings } });
+  }
+
+  refreshMaster(options?: CallOptions): Promise<TrainsData> {
+    return this.#call({ command: 'refresh_master', payload: {} }, options);
+  }
+
+  startMasterImport(): Promise<TrainsData> {
+    return this.#call({ command: 'start_master_import', payload: {} });
+  }
+
+  stageMasterSheet(sheet: string): Promise<TrainsData> {
+    return this.#call({ command: 'stage_master_sheet', payload: { sheet } });
   }
 
   // The opener is the filler's command and is deliberately reused: opening a

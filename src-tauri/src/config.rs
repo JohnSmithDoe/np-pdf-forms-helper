@@ -9,10 +9,11 @@
 // Unknown `.npconfig` keys are ignored, so a config file carrying keys this
 // build does not know still loads.
 //
-// `MASTER_FILE` is the trains master workbook. Unlike every other path here it
-// names a document the USER owns and the app writes into, so it is deliberately
-// a config key rather than something the app picks: nobody should discover which
-// file is being edited by watching it change.
+// There is no `MASTER_FILE` any more. The trains master is picked in the app and
+// stored with the trains settings: the app only ever writes a dated COPY beside
+// it, so nobody can discover their file being edited by watching it change, and
+// a Citrix desk has no comfortable way to edit `.npconfig`. An old config that
+// still names the key loads, because unknown keys are ignored.
 // ────────────────────────────────────────────────────────────────
 
 use std::path::{Path, PathBuf};
@@ -31,7 +32,6 @@ struct ConfigFile {
     output_path: Option<String>,
     db_file: Option<String>,
     profile_file: Option<String>,
-    master_file: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -41,7 +41,6 @@ pub struct AppConfig {
     pub output_path: PathBuf,
     pub db_file: PathBuf,
     pub profile_file: PathBuf,
-    pub master_file: PathBuf,
 }
 
 impl AppConfig {
@@ -72,9 +71,6 @@ impl AppConfig {
             }),
             profile_file: resolve(file.profile_file, "APP_PROFILE_FILE", &env, || {
                 data_path.join("profiles.db")
-            }),
-            master_file: resolve(file.master_file, "APP_MASTER_FILE", &env, || {
-                data_path.join("trains/master.xlsx")
             }),
             data_path,
         }

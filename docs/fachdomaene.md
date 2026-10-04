@@ -83,6 +83,12 @@ Belastbar sind genau zwei Angaben:
 | --- | --- |
 | **Wagennummer** | Zwölfstellig **mit Prüfziffer**. Ein Zahlendreher fällt auf, bevor er etwas anlegt. Das Einzige, was ohne Rückfrage entscheiden darf |
 | **Radsatznummer — erst nach Bestätigung** | Ohne Prüfziffer und ohne eindeutiges Format, also **nicht** aus sich heraus belastbar. Erst wenn der Anwender sie einem Radsatz zugeordnet hat, ist sie für **diesen Absender** verlässlich — und genau das ist es, was die Alias-Tabelle festhält |
+| **Bestellnummer — nur zusammen mit der Wagennummer** | Vom Bestellsystem in einem Schema vergeben (`12345-26`, `12345-26/01`), also je Wagen eindeutig. Allein entscheidet sie nie: dieselbe Nummer an zwei Wagen ist eine Sammelbestellung und damit eine Frage, keine Zusammenführung |
+
+**Die Master-Datei des Kunden ist die Ausnahme von „Indiz“.** Sie ist kein Absenderdokument, sondern
+der Stand, den der Kunde selbst pflegt; das Schattensystem **spiegelt** sie bei jedem Import neu
+(siehe [decisions.md](./decisions.md), „Der Master wird gespiegelt“). Widersprechen sich zwei ihrer
+Blätter, entscheidet der Anwender — das Programm wählt keine Quelle.
 
 Alles Übrige ist Indiz und wird als solches behandelt:
 
@@ -316,6 +322,26 @@ Rechnungszeile), einen **geschlossenen** `Einbau` für den ausgebauten und einen
 eingebauten Radsatz. Eine Zeile, die einen Radsatz lediglich **nennt**, dokumentiert keinen Wechsel
 — erst ein Ein- oder Ausbaudatum ist eine Bewegung.
 
+### Fristen in der Master-Datei des Kunden
+
+Der Kunde **disponiert** seine Wagen selbst: er plant, wann welcher Wagen in welche Werkstatt geht,
+und prüft und korrigiert die Rechnungen. Die Master-Datei nennt dafür diese wiederkehrenden Arbeiten
+(Stand 2026-10-04, gemessen in der echten Datei):
+
+| Begriff | Bedeutung | Bezug |
+| --- | --- | --- |
+| **Revision G4.x** | Hauptuntersuchung des Wagens; Zyklus in der Datei 72 Monate (`ZYKLUS_REV`), nächste Stufe z. B. „G 4.0“ | Wagen |
+| **P8** | Jährlich zu disponierende Arbeit je Wagen mit festem Leistungsumfang und vereinbarten Preisen; erste P8 ein Jahr nach der Revision. Wofür die Abkürzung steht, ist offen | Wagen |
+| **KP-P** | Kesselprüfung; in der Rechnungsaufteilung zusammen mit P8 abgerechnet | Wagen |
+| **RID-Frist** | Prüffrist für Gefahrgutwagen (RID); im Bestand des ersten Kunden leer, das Modell muss sie trotzdem tragen | Wagen |
+| **AL-RS 2 Jahre** | Ein Radsatz mit „AL“-Nummer braucht innerhalb von zwei Jahren nach Einbau eine IS2/3 | Radsatz |
+| **IS-13-Jahre-Limit** | Zeitgrenze für die Radsatz-Instandsetzung | Radsatz |
+| **Status G / A** | Bestellstand einer Frist im Portal-Export: **G = geplant** (noch keine Bestellung), **A = aktuell** (bestellt, Bestellnummer und Erfassungsdatum vorhanden) | Frist |
+
+Die Kette, über die Bestellnummer verbunden: Frist (G) → Bestellung (A) → Werkstatteingang → Rechnung.
+Fälligkeiten werden gespiegelt, **nicht berechnet** — die Zyklusregeln je Fristart gehören erst dem
+Schattensystem als führendem System (v3).
+
 ---
 
 ## 9. Normen und Regelwerke
@@ -346,12 +372,16 @@ davon in Code oder Oberfläche auftaucht.
 ## 10. Was bewusst nicht modelliert ist
 
 Kein Versehen, sondern Zuschnitt. Wenn eines davon gebraucht wird, ist es eine Entscheidung und
-gehört nach [decisions.md](./decisions.md):
+gehört nach [decisions.md](./decisions.md). **Seit 2026-10-04 ist der Master-Spiegel diese
+Entscheidung für mehrere Punkte**: was der Kunde in seiner Master-Datei pflegt, braucht er, und wird
+in Phasen gespiegelt — die Punkte unten sagen, welche.
 
 - **Zustands- und Verschleißdaten** — Durchmesser, Sd/Sh/qR, Zahl der Abdrehungen, Schrottmaß,
   letzte Ultraschallprüfung. Erfordert Einheiten, Plausibilitätsbereiche und Spalten, die Absender
-  selten einheitlich füllen.
+  selten einheitlich füllen. *Geplant aus dem Master (Phase 5): LKD, Laufleistung, Restlauftage je
+  Radsatz mit Stichtag.*
 - **Fristen und Instandhaltungsstufen** — Revisionsfristen, Laufleistungen, fällige Prüfungen.
+  *Geplant aus dem Master (Phase 4) als `Frist`, angezeigt wie genannt, nicht berechnet.*
 - **Miet- und Vertragsdaten** — wer welchen Wagen wie lange gemietet hat.
 - **Schadensregulierung nach AVV** — Schadensursache, Kostenzuordnung, Haftung.
 - **ECM-Nachweisführung** — das Modul verwaltet Daten, es ist kein zertifiziertes
@@ -361,4 +391,20 @@ gehört nach [decisions.md](./decisions.md):
   Weiteres wird eine Auftragsliste nur als Quelle **abgeschlossener** Instandhaltungen gelesen
   (Datum = Werkstattausgang); ein eigenes `Auftrag` mit der Bestellnummer als Schlüssel ist
   zurückgestellt, bis eine echte Rechnungsdatei zeigt, dass Rechnung und Auftrag über sie
-  zusammenfinden. Siehe [decisions.md](./decisions.md).
+  zusammenfinden. Siehe [decisions.md](./decisions.md). *Geplant aus dem Master (Phase 3) als
+  `Werkstattauftrag`; die Rechnung findet über Bestellnummer + Wagennummer zum Auftrag (§3).*
+
+Der Master-Spiegel nach Phasen, entlang der drei Aufgaben des Kunden:
+
+- **Phase 1, umgesetzt:** Wagen, Halter, Radsätze und Einbauten (mit und ohne Position).
+- **Phase 2 — wo ist der Wagen, wie ist sein Zustand:** Wagenmeldung (die Handspalten und
+  Handfarben des Dashboards, Meldelisten, Checklisten), Telematik-Gerät, Werkstatteingang.
+- **Phase 3 — stimmt die Rechnung:** Werkstattauftrag, Rechnungsaufteilung (je Blatt ein
+  Reparaturfall), Leistungskatalog mit Sollpreisen, Rechnungsrücksendungen.
+- **Phase 4 — wer muss wann in die Werkstatt:** Frist, Werkstattbedarf, Flottenbedarf, Standorte
+  mit Ansprechpartnern.
+- **Phase 5:** Bauteile mit Seriennummer (Bremseinheiten, Federlenker mit Gewährleistung),
+  Radsatz-Messwerte, Wagen-Stammdaten (Gattung, Baujahr, ECM, Vertrag).
+
+Bewusst weiter **nicht**: eine Achszahl je Wagen, ob gespeichert oder aus offenen Einbauten
+abgeleitet — siehe [decisions.md](./decisions.md).

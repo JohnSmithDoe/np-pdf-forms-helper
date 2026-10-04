@@ -31,6 +31,12 @@ const featureMayUseSharedFeature = (ctx: {
  * below names any of them: the `src/app/<domain>/<type>` matcher and the
  * `domain:*` rule are generic, so a domain costs a folder and no config change.
  *
+ * `trains/master` is a SUBMODULE of trains, not a domain: it renders trains'
+ * data, and a sealed domain could not reach it. Patterns form a tree and a
+ * literal segment shadows `<domain>`, so naming `trains/master/<type>` also
+ * needs `trains/<type>` beside it, or every other trains module falls back to
+ * the shell.
+ *
  * What does NOT get its own domain is a second view over the same data. The
  * setup and export wizards live inside `filler` with the expert page, because
  * sealing them apart would cut them off from `FillerStore` and the only way back
@@ -42,6 +48,8 @@ export const config: SheriffConfig = {
   enableBarrelLess: true,
   modules: {
     'src/app': ['type:shell'],
+    'src/app/trains/master/<type>': ['domain:trains', 'type:<type>'],
+    'src/app/trains/<type>': ['domain:trains', 'type:<type>'],
     'src/app/<domain>/<type>': ['domain:<domain>', 'type:<type>'],
   },
 

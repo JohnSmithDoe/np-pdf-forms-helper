@@ -14,11 +14,6 @@
 // the same value. Dates are `31.12.2025` and amounts `1234,56`: German, because
 // the ERP is.
 //
-// The maintenance columns are `export::INSTANDHALTUNG_COLUMNS` and `export::instandhaltung_row`
-// rather than a list here, because the master workbook writes the same seven and
-// finds its cells by header text. The wagen sheet keeps its own list: it is
-// this file's alone.
-//
 // The wheelsets go out as two more sheets: `Radsätze`, one row per wheelset with
 // the wagen it is fitted to NOW, and `Einbauten`, the FULL fitting history.
 // Both questions are asked of this data — "what is on wagen X" and "where has
@@ -36,7 +31,8 @@ use std::path::Path;
 
 use crate::error::{AppError, AppResult};
 use crate::trains::db::TrainsDb;
-use crate::trains::export::{fill, instandhaltung_row, INSTANDHALTUNG_COLUMNS};
+use crate::trains::export::fill;
+use crate::trains::model::Instandhaltung;
 use crate::trains::sanitise::format;
 
 const WAGGON_HEADERS: [&str; 5] = ["Id", "Wagennummer", "Gattung", "Eigentümer", "Bemerkung"];
@@ -59,6 +55,39 @@ const EINBAU_HEADERS: [&str; 6] = [
     "Eingebaut am",
     "Ausgebaut am",
 ];
+
+const INSTANDHALTUNG_COLUMNS: [&str; 7] = [
+    "Id",
+    "Wagennummer",
+    "Datum",
+    "Werkstatt",
+    "Leistung",
+    "Betrag",
+    "Bemerkung",
+];
+
+fn instandhaltung_row(db: &TrainsDb, event: &Instandhaltung) -> [String; 7] {
+    [
+        event.id.clone(),
+        db.wagen_by_id(&event.wagen_id)
+            .map(|wagen| format::uic_in(&wagen.nummer, db.settings().wagennummer))
+            .unwrap_or_default(),
+        event
+            .datum
+            .as_deref()
+            .map(format::iso_date)
+            .unwrap_or_default(),
+        event
+            .werkstatt_id
+            .as_deref()
+            .and_then(|id| db.partner_by_id(id))
+            .map(|partner| partner.name.clone())
+            .unwrap_or_default(),
+        event.leistung.clone(),
+        event.betrag_cent.map(format::money).unwrap_or_default(),
+        event.bemerkung.clone().unwrap_or_default(),
+    ]
+}
 
 pub fn write(db: &TrainsDb, folder: &Path) -> AppResult<Vec<String>> {
     let created = || "Die Arbeitsmappe konnte nicht angelegt werden.".to_string();

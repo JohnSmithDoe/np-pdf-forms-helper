@@ -27,18 +27,31 @@
 // A group carries the protocol lines of ITS cells — the rows it was read from,
 // in the column its field was mapped to — so the walk can show what the cleaning
 // did to exactly this value.
+//
+// EINBAU CONFLICTS are the one question that is not an entity. The master is
+// several sheets of one portal report at different dates, imported one after
+// the other, so a Radsatz already open on a Wagen can arrive again on the SAME
+// Wagen with another install date. That is one fitting with a disputed date,
+// not a movement, and closing the stored one would invent a removal that never
+// happened. `einbau_konflikte` finds them against the STORE — `group` sees only
+// the staging, so it cannot — keyed by the Radsatz id; `expand` hands the answer
+// to each of its rows, and a missing answer keeps what is stored. Only the
+// master path asks: everywhere else a new date is still a movement.
 // ────────────────────────────────────────────────────────────────
 
 use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 
+use super::db::TrainsDb;
 use super::model::{
-    CommitDecisions, EntityChoice, EntityDecision, EntityDecisions, EntityGroup, EntityGroups,
-    EntityKind, FieldKind, PartnerRolle, ProtocolLine, Resolution, RowDecision, RowStatus,
-    StagedImport, StagedRow,
+    CommitDecisions, EinbauKonflikt, EntityChoice, EntityDecision, EntityDecisions, EntityGroup,
+    EntityGroups, EntityKind, FieldKind, PartnerRolle, ProtocolLine, Resolution, RowDecision,
+    RowStatus, StagedImport, StagedRow,
 };
 use super::resolve::{partner, radsatz};
+use super::sanitise::{format, Value};
+use super::stage::RowValues;
 
 const PARTNERS: [(PartnerRolle, FieldKind); 3] = [
     (PartnerRolle::Werkstatt, FieldKind::Werkstatt),
@@ -131,7 +144,62 @@ pub fn group(staging: &StagedImport, protocol: &[ProtocolLine]) -> EntityGroups 
         partner: attach(partners),
         wagen: attach(wagen),
         radsaetze: attach(radsaetze),
+        einbauten: Vec::new(),
     }
+}
+
+pub fn einbau_konflikte(
+    db: &TrainsDb,
+    staging: &StagedImport,
+    values: &[RowValues],
+) -> Vec<EinbauKonflikt> {
+    let installed: HashMap<u32, String> = values
+        .iter()
+        .filter_map(|entry| match entry.value(FieldKind::EingebautAm) {
+            Some(Value::Date(date)) => Some((entry.row, date.to_iso())),
+            _ => None,
+        })
+        .collect();
+
+    let mut found: IndexMap<String, EinbauKonflikt> = IndexMap::new();
+    for row in staging
+        .rows
+        .iter()
+        .filter(|row| row.status != RowStatus::Rejected)
+    {
+        let (
+            Resolution::Known {
+                id: radsatz_id,
+                name: radsatz,
+            },
+            Resolution::Known { id: wagen_id, .. },
+            Some(neu),
+        ) = (&row.radsatz, &row.wagen, installed.get(&row.row))
+        else {
+            continue;
+        };
+        let Some(open) = db.open_einbau(radsatz_id) else {
+            continue;
+        };
+        if open.wagen_id != *wagen_id || open.eingebaut_am.as_deref() == Some(neu.as_str()) {
+            continue;
+        }
+        let konflikt = found
+            .entry(radsatz_id.clone())
+            .or_insert_with(|| EinbauKonflikt {
+                key: radsatz_id.clone(),
+                radsatz: radsatz.clone(),
+                wagen: db.wagen_by_id(wagen_id).map_or_else(String::new, |wagen| {
+                    format::uic_in(&wagen.nummer, db.settings().wagennummer)
+                }),
+                bisher: open.eingebaut_am.clone(),
+                bisher_quelle: Some(format!("{}, Zeile {}", open.source.sheet, open.source.row)),
+                neu: neu.clone(),
+                rows: Vec::new(),
+            });
+        konflikt.rows.push(row.row);
+    }
+    found.into_values().collect()
 }
 
 pub fn expand(staging: &StagedImport, decisions: &EntityDecisions) -> CommitDecisions {
@@ -144,6 +212,18 @@ pub fn expand(staging: &StagedImport, decisions: &EntityDecisions) -> CommitDeci
     let partners = lookup(&decisions.partner);
     let wagen = lookup(&decisions.wagen);
     let radsaetze = lookup(&decisions.radsaetze);
+    let uebernehmen: HashSet<u32> = staging
+        .entities
+        .iter()
+        .flat_map(|groups| &groups.einbauten)
+        .filter(|konflikt| {
+            decisions
+                .einbauten
+                .iter()
+                .any(|choice| choice.key == konflikt.key && choice.uebernehmen)
+        })
+        .flat_map(|konflikt| konflikt.rows.iter().copied())
+        .collect();
     let decided = |map: &HashMap<String, EntityDecision>, key: Option<String>| {
         key.and_then(|key| map.get(&key).cloned())
             .unwrap_or(EntityDecision::Skip)
@@ -166,6 +246,7 @@ pub fn expand(staging: &StagedImport, decisions: &EntityDecisions) -> CommitDeci
                     halter: decided(&partners, keys.halter),
                     eigentuemer: decided(&partners, keys.eigentuemer),
                     radsatz: decided(&radsaetze, keys.radsatz),
+                    einbau_uebernehmen: uebernehmen.contains(number),
                 }
             }
             None => RowDecision {
@@ -175,6 +256,7 @@ pub fn expand(staging: &StagedImport, decisions: &EntityDecisions) -> CommitDeci
                 halter: EntityDecision::Skip,
                 eigentuemer: EntityDecision::Skip,
                 radsatz: EntityDecision::Skip,
+                einbau_uebernehmen: false,
             },
         })
         .collect();
@@ -334,6 +416,7 @@ mod tests {
             grid: &Grid::from_text("Tabelle1", &table),
             plan: &plan(fields),
             db,
+            master: false,
         })
         .unwrap()
         .wire
@@ -467,6 +550,7 @@ mod tests {
             partner: vec![choice(&groups.partner[0].key, EntityDecision::Create)],
             wagen: vec![choice(&groups.wagen[0].key, EntityDecision::Create)],
             radsaetze: Vec::new(),
+            einbauten: Vec::new(),
             rows: vec![2, 3, 3],
         };
         let expanded = expand(&wire, &decisions);
@@ -489,6 +573,7 @@ mod tests {
             partner: Vec::new(),
             wagen: Vec::new(),
             radsaetze: Vec::new(),
+            einbauten: Vec::new(),
             rows: Vec::new(),
         };
         assert!(expand(&wire, &decisions).rows.is_empty());

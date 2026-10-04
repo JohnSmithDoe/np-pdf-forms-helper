@@ -46,6 +46,15 @@
 // file of a session answer with nothing. It covers all four row states plus a
 // Fehler and a Warnung, because the review screen's chips, its selects and its
 // "nur fehlerfreie Zeilen" default cannot be seen with a clean file.
+//
+// THE MASTER is bound three ways — a Wagen list and a Radsatz list with a kind,
+// and a refresh-only sheet without one — and its import run is left HALF done,
+// so the „unvollständig“ banners show. The sheet views are written out by hand
+// like `demoDocument()`'s groups: building them is `sheet_view.rs`'s, and a
+// TypeScript projection here would be a second one. The Werkstattliste has no
+// view on purpose, so the fake's headers-only answer — every column „nicht im
+// Schattensystem“, no rows — has a sheet to show on. `demoMasterStaging()` is
+// the Mai walk with one Einbau conflict, the card no other file produces.
 // ────────────────────────────────────────────────────────────────
 
 import type {
@@ -54,6 +63,8 @@ import type {
   FakeDocument,
   FakeEinbau,
   FakeInstandhaltung,
+  FakeMasterSettings,
+  FakeMasterSheetView,
   FakePartner,
   FakeRadsatz,
   FakeScanFile,
@@ -1082,6 +1093,28 @@ let committed = 0;
 /** What a committed row "becomes". The fake does not run `commit.rs` — that is
  *  the module whose gates are proved by `cargo test` — so the dev shell invents a
  *  plausible Instandhaltung, and the counts and the list then move. */
+export function demoMasterStaging(): FakeStaging {
+  const staged = demoDocument();
+  return {
+    ...staged,
+    id: 'stg-master',
+    entities: staged.entities && {
+      ...staged.entities,
+      einbauten: [
+        {
+          key: 'rs-1',
+          radsatz: 'RS-2024-0815',
+          wagen: '218124712173',
+          bisher: '2026-02-02',
+          bisherQuelle: 'Radsätze aktuell, Zeile 2',
+          neu: '2026-06-19',
+          rows: [2],
+        },
+      ],
+    },
+  };
+}
+
 export function committedEvent(row: number): FakeInstandhaltung {
   const nth = ++committed;
   return {
@@ -1096,6 +1129,93 @@ export function committedEvent(row: number): FakeInstandhaltung {
   };
 }
 
+const master: FakeMasterSettings = {
+  file: 'C:\\Daten\\Wagenmut Übersicht.xlsx',
+  bindings: [
+    {
+      sheet: 'Alle Wagen',
+      templateId: '',
+      kind: 'wagenliste',
+      mode: 'snapshot',
+      aliases: [],
+    },
+    {
+      sheet: 'Radsätze aktuell',
+      templateId: '',
+      kind: 'radsatzEinbau',
+      mode: 'snapshot',
+      aliases: [],
+    },
+    {
+      sheet: 'Werkstattliste',
+      templateId: 'tpl-bremen',
+      mode: 'feed',
+      aliases: [],
+    },
+  ],
+  importRun: {
+    startedAt: '2026-10-04',
+    sheets: ['Alle Wagen', 'Radsätze aktuell'],
+    done: ['Alle Wagen'],
+  },
+};
+
+const masterSheetViews: Record<string, FakeMasterSheetView> = {
+  'Alle Wagen': {
+    sheet: 'Alle Wagen',
+    kind: 'wagenliste',
+    rowLabel: 'Wagen',
+    columns: [
+      { index: 1, header: 'Wagen-Nr.', filled: true },
+      { index: 2, header: 'Status', filled: false },
+      { index: 3, header: 'Bemerkung', filled: false },
+    ],
+    rows: [
+      ['218124712173', 2],
+      ['238566234569', 3],
+      ['318133445565', 4],
+      ['338080123452', 5],
+      ['378045567815', 6],
+    ].map(([nummer, row]) => ({
+      key: String(nummer),
+      cells: [String(nummer), '', ''],
+      source: `Alle Wagen, Zeile ${row}`,
+    })),
+  },
+  'Radsätze aktuell': {
+    sheet: 'Radsätze aktuell',
+    kind: 'radsatzEinbau',
+    rowLabel: 'Radsätze',
+    columns: [
+      { index: 1, header: 'Wagen', filled: true },
+      { index: 2, header: 'Radsatz', filled: true },
+      { index: 3, header: 'Eingebaut', filled: true },
+      { index: 4, header: 'Position', filled: true },
+    ],
+    rows: [
+      {
+        key: '218124712173 · RS-2024-0815',
+        cells: ['218124712173', 'RS-2024-0815', '02.02.2026', '1'],
+        source: 'Radsätze aktuell, Zeile 2',
+      },
+      {
+        key: '238566234569 · 4711-B',
+        cells: ['238566234569', '4711-B', '04.03.2026', '2'],
+        source: 'Radsätze aktuell, Zeile 4',
+      },
+      {
+        key: '338080123452 · RS-2024-0816',
+        cells: ['338080123452', 'RS-2024-0816', '02.02.2026', '3'],
+        source: 'Radsätze aktuell, Zeile 3',
+      },
+      {
+        key: 'RS-2025-0002',
+        cells: ['', 'RS-2025-0002', '', ''],
+      },
+    ],
+  },
+};
+
 export const DEMO_SEED: FakeSeed = {
   dokumente,
   wagen,
@@ -1104,6 +1224,20 @@ export const DEMO_SEED: FakeSeed = {
   einbauten,
   events,
   templates,
+  master,
+  masterSheetViews,
+  masterPicker: 'C:\\Daten\\Wagenmut Übersicht.xlsx',
+  masterSheets: [
+    { name: 'Alle Wagen', headers: ['Wagen-Nr.', 'Status', 'Bemerkung'] },
+    {
+      name: 'Werkstattliste',
+      headers: ['Wagen-Nr.', 'Datum', 'Leistung', 'Betrag', 'Notiz'],
+    },
+    {
+      name: 'Radsätze aktuell',
+      headers: ['Wagen', 'Radsatz', 'Eingebaut', 'Position'],
+    },
+  ],
   documents,
   profiles: [
     {

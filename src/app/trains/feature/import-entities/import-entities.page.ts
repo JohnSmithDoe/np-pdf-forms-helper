@@ -18,7 +18,12 @@
 // first, because it drops every one of their rows.
 //
 // The first step's back button CANCELS the walk, and asks first: answers given
-// are lost, and the cleaned document stays untouched in the list.
+// are lost, and the cleaned document stays untouched in the list. A master
+// sheet's walk returns to the master page instead — its run stays incomplete.
+//
+// On the Radsätze step a master sheet may also bring EINBAU conflicts: a
+// Radsatz already fitted on the same Wagen under another date. They never
+// block Weiter, because keeping the stored date is the preselected answer.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -37,13 +42,19 @@ import {
 import { OverlayService } from '../../../@shared/data/overlays/overlay.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { WizardShellComponent } from '../../../@shared/ui/wizard-shell/wizard-shell.component';
-import { ImportWalkFacade, type BulkAnswer, type GroupView } from '../../data';
+import {
+  ImportWalkFacade,
+  type BulkAnswer,
+  type EinbauView,
+  type GroupView,
+} from '../../data';
 import type {
   EntityDecision,
   EntityKind,
   PartnerRolle,
 } from '../../model/trains.types';
 import { IMPORT_PHASE, IMPORT_STEPS } from '../../model/import-walk';
+import { EinbauKonfliktComponent } from '../../ui/einbau-konflikt/einbau-konflikt.component';
 import { EntityGroupComponent } from '../../ui/entity-group/entity-group.component';
 
 interface StepConfig {
@@ -103,6 +114,7 @@ const ROLLEN: readonly [PartnerRolle, string][] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BusyOverlayComponent,
+    EinbauKonfliktComponent,
     EntityGroupComponent,
     IonButton,
     IonLabel,
@@ -143,6 +155,10 @@ export class ImportEntitiesPage {
     })).filter((section) => section.views.length > 0);
   });
 
+  protected readonly einbauten = computed(() =>
+    this.kind === 'radsatz' ? this.facade.einbauten() : []
+  );
+
   protected readonly open = computed(() => this.facade.undecided()[this.kind]);
   protected readonly bulk = computed(() => this.facade.bulkCounts(this.kind));
 
@@ -155,6 +171,17 @@ export class ImportEntitiesPage {
 
   protected onDecide(view: GroupView, decision: EntityDecision): void {
     this.facade.decide(view.group, decision);
+  }
+
+  protected onTake(view: EinbauView, uebernehmen: boolean): void {
+    this.facade.takeEinbau([view.konflikt.key], uebernehmen);
+  }
+
+  protected onTakeAll(uebernehmen: boolean): void {
+    this.facade.takeEinbau(
+      this.einbauten().map((view) => view.konflikt.key),
+      uebernehmen
+    );
   }
 
   protected async onBulk(answer: BulkAnswer): Promise<void> {
@@ -172,12 +199,17 @@ export class ImportEntitiesPage {
       await this.#router.navigate([this.config.back]);
       return;
     }
+    const master = this.facade.masterSheet() !== undefined;
     const confirmed = await this.#overlays.confirm(
-      'Import abbrechen? Die Entscheidungen gehen verloren, das bereinigte Dokument bleibt.'
+      master
+        ? 'Master-Import abbrechen? Die Entscheidungen gehen verloren, der Spiegel bleibt unvollständig.'
+        : 'Import abbrechen? Die Entscheidungen gehen verloren, das bereinigte Dokument bleibt.'
     );
     if (!confirmed) return;
     await this.facade.cancel();
-    await this.#router.navigate(['/trains/documents']);
+    await this.#router.navigate([
+      master ? '/trains/master' : '/trains/documents',
+    ]);
   }
 
   protected async onNext(): Promise<void> {

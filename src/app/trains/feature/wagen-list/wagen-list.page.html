@@ -12,10 +12,36 @@
     [title]="row.nummer"
     [note]="row.owner"
     leadingIcon="train-outline"
+    (selectItem)="toggle(row.id)"
     (deleteItem)="onRemove(row)"
   >
-    @if (row.kind) {
-      <span itemDetails>{{ row.kind }}</span>
-    }
+    <ng-container itemDetails>
+      @if (row.kind) {
+        <span>{{ row.kind }}</span>
+      }
+      @if (row.fitted.length) {
+        <ion-note data-testid="wagen-fitted-count">
+          {{
+            row.fitted.length === 1
+              ? '1 Radsatz eingebaut'
+              : row.fitted.length + ' Radsätze eingebaut'
+          }}
+        </ion-note>
+      }
+      @if (isExpanded(row.id)) {
+        @for (entry of row.fitted; track $index) {
+          <ion-note class="wagen-list__fitted" data-testid="wagen-fitted">
+            {{
+              entry.position ? 'Position ' + entry.position : 'ohne Position'
+            }}
+            · {{ entry.radsatz || 'unbekannter Radsatz' }}
+            @if (entry.since) {
+              · seit {{ entry.since }}
+            }
+            · {{ entry.source }}
+          </ion-note>
+        }
+      }
+    </ng-container>
   </app-list-item>
 </ng-template>

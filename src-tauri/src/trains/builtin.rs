@@ -15,6 +15,11 @@
 // update of the program can improve it without overwriting what the user made
 // of it, and a reset brings it back.
 //
+// The master workbook's sheet kinds build their templates with `shaped` too, but
+// are NOT in `all()`: they exist for the master import, which knows each sheet's
+// kind from its binding, and offered to recognition the position-less Radsatz
+// shape would also match every file carrying positions and make it ambiguous.
+//
 // The mappings are the ones `docs/decisions.md` argued for each file: the order
 // feed is dated by the workshop exit, the wheelset snapshot is fittings plus the
 // sender's own wheelset id, and the telematics export contributes only the
@@ -62,8 +67,12 @@ pub fn is_builtin(id: &str) -> bool {
 }
 
 fn template(slug: &str, name: &str, columns: &[(&str, FieldKind)]) -> ImportTemplate {
+    shaped(format!("{PREFIX}{slug}"), name, columns)
+}
+
+pub fn shaped(id: String, name: &str, columns: &[(&str, FieldKind)]) -> ImportTemplate {
     ImportTemplate {
-        id: format!("{PREFIX}{slug}"),
+        id,
         name: name.into(),
         plan: ImportPlan {
             reader: ReaderKind::HeaderRow,

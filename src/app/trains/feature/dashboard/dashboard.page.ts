@@ -31,6 +31,12 @@
 // „Export erstellen“ sits in the toolbar here because the dashboard is the
 // domain's one way in. It runs `silent` and presents its own report, since no
 // page in trains listens on `report$` any more.
+//
+// A master import left before its last sheet leaves the Schattensystem HALF a
+// mirror, and every count on this page would read as the whole. So the open run
+// is a banner above the tiles, from `masterImportRun` — which rides on the list
+// answers, so the dashboard learns it without opening the workbook. It links to
+// the master page rather than continuing here: that page owns the run.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -51,6 +57,9 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
+  IonItem,
+  IonLabel,
+  IonList,
   IonMenuButton,
   IonNote,
   IonTitle,
@@ -65,10 +74,12 @@ import {
   colorWandOutline,
   documentsOutline,
   ellipseOutline,
+  gridOutline,
   peopleOutline,
   ribbonOutline,
   settingsOutline,
   trainOutline,
+  warningOutline,
 } from 'ionicons/icons';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { TrainsFacade } from '../../data';
@@ -93,6 +104,9 @@ interface DashboardTile {
   imports: [
     IonButton,
     IonButtons,
+    IonItem,
+    IonLabel,
+    IonList,
     IonCard,
     IonCardContent,
     IonCardHeader,
@@ -184,6 +198,14 @@ export class TrainsDashboardPage {
         count: this.#facade.templates()?.length,
       },
       {
+        route: '/trains/master',
+        label: 'Master-Datei',
+        icon: 'grid-outline',
+        description:
+          'Die Master-Datei ins Schattensystem importieren, Blatt für Blatt ansehen und als Kopie mit Datum auffrischen.',
+        subtitle: 'Import, Ansicht, Kopie',
+      },
+      {
         route: '/trains/settings',
         label: 'Einstellungen',
         icon: 'settings-outline',
@@ -191,6 +213,11 @@ export class TrainsDashboardPage {
         subtitle: 'Für alle Listen und Dateien',
       },
     ];
+  });
+
+  protected readonly openSheets = computed(() => {
+    const run = this.#facade.masterImportRun();
+    return run ? run.sheets.filter((sheet) => !run.done.includes(sheet)) : [];
   });
 
   constructor() {
@@ -202,10 +229,12 @@ export class TrainsDashboardPage {
       colorWandOutline,
       documentsOutline,
       ellipseOutline,
+      gridOutline,
       peopleOutline,
       ribbonOutline,
       settingsOutline,
       trainOutline,
+      warningOutline,
     });
   }
 
@@ -216,6 +245,10 @@ export class TrainsDashboardPage {
 
   protected open(tile: DashboardTile): void {
     void this.#router.navigate([tile.route]);
+  }
+
+  protected onMaster(): void {
+    void this.#router.navigate(['/trains/master']);
   }
 
   protected async onExport(): Promise<void> {

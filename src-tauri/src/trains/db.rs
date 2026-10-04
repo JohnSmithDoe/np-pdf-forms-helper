@@ -43,10 +43,24 @@
 // live under `dokumente/<id>/` beside the stores; `reset` removes them too, or a
 // reset would leave records' files behind with no record pointing at them.
 //
+// A WRITE THAT CLEARS a store must `reindex` after it. The `put_*` calls keep
+// the indexes current, but a `clear()` inside a transaction does not, and a
+// stale `dedupe_key` index made every row of a file re-imported after a reset
+// stage as a duplicate until the next start.
+//
+// `clear_mirror` is the master import's narrow wipe: the FACTS go (Wagen,
+// Radsatz, Einbau, Instandhaltung) because the master brings them back whole;
+// IDENTITY and configuration stay — Partner with its learned aliases, templates
+// with their learned readings, and the filed Dokumente the refresh reads, which
+// become importable again. A kept alias only survives with what it points at,
+// which is why Partner is kept rather than its aliases extracted.
+//
 // `einstellungen.json` is not a store of items but ONE settings object, read
 // with defaults (a missing file or key is the default, so an old data folder
 // loads) and written alone, atomically. It sits outside `transaction` because
-// it changes nothing a rollback would have to restore alongside.
+// it changes nothing a rollback would have to restore alongside. `master.json`
+// is the same shape for the same reasons, and `reset` keeps both: they are
+// configuration, not imported data.
 //
 // The SHIPPED templates are never stored. `templates` merges them in at read
 // time, minus any a user copy shadows through its `origin`, so a reset cannot
@@ -67,12 +81,13 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use crate::config::AppConfig;
 use crate::error::{AppError, AppResult};
 use crate::trains::model::{
-    Dokument, Einbau, ImportTemplate, Instandhaltung, Partner, PartnerRolle, Radsatz, RadsatzAlias,
-    TrainsCounts, TrainsSettings, Wagen,
+    Dokument, Einbau, ImportTemplate, Instandhaltung, MasterSettings, Partner, PartnerRolle,
+    Radsatz, RadsatzAlias, TrainsCounts, TrainsSettings, Wagen,
 };
 
 const VERSION: u32 = 1;
 const SETTINGS: &str = "einstellungen.json";
+const MASTER: &str = "master.json";
 
 /// Its own key AND every alias key, so a spelling learnt for one sender finds
 /// the radsatz at all — whether it then DECIDES is `resolve::radsatz`'s call.
@@ -107,6 +122,7 @@ pub struct TrainsDb {
     einbauten: IndexMap<String, Einbau>,
     dokumente: IndexMap<String, Dokument>,
     settings: TrainsSettings,
+    master: MasterSettings,
     by_wagennummer: HashMap<String, String>,
     by_match_key: HashMap<String, String>,
     by_dedupe: HashSet<String>,
@@ -143,7 +159,8 @@ impl TrainsDb {
             radsaetze: read(&folder.join("radsaetze.db"))?,
             einbauten: read(&folder.join("einbauten.db"))?,
             dokumente: read(&folder.join("dokumente.db"))?,
-            settings: read_settings(&folder.join(SETTINGS))?,
+            settings: read_or_default(&folder.join(SETTINGS))?,
+            master: read_or_default(&folder.join(MASTER))?,
             folder,
             by_wagennummer: HashMap::new(),
             by_match_key: HashMap::new(),
@@ -223,6 +240,20 @@ impl TrainsDb {
         })
     }
 
+    pub fn wagen_refs(&self) -> impl Iterator<Item = &Wagen> {
+        self.wagen.values()
+    }
+
+    pub fn radsatz_refs(&self) -> impl Iterator<Item = &Radsatz> {
+        self.radsaetze.values()
+    }
+
+    pub fn open_einbau(&self, radsatz_id: &str) -> Option<&Einbau> {
+        self.einbauten
+            .values()
+            .find(|einbau| einbau.radsatz_id == radsatz_id && einbau.is_open())
+    }
+
     pub fn radsatz(&self, id: &str) -> Option<&Radsatz> {
         self.radsaetze.get(id)
     }
@@ -283,12 +314,18 @@ impl TrainsDb {
     }
 
     pub fn save_settings(&mut self, settings: TrainsSettings) -> AppResult<()> {
-        let path = self.folder.join(SETTINGS);
-        let json = serde_json::to_vec(&settings).map_err(|error| AppError::json(&path, error))?;
-        let temp = path.with_extension("tmp");
-        std::fs::write(&temp, &json).map_err(|error| AppError::io(&temp, error))?;
-        std::fs::rename(&temp, &path).map_err(|error| AppError::io(&path, error))?;
+        write_whole(&self.folder.join(SETTINGS), &settings)?;
         self.settings = settings;
+        Ok(())
+    }
+
+    pub fn master(&self) -> &MasterSettings {
+        &self.master
+    }
+
+    pub fn save_master(&mut self, master: MasterSettings) -> AppResult<()> {
+        write_whole(&self.folder.join(MASTER), &master)?;
+        self.master = master;
         Ok(())
     }
 
@@ -446,12 +483,30 @@ impl TrainsDb {
             tx.dokumente_mut().clear();
             Ok(())
         })?;
+        self.reindex();
         let folder = self.dokumente_folder();
         match std::fs::remove_dir_all(&folder) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(error) => Err(AppError::io(&folder, error)),
         }
+    }
+}
+
+impl TrainsDb {
+    pub fn clear_mirror(&mut self) -> AppResult<()> {
+        self.transaction(|tx| {
+            tx.wagen_mut().clear();
+            tx.instandhaltungen_mut().clear();
+            tx.radsaetze_mut().clear();
+            tx.einbauten_mut().clear();
+            for dokument in tx.dokumente_mut().values_mut() {
+                dokument.importiert_am = None;
+            }
+            Ok(())
+        })?;
+        self.reindex();
+        Ok(())
     }
 }
 
@@ -755,12 +810,19 @@ fn read<T: DeserializeOwned>(path: &Path) -> AppResult<IndexMap<String, T>> {
     Ok(store.items)
 }
 
-fn read_settings(path: &Path) -> AppResult<TrainsSettings> {
+fn read_or_default<T: DeserializeOwned + Default>(path: &Path) -> AppResult<T> {
     match std::fs::read_to_string(path) {
         Ok(text) => serde_json::from_str(&text).map_err(|error| AppError::json(path, error)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(TrainsSettings::default()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(T::default()),
         Err(error) => Err(AppError::io(path, error)),
     }
+}
+
+fn write_whole<T: Serialize>(path: &Path, value: &T) -> AppResult<()> {
+    let json = serde_json::to_vec(value).map_err(|error| AppError::json(path, error))?;
+    let temp = path.with_extension("tmp");
+    std::fs::write(&temp, &json).map_err(|error| AppError::io(&temp, error))?;
+    std::fs::rename(&temp, path).map_err(|error| AppError::io(path, error))
 }
 
 fn write<T: Serialize>(path: &Path, items: &IndexMap<String, T>) -> AppResult<()> {
@@ -827,6 +889,58 @@ mod tests {
 
     fn db(folder: &TempDir) -> TrainsDb {
         TrainsDb::load(&folder.config()).expect("loads")
+    }
+
+    #[test]
+    fn a_reset_forgets_the_dedupe_keys_too() {
+        let folder = TempDir::new("trains-reset-index");
+        let mut store = db(&folder);
+        store
+            .transaction(|tx| {
+                tx.put_wagen(wagen("w1", "218124712173"));
+                tx.put_instandhaltung(event("e1", "w1", "2026-01-01", "k1"));
+                Ok(())
+            })
+            .unwrap();
+        assert!(store.event_exists("k1"));
+
+        store.reset().unwrap();
+        // A stale index made every row of a re-imported file a duplicate.
+        assert!(!store.event_exists("k1"));
+    }
+
+    #[test]
+    fn clearing_the_mirror_keeps_identity_and_reopens_documents() {
+        let folder = TempDir::new("trains-clear-mirror");
+        let mut store = db(&folder);
+        store
+            .transaction(|tx| {
+                tx.put_wagen(wagen("w1", "218124712173"));
+                tx.put_partner(partner("p1", "Rundlauf Radsatztechnik", "RUNDLAUF"));
+                tx.put_instandhaltung(event("e1", "w1", "2026-01-01", "k1"));
+                Ok(())
+            })
+            .unwrap();
+
+        store.clear_mirror().unwrap();
+
+        assert_eq!(store.counts().wagen, 0);
+        assert!(!store.event_exists("k1"));
+        assert!(store.wagen_by_nummer("218124712173").is_none());
+        assert_eq!(
+            store.partner().len(),
+            1,
+            "a Partner is identity, not a fact"
+        );
+        assert!(store.partner_by_key("RUNDLAUF").is_some());
+
+        let reloaded = db(&folder);
+        assert_eq!(
+            reloaded.counts().wagen,
+            0,
+            "the wipe was written, not only held"
+        );
+        assert_eq!(reloaded.partner().len(), 1);
     }
 
     #[test]

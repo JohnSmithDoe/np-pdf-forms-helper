@@ -46,12 +46,12 @@ use crate::state::AppState;
 use crate::trains::db::TrainsDb;
 use crate::trains::dokument::{self, Cleaning, Filed};
 use crate::trains::model::{
-    CleanDecisions, EntityDecisions, ImportPlan, Partner, Radsatz, TrainsData, TrainsSettings,
-    Vorhanden, Wagen,
+    CleanDecisions, EntityDecisions, ImportPlan, MasterSettings, Partner, Radsatz, StagingOrigin,
+    TrainsData, TrainsSettings, Vorhanden, Wagen,
 };
 use crate::trains::sheet::grid;
 use crate::trains::stage::{stage, HeldImport, StageInput};
-use crate::trains::{clean, commit, entities, export, recognise, scan, template};
+use crate::trains::{clean, commit, entities, export, master, recognise, scan, template};
 
 fn everything(db: &TrainsDb) -> TrainsData {
     TrainsData::nothing()
@@ -63,6 +63,7 @@ fn everything(db: &TrainsDb) -> TrainsData {
         .dokumente(db.dokumente())
         .settings(db.settings())
         .counts(db.counts())
+        .master_import_run(db.master().import_run.clone())
 }
 
 #[tauri::command]
@@ -118,6 +119,7 @@ pub fn restage_import(plan: ImportPlan, state: State<'_, AppState>) -> AppResult
             grid: &held.grid,
             plan: &plan,
             db: &state.trains(),
+            master: false,
         })?;
         (staged.wire, staged.values)
     };
@@ -168,8 +170,11 @@ fn stage_owned(id: &str, state: &AppState) -> AppResult<TrainsData> {
         grid: &source.grid,
         plan: &dokument.plan,
         db: &state.trains(),
+        master: false,
     })?;
-    staged.wire.dokument_id = Some(dokument.id.clone());
+    staged.wire.origin = StagingOrigin::Dokument {
+        id: dokument.id.clone(),
+    };
     staged.wire.entities = Some(entities::group(&staged.wire, &protocol));
 
     let wire = staged.wire.clone();
@@ -194,7 +199,7 @@ pub fn commit_document(
 fn commit_owned(decisions: &EntityDecisions, state: &AppState) -> AppResult<TrainsData> {
     let mut held = state.staging();
     let staging = held.as_ref().ok_or_else(stale)?;
-    if staging.wire.dokument_id.is_none() {
+    if staging.wire.origin == StagingOrigin::Datei {
         return Err(AppError::Report(vec![
             "Importiert wird nur ein bereinigtes Dokument.".into(),
         ]));
@@ -202,6 +207,9 @@ fn commit_owned(decisions: &EntityDecisions, state: &AppState) -> AppResult<Trai
     let rows = entities::expand(&staging.wire, decisions);
     let mut db = state.trains();
     let report = commit::commit(&mut db, &staging.wire, &staging.values, &rows)?.report();
+    if let StagingOrigin::Master { sheet } = &staging.wire.origin {
+        master::mirror::done(&mut db, sheet)?;
+    }
     *held = None;
     Ok(everything(&db).report(report))
 }
@@ -543,9 +551,73 @@ pub fn create_trains_export(state: State<'_, AppState>) -> AppResult<TrainsData>
         .config
         .output_path
         .join(format!("trains-{}", crate::trains::clock::today_iso()));
-    let run = export::run(&state.trains(), &folder, &state.config.master_file)?;
+    let run = export::run(&state.trains(), &folder)?;
 
     Ok(TrainsData::nothing().report(run.report(&folder)))
+}
+
+#[tauri::command(async)]
+pub fn get_master(state: State<'_, AppState>) -> AppResult<TrainsData> {
+    let db = state.trains();
+    Ok(TrainsData::nothing().master(master::view(db.master())))
+}
+
+#[tauri::command(async)]
+pub fn pick_master_file(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    let Some(file) = picker::file(&window, "Master-Datei wählen", None, Some(picker::EXCEL))
+    else {
+        return Ok(TrainsData::nothing());
+    };
+    let mut settings = state.trains().master().clone();
+    settings.file = Some(file.to_string_lossy().into_owned());
+    save_master(settings, state)
+}
+
+#[tauri::command(async)]
+pub fn save_master(settings: MasterSettings, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    let mut db = state.trains();
+    let settings = MasterSettings {
+        import_run: db.master().import_run.clone(),
+        ..settings
+    };
+    db.save_master(settings.clone())?;
+    Ok(TrainsData::nothing().master(master::view(&settings)))
+}
+
+#[tauri::command(async)]
+pub fn get_master_sheet(sheet: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    Ok(TrainsData::nothing().master_sheet(master::sheet_view(&state.trains(), &sheet)))
+}
+
+#[tauri::command(async)]
+pub fn start_master_import(state: State<'_, AppState>) -> AppResult<TrainsData> {
+    *state.staging() = None;
+    let mut db = state.trains();
+    master::mirror::start(&mut db, &crate::trains::clock::today_iso())?;
+    Ok(everything(&db).master(master::view(db.master())))
+}
+
+#[tauri::command(async)]
+pub fn stage_master_sheet(sheet: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    stage_master(&sheet, &state)
+}
+
+fn stage_master(sheet: &str, state: &AppState) -> AppResult<TrainsData> {
+    let held = master::mirror::stage_sheet(&state.trains(), sheet)?;
+    let wire = held.wire.clone();
+    *state.staging() = Some(held);
+    Ok(TrainsData::nothing()
+        .staging(wire)
+        .counts(state.trains().counts()))
+}
+
+#[tauri::command(async)]
+pub fn refresh_master(state: State<'_, AppState>) -> AppResult<TrainsData> {
+    let run = master::refresh(&state.trains(), &crate::trains::clock::today_iso())?;
+    Ok(TrainsData::nothing().report(run.report()))
 }
 
 fn read_and_stage(path: &Path, sheet: Option<&str>, state: &AppState) -> AppResult<TrainsData> {
@@ -573,6 +645,7 @@ fn stage_source(
         grid: &source.grid,
         plan: &plan,
         db: &state.trains(),
+        master: false,
     })?;
 
     let wire = staged.wire.clone();
@@ -719,6 +792,7 @@ mod tests {
                 decision: EntityDecision::Create,
             }],
             radsaetze: Vec::new(),
+            einbauten: Vec::new(),
             rows: vec![2],
         };
         let committed = commit_owned(&decisions, &state).unwrap();
@@ -777,6 +851,7 @@ mod tests {
                 partner: Vec::new(),
                 wagen: Vec::new(),
                 radsaetze: Vec::new(),
+                einbauten: Vec::new(),
                 rows: vec![2],
             },
             &state,

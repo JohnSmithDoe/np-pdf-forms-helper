@@ -107,6 +107,33 @@ Measured 2026-08-22 in Chrome against `@ionic/angular@8`, while reworking the ex
 
 - **A full `read` deserialises every sheet, whichever one you wanted.** The same workbook had two
   sheets filled with `0` down to row 1,048,576: 6.5 s and 2.6 GB for a full read, 0.4 s and 300 MB for
-  `lazy_read` plus the one sheet. `grid::read` therefore reads one sheet; the master export and the
-  filler keep the full read, because they write the workbook back out.
+  `lazy_read` plus the one sheet. `grid::read` therefore reads one sheet, and so does the master
+  refresh, which writes the workbook back out; the filler and the cleaner keep the full read.
+
+- **`Workbook::sheet_collection_mut()` deserialises EVERY sheet before it answers.** It looks like a
+  plain accessor; it calls `read_sheet_collection()`. On the 28-sheet master, reaching one sheet through
+  it cost 4 s, made the write 7 s instead of 1 s — a deserialised sheet is re-serialised rather than
+  copied raw — and lost the byte-identical copy of every untouched sheet. `sheet_mut(index)`
+  deserialises that one sheet. `grid::heads` had the same call and, despite its header, held every
+  sheet of a scanned workbook at once; both now use `sheet_mut`. `sheet_collection_no_check()` is the
+  read-only accessor that does not deserialise.
+
+## Writing a workbook back
+
+Measured 2026-10-03 on the real master (20 MB, 28 sheets) with umya 3.1.0, `lazy_read` plus one
+deserialised sheet, then opened in Excel for Mac: no repair prompt, the changed cell visible on the
+dashboard through its VLOOKUP. 1.9 s and ~500 MB, where a full read alone took 2.6 GB.
+
+- **Undeserialised sheets are written back byte for byte** (`raw_data_of_worksheet`), and the shared
+  strings stay a superset with the old indices in place, so those raw sheets still point at the right
+  text. `cellXfs` keeps its count and order, so their style indices hold too.
+- **What is lost or changed anyway:** `customXml/*` (SharePoint content-type metadata) is dropped;
+  `calcChain.xml` is dropped and `calcPr` written as `calcId="122211"`, older than Excel's, which is
+  what makes Excel recalculate everything on open — wanted. A `numFmt` that REDEFINES a built-in id is
+  dropped: the master redefined id 19 as `dd/mm/yyyy`, and Excel's own 19 is a time, so any cell using
+  it would show `0:00:00` instead of a date (no cell in that file used it). A font name containing
+  `&quot;` is escaped a second time. A dxf's `<color auto="1"/>` is dropped, which is the default anyway.
+- **A written formula cell has no cached value of its own** until Excel recalculates; a cell cloned
+  from another row carries that row's stale result. Harmless with the `calcId` above, misleading to
+  anything that reads the copy without Excel.
 

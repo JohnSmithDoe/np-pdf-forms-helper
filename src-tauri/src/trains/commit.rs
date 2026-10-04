@@ -52,6 +52,13 @@
 // overrides a choice the user made. A partner met again in another role gains
 // that role rather than a twin: one `Partner` with a `rollen` list.
 //
+// ON THE MASTER PATH a Radsatz already open on the SAME Wagen with another
+// install date is one fitting with a disputed date, not a movement: the master
+// is several snapshots of one report, and closing the stored fitting would
+// invent a removal. The row's `einbau_uebernehmen` corrects the date in place,
+// otherwise the stored fitting stands. The conflict is re-derived here from the
+// store, not read off the wire — the walk's answer is only the choice.
+//
 // A wagen's `Likely` does NOT rewrite the stored number. The stored one is
 // presumed right and the incoming one is presumed to be the typo — the opposite
 // would let one bad file rewrite the fleet.
@@ -126,7 +133,7 @@ pub fn commit(
         ]));
     }
 
-    if let Some(id) = &staging.dokument_id {
+    if let Some(id) = staging.origin.dokument_id() {
         match db.dokument(id) {
             None => {
                 return Err(AppError::Report(vec![
@@ -175,6 +182,7 @@ pub fn commit(
                 sheet: &sheet,
                 stamp: &stamp,
                 template_sender: template_sender.as_deref(),
+                master: staging.origin.is_master(),
             };
             match commit_row(tx, row, row_values, decision, &run) {
                 Ok(Some(created)) => {
@@ -194,7 +202,7 @@ pub fn commit(
             }
         }
 
-        if let Some(id) = &staging.dokument_id {
+        if let Some(id) = staging.origin.dokument_id() {
             tx.mark_imported(id, &stamp);
         }
 
@@ -221,6 +229,7 @@ struct Run<'a> {
     sheet: &'a str,
     stamp: &'a str,
     template_sender: Option<&'a str>,
+    master: bool,
 }
 
 /// The two raw cells a radsatz is built from. The Wellennummer rides along
@@ -381,8 +390,23 @@ fn commit_row(
             .db()
             .einbau_of(radsatz_id, &wagen_id, installed.as_deref())
             .cloned();
+        let disputed = tx
+            .db()
+            .open_einbau(radsatz_id)
+            .filter(|open| run.master && open.wagen_id == wagen_id && installed.is_some())
+            .cloned();
         match known {
             _ if installed.is_none() && removed.is_none() => {}
+            None if disputed.is_some() => {
+                if let Some(mut einbau) = disputed.filter(|_| decision.einbau_uebernehmen) {
+                    einbau.eingebaut_am = installed;
+                    if einbau.position.is_none() {
+                        einbau.position = text_of(row, FieldKind::Einbauposition);
+                    }
+                    tx.put_einbau(einbau);
+                    created.einbau = true;
+                }
+            }
             Some(einbau) if einbau.ausgebaut_am == removed => {}
             Some(mut einbau) if einbau.is_open() => {
                 einbau.ausgebaut_am = removed;
@@ -681,6 +705,7 @@ pub(super) mod tests {
             grid: &grid(),
             plan: &plan(),
             db,
+            master: false,
         })
         .unwrap()
     }
@@ -693,6 +718,7 @@ pub(super) mod tests {
             halter: EntityDecision::Create,
             eigentuemer: EntityDecision::Skip,
             radsatz: EntityDecision::Create,
+            einbau_uebernehmen: false,
         }
     }
 
@@ -767,7 +793,7 @@ pub(super) mod tests {
         let (folder, mut db) = fresh("commit-dokument");
         let id = filed(&mut db, &folder);
         let mut plan = staged(&db);
-        plan.wire.dokument_id = Some(id.clone());
+        plan.wire.origin = crate::trains::model::StagingOrigin::Dokument { id: id.clone() };
 
         commit(
             &mut db,
@@ -964,6 +990,7 @@ pub(super) mod tests {
             grid: &owned,
             plan: &owner_plan,
             db: &db,
+            master: false,
         })
         .unwrap();
 
@@ -1036,6 +1063,7 @@ pub(super) mod tests {
             grid: &grid,
             plan: &plan,
             db: &empty,
+            master: false,
         })
         .unwrap()
     }
@@ -1125,6 +1153,7 @@ mod radsatz_tests {
             grid,
             plan,
             db,
+            master: false,
         })
         .unwrap()
     }

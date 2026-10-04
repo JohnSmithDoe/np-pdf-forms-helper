@@ -72,7 +72,25 @@
 // `TrainsSettings` is the Schattensystem's own configuration, stored beside the
 // data rather than in the browser's localStorage: it changes what the backend
 // WRITES (cleaned copies, exports), so the backend has to know it, and it holds
-// for every desk that shares the data folder.
+// for every desk that shares the data folder. `MasterSettings` is the same
+// kind of thing: which workbook is the customer's master and which of its sheets
+// a template refreshes — names from the customer's file, so user data and never
+// `builtin.rs`. `MasterView` adds what only the workbook can say, its sheets and
+// the header row of each bound one, so the page can offer them without a second
+// read per select.
+//
+// A staging names its ORIGIN — a file being mapped, a filed document, or one
+// sheet of the master — instead of an optional document id: the commit's gate
+// ("only a cleaned document is imported") has to tell the master sheet, which
+// is deliberately never filed, apart from a loose file. `SheetKind` is what a
+// master sheet IS; the customer's sheet names stay in `MasterBinding.sheet`.
+// `EinbauKonflikt` is the master import's one non-entity question — a Radsatz
+// already fitted on the same Wagen under another date — answered per Radsatz
+// by an `EinbauChoice`.
+//
+// `master_import_run` rides on every whole-list answer, and only while a master
+// import is OPEN: the dashboard warns about a partial mirror without opening the
+// workbook, which `MasterView` would.
 //
 // Three fields go out RENAMED, because the frontend reads those keys: the
 // partner list as `partners`, and the counts as `partners` and `events`. They had
@@ -104,6 +122,116 @@ pub enum UicStyle {
 #[serde(rename_all = "camelCase", default)]
 pub struct TrainsSettings {
     pub wagennummer: UicStyle,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MasterMode {
+    #[default]
+    Snapshot,
+    Feed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterAlias {
+    pub master: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SheetKind {
+    Wagenliste,
+    RadsatzEinbau,
+    RadsatzBestand,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterBinding {
+    pub sheet: String,
+    #[serde(default)]
+    pub template_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<SheetKind>,
+    #[serde(default)]
+    pub mode: MasterMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub aliases: Vec<MasterAlias>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MasterImportRun {
+    pub started_at: String,
+    pub sheets: Vec<String>,
+    pub done: Vec<String>,
+}
+
+impl MasterImportRun {
+    pub fn is_open(&self) -> bool {
+        self.sheets.iter().any(|sheet| !self.done.contains(sheet))
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MasterSettings {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
+    pub bindings: Vec<MasterBinding>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub import_run: Option<MasterImportRun>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterSheet {
+    pub name: String,
+    pub headers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterSheetView {
+    pub sheet: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<SheetKind>,
+    pub row_label: String,
+    pub columns: Vec<SheetColumn>,
+    pub rows: Vec<SheetRow>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub problem: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SheetColumn {
+    pub index: u32,
+    pub header: String,
+    pub filled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SheetRow {
+    pub key: String,
+    pub cells: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MasterView {
+    pub settings: MasterSettings,
+    pub sheets: Vec<String>,
+    pub headers: Vec<MasterSheet>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub problem: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -459,10 +587,35 @@ pub struct StagedImport {
     pub candidates: Vec<Candidate>,
     pub rows: Vec<StagedRow>,
     pub summary: StagedSummary,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dokument_id: Option<String>,
+    pub origin: StagingOrigin,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entities: Option<EntityGroups>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum StagingOrigin {
+    #[default]
+    Datei,
+    Dokument {
+        id: String,
+    },
+    Master {
+        sheet: String,
+    },
+}
+
+impl StagingOrigin {
+    pub fn dokument_id(&self) -> Option<&str> {
+        match self {
+            Self::Dokument { id } => Some(id),
+            _ => None,
+        }
+    }
+
+    pub fn is_master(&self) -> bool {
+        matches!(self, Self::Master { .. })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -489,6 +642,8 @@ pub struct RowDecision {
     pub eigentuemer: EntityDecision,
     #[serde(default = "skip_decision")]
     pub radsatz: EntityDecision,
+    #[serde(default)]
+    pub einbau_uebernehmen: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -514,6 +669,29 @@ pub struct EntityDecisions {
     pub wagen: Vec<EntityChoice>,
     #[serde(default)]
     pub radsaetze: Vec<EntityChoice>,
+    #[serde(default)]
+    pub einbauten: Vec<EinbauChoice>,
+    pub rows: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EinbauChoice {
+    pub key: String,
+    pub uebernehmen: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EinbauKonflikt {
+    pub key: String,
+    pub radsatz: String,
+    pub wagen: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bisher: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bisher_quelle: Option<String>,
+    pub neu: String,
     pub rows: Vec<u32>,
 }
 
@@ -544,6 +722,7 @@ pub struct EntityGroups {
     pub partner: Vec<EntityGroup>,
     pub wagen: Vec<EntityGroup>,
     pub radsaetze: Vec<EntityGroup>,
+    pub einbauten: Vec<EinbauKonflikt>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -795,6 +974,12 @@ pub struct TrainsData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<TrainsSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub master: Option<MasterView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub master_sheet: Option<MasterSheetView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub master_import_run: Option<MasterImportRun>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<crate::model::ClientReport>,
 }
 
@@ -860,6 +1045,21 @@ impl TrainsData {
 
     pub fn scan(mut self, scan: Vec<ScanFile>) -> Self {
         self.scan = Some(scan);
+        self
+    }
+
+    pub fn master(mut self, master: MasterView) -> Self {
+        self.master = Some(master);
+        self
+    }
+
+    pub fn master_import_run(mut self, run: Option<MasterImportRun>) -> Self {
+        self.master_import_run = run.filter(MasterImportRun::is_open);
+        self
+    }
+
+    pub fn master_sheet(mut self, sheet: MasterSheetView) -> Self {
+        self.master_sheet = Some(sheet);
         self
     }
 

@@ -26,6 +26,7 @@
 //
 // `stage_document` re-arms `demoDocument()` for the same reason: the commit
 // lets go of the staging, and the next document walked would find nothing.
+// `stage_master_sheet` re-arms `demoMasterStaging()` per sheet of a run.
 //
 // `commit_document` — the commit gates live in `trains/commit.rs` and are
 // proved by `cargo test`; the fake must not grow a second implementation of
@@ -52,6 +53,7 @@ import {
   DEMO_SEED,
   demoClean,
   demoDocument,
+  demoMasterStaging,
   demoScan,
   demoStaging,
   nextPickedDocument,
@@ -64,6 +66,7 @@ interface FakeState {
   scan: FakeScanFile[] | null;
   clean: FakeCleanReport | null;
   document: FakeStaging | null;
+  masterStaging: FakeStaging | null;
   events: FakeInstandhaltung[];
 }
 
@@ -111,6 +114,11 @@ internals.invoke = (command, args = {}) => {
 
   if (command === 'stage_document') {
     state.document = demoDocument();
+    return forward(command, args);
+  }
+
+  if (command === 'stage_master_sheet') {
+    state.masterStaging = demoMasterStaging();
     return forward(command, args);
   }
 

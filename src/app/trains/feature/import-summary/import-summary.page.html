@@ -17,6 +17,9 @@
       am {{ dokument.bereinigtAm }}
     </p>
   }
+  @if (facade.masterSheet(); as sheet) {
+    <p data-testid="import-summary-master-sheet">Master-Blatt „{{ sheet }}“</p>
+  }
 
   <ion-list lines="full" data-testid="import-plan">
     @for (count of facade.plan(); track count.kind) {

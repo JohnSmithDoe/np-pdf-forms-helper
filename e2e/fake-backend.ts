@@ -41,6 +41,21 @@
 // `commit_document` only records the rows it was sent and marks the document
 // imported. An imported document is refused exactly as Rust refuses it, since
 // that is a rule the UI is built around, not a property of bytes.
+//
+// The master workbook is `seed.masterSheets` — its sheet names and header rows,
+// which is all `get_master` reads of it — and `seed.masterPicker` the path the
+// file picker returns. `refresh_master` writes nothing and only reports one line
+// per binding: snapshot, feed, typing and formulas are `cargo test`'s.
+//
+// The master IMPORT is faked at the same depth. `start_master_import` empties
+// the facts and records the run over the bindings that have a `kind`;
+// `stage_master_sheet` serves `seed.masterStaging` (else `seed.document`, else
+// `seed.staging`) stamped with the sheet as its origin, Einbau conflicts and
+// all — finding them is `entities::einbau_konflikte`'s; `commit_document` ticks
+// the sheet off. Every whole-list answer carries `masterImportRun` while a sheet
+// is still open and drops it after the last, as `everything()` does — the
+// store reads that absence as "closed". `get_master_sheet` answers `seed.masterSheetViews[sheet]`,
+// else the bound sheet's headers with no rows: building the view is Rust's.
 // ────────────────────────────────────────────────────────────────
 
 import type { Page } from '@playwright/test';
@@ -123,11 +138,23 @@ export interface FakeStaging {
     hint: { headerRow?: number; firstDataRow: number; lastDataRow?: number };
   }[];
   rows: FakeStagedRow[];
-  dokumentId?: string;
+  origin?:
+    | { kind: 'datei' }
+    | { kind: 'dokument'; id: string }
+    | { kind: 'master'; sheet: string };
   entities?: {
     partner: FakeEntityGroup[];
     wagen: FakeEntityGroup[];
     radsaetze: FakeEntityGroup[];
+    einbauten?: {
+      key: string;
+      radsatz: string;
+      wagen: string;
+      bisher?: string;
+      bisherQuelle?: string;
+      neu: string;
+      rows: number[];
+    }[];
   };
   summary: {
     total: number;
@@ -341,6 +368,33 @@ export interface FakeCleanDecisions {
   )[];
 }
 
+export interface FakeMasterSheet {
+  name: string;
+  headers: string[];
+}
+
+export interface FakeMasterSettings {
+  file?: string;
+  bindings: {
+    sheet: string;
+    templateId: string;
+    kind?: 'wagenliste' | 'radsatzEinbau' | 'radsatzBestand';
+    mode: 'snapshot' | 'feed';
+    key?: string;
+    aliases: { master: string; source: string }[];
+  }[];
+  importRun?: { startedAt: string; sheets: string[]; done: string[] };
+}
+
+export interface FakeMasterSheetView {
+  sheet: string;
+  kind?: string;
+  rowLabel: string;
+  columns: { index: number; header: string; filled: boolean }[];
+  rows: { key: string; cells: string[]; source?: string }[];
+  problem?: string;
+}
+
 export interface FakeSeed {
   documents?: FakeDocument[];
   profiles?: FakeProfile[];
@@ -364,6 +418,16 @@ export interface FakeSeed {
   document?: FakeStaging | null;
   /** What the native picker hands back on the next add. `null` = cancelled. */
   picker?: FakeDocument | null;
+  /** The master workbook settings; none chosen when absent. */
+  master?: FakeMasterSettings;
+  /** The master workbook's sheets with their header rows. */
+  masterSheets?: FakeMasterSheet[];
+  /** What the master file picker hands back. `null` = cancelled. */
+  masterPicker?: string | null;
+  /** What `stage_master_sheet` stages, whatever sheet; falls back to `document`, then `staging`. */
+  masterStaging?: FakeStaging | null;
+  /** What `get_master_sheet` answers per sheet name. */
+  masterSheetViews?: Record<string, FakeMasterSheetView>;
   /** Command name → the German lines it should reject with. */
   failures?: Record<string, string[]>;
 }
@@ -418,6 +482,11 @@ export function install(seed: FakeSeed): void {
     dokumente: FakeDokument[];
     document: FakeStaging | null;
     settings: { wagennummer: string };
+    master: FakeMasterSettings;
+    masterSheets: FakeMasterSheet[];
+    masterPicker: string | null;
+    masterStaging: FakeStaging | null;
+    masterSheetViews: Record<string, FakeMasterSheetView>;
     committed: number[];
     failures: Record<string, string[]>;
     calls: RecordedCall[];
@@ -440,6 +509,11 @@ export function install(seed: FakeSeed): void {
     dokumente: seed.dokumente ?? [],
     document: seed.document ?? null,
     settings: seed.settings ?? { wagennummer: 'compact' },
+    master: seed.master ?? { bindings: [] },
+    masterSheets: seed.masterSheets ?? [],
+    masterPicker: seed.masterPicker ?? null,
+    masterStaging: seed.masterStaging ?? null,
+    masterSheetViews: seed.masterSheetViews ?? {},
     committed: [],
     failures: seed.failures ?? {},
     calls: [],
@@ -479,7 +553,29 @@ export function install(seed: FakeSeed): void {
     dokumente: copy(state.dokumente),
     settings: copy(state.settings),
     counts: counts(),
+    masterImportRun: openRun(),
   });
+
+  const openRun = () => {
+    const run = state.master.importRun;
+    return run && run.sheets.some((sheet) => !run.done.includes(sheet))
+      ? copy(run)
+      : undefined;
+  };
+
+  const masterView = () => {
+    const bound = new Set(state.master.bindings.map((entry) => entry.sheet));
+    const open = !!state.master.file;
+    return {
+      master: {
+        settings: copy(state.master),
+        sheets: open ? state.masterSheets.map((sheet) => sheet.name) : [],
+        headers: open
+          ? copy(state.masterSheets.filter((sheet) => bound.has(sheet.name)))
+          : [],
+      },
+    };
+  };
 
   const scanned = () => (state.scan ? { scan: copy(state.scan) } : {});
 
@@ -685,13 +781,18 @@ export function install(seed: FakeSeed): void {
       }
       const staged = state.document ?? state.staging;
       if (!staged) return {};
-      state.staging = { ...copy(staged), dokumentId: id };
+      state.staging = { ...copy(staged), origin: { kind: 'dokument', id } };
       return { staging: copy(state.staging), counts: counts() };
     },
 
     commit_document: (args) => {
       const decisions = args['decisions'] as unknown as { rows: number[] };
-      const id = state.staging?.dokumentId;
+      const origin = state.staging?.origin;
+      const id = origin?.kind === 'dokument' ? origin.id : undefined;
+      if (origin?.kind === 'master' && state.master.importRun) {
+        const run = state.master.importRun;
+        if (!run.done.includes(origin.sheet)) run.done.push(origin.sheet);
+      }
       state.committed = [...decisions.rows];
       state.dokumente = state.dokumente.map((entry) =>
         entry.id === id ? { ...entry, importiertAm: '2026-10-03' } : entry
@@ -821,6 +922,102 @@ export function install(seed: FakeSeed): void {
     discard_clean: () => {
       state.cleaning = null;
       return {};
+    },
+
+    get_master: () => masterView(),
+
+    pick_master_file: () => {
+      if (!state.masterPicker) return {};
+      state.master = { ...state.master, file: state.masterPicker };
+      return masterView();
+    },
+
+    save_master: (args) => {
+      const run = state.master.importRun;
+      state.master = {
+        ...copy(args['settings'] as unknown as FakeMasterSettings),
+        importRun: run,
+      };
+      return masterView();
+    },
+
+    get_master_sheet: (args) => {
+      const sheet = String(args['sheet']);
+      const seeded = state.masterSheetViews[sheet];
+      if (seeded) return { masterSheet: copy(seeded) };
+      const headers =
+        state.masterSheets.find((entry) => entry.name === sheet)?.headers ?? [];
+      const bound = state.master.bindings.find(
+        (entry) => entry.sheet === sheet
+      );
+      return {
+        masterSheet: {
+          sheet,
+          kind: bound?.kind,
+          rowLabel: '',
+          columns: headers.map((header, index) => ({
+            index: index + 1,
+            header,
+            filled: false,
+          })),
+          rows: [],
+          problem: bound
+            ? undefined
+            : `Das Blatt „${sheet}“ ist in den Master-Einstellungen nicht zugeordnet.`,
+        },
+      };
+    },
+
+    start_master_import: () => {
+      const sheets = state.master.bindings
+        .filter((entry) => entry.kind)
+        .map((entry) => entry.sheet);
+      if (!state.master.file || sheets.length === 0) {
+        return Promise.reject({
+          messages: [
+            'Es ist noch keinem Blatt der Master-Datei eine Art zugeordnet.',
+          ],
+        });
+      }
+      state.wagen = [];
+      state.radsaetze = [];
+      state.einbauten = [];
+      state.events = [];
+      state.staging = null;
+      state.dokumente = state.dokumente.map((entry) => ({
+        ...entry,
+        importiertAm: undefined,
+      }));
+      state.master = {
+        ...state.master,
+        importRun: { startedAt: '2026-10-04', sheets, done: [] },
+      };
+      return { ...trainsLists(), ...masterView() };
+    },
+
+    stage_master_sheet: (args) => {
+      const sheet = String(args['sheet']);
+      const staged = state.masterStaging ?? state.document ?? state.staging;
+      if (!staged) return {};
+      state.staging = { ...copy(staged), origin: { kind: 'master', sheet } };
+      return { staging: copy(state.staging), counts: counts() };
+    },
+
+    refresh_master: () => {
+      const file = state.master.file ?? '';
+      const folder = file.replace(/[\\/][^\\/]*$/, '');
+      return {
+        message: report(
+          'Master-Datei wurde aktualisiert',
+          [
+            ...state.master.bindings.map(
+              (entry) => `„${entry.sheet}“: 3 Zeile(n) übernommen (vorher 3).`
+            ),
+            'Geschrieben als „Master 2026-10-03.xlsx“; das Original ist unverändert.',
+          ],
+          folder
+        ),
+      };
     },
 
     create_trains_export: () => ({

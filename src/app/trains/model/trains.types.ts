@@ -45,7 +45,21 @@
 //
 // `TrainsSettings` is the Schattensystem's own configuration and lives in the
 // backend, not in localStorage: it changes what Rust writes into cleaned copies
-// and exports, so Rust has to hold it.
+// and exports, so Rust has to hold it. `MasterSettings` likewise: the master
+// workbook and which of its sheets each template refreshes. `MasterView` is the
+// settings plus what only the workbook can say — its sheets and the headers of
+// the bound ones — and a `problem` when the file cannot be read. A binding's
+// `kind` says what the sheet IS and makes it part of the master import;
+// `importRun` is the backend's record of the last run and is never sent back
+// meaningfully — `save_master` keeps the stored one. `MasterSheetView` is one
+// bound sheet as the mirror holds it, built whole in Rust: the frontend renders
+// its columns and rows and decides nothing about them.
+//
+// A staging says where it came from in `origin`: a file being mapped, a filed
+// document, or one sheet of the master. The walk matches its staging by it.
+// `einbauten` are the master import's date conflicts — one Radsatz already
+// fitted on the same Wagen under another date — answered per key; no answer
+// keeps the stored date.
 //
 // A `Dokument` is a file the app OWNS once its cleaning is filed: original and
 // cleaned copy in the data folder, identified by the original's content hash,
@@ -62,6 +76,69 @@ export type UicStyle = 'compact' | 'grouped';
 
 export interface TrainsSettings {
   wagennummer: UicStyle;
+}
+
+export type MasterMode = 'snapshot' | 'feed';
+
+export interface MasterAlias {
+  master: string;
+  source: string;
+}
+
+export type SheetKind = 'wagenliste' | 'radsatzEinbau' | 'radsatzBestand';
+
+export interface MasterBinding {
+  sheet: string;
+  templateId: string;
+  kind?: SheetKind;
+  mode: MasterMode;
+  key?: string;
+  aliases: MasterAlias[];
+}
+
+export interface MasterImportRun {
+  startedAt: string;
+  sheets: string[];
+  done: string[];
+}
+
+export interface MasterSettings {
+  file?: string;
+  bindings: MasterBinding[];
+  importRun?: MasterImportRun;
+}
+
+export interface MasterSheet {
+  name: string;
+  headers: string[];
+}
+
+export interface MasterView {
+  settings: MasterSettings;
+  sheets: string[];
+  headers: MasterSheet[];
+  problem?: string;
+}
+
+export interface SheetColumn {
+  index: number;
+  header: string;
+  filled: boolean;
+}
+
+export interface SheetRow {
+  key: string;
+  cells: string[];
+  source?: string;
+}
+
+export interface MasterSheetView {
+  sheet: string;
+  kind?: SheetKind;
+  rowLabel: string;
+  columns: SheetColumn[];
+  rows: SheetRow[];
+  problem?: string;
 }
 export type ReaderKind = 'headerRow' | 'manual';
 export type PartnerRolle = 'halter' | 'eigentuemer' | 'werkstatt';
@@ -259,8 +336,28 @@ export interface StagedImport {
   candidates: LayoutCandidate[];
   rows: StagedRow[];
   summary: StagedSummary;
-  dokumentId?: string;
+  origin: StagingOrigin;
   entities?: EntityGroups;
+}
+
+export type StagingOrigin =
+  | { kind: 'datei' }
+  | { kind: 'dokument'; id: string }
+  | { kind: 'master'; sheet: string };
+
+export interface EinbauKonflikt {
+  key: string;
+  radsatz: string;
+  wagen: string;
+  bisher?: string;
+  bisherQuelle?: string;
+  neu: string;
+  rows: number[];
+}
+
+export interface EinbauChoice {
+  key: string;
+  uebernehmen: boolean;
 }
 
 export type EntityDecision =
@@ -292,6 +389,7 @@ export interface EntityGroups {
   partner: EntityGroup[];
   wagen: EntityGroup[];
   radsaetze: EntityGroup[];
+  einbauten: EinbauKonflikt[];
 }
 
 export interface EntityChoice {
@@ -304,6 +402,7 @@ export interface EntityDecisions {
   partner: EntityChoice[];
   wagen: EntityChoice[];
   radsaetze: EntityChoice[];
+  einbauten: EinbauChoice[];
   rows: number[];
 }
 
@@ -466,5 +565,8 @@ export interface TrainsData {
   cleaning?: CleanReport;
   dokumente?: Dokument[];
   settings?: TrainsSettings;
+  master?: MasterView;
+  masterSheet?: MasterSheetView;
+  masterImportRun?: MasterImportRun;
   message?: ClientReport;
 }

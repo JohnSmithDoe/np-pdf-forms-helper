@@ -7,12 +7,22 @@
 // `applyTrainsData`. Nothing is written ahead of the response — the backend owns
 // the entities and echoes the list back, so an optimistic write would be
 // overwritten on success and stranded on failure.
+//
+// `masterSheet` is the one exception: it RETURNS the view and stores nothing.
+// A sheet view belongs to the one page that shows it, and up to 1,700 rows of
+// display strings would otherwise outlive it in the store.
 // ────────────────────────────────────────────────────────────────
 
 import { inject, Injectable } from '@angular/core';
 import { BackendService } from '../../@shared/data/backend/backend.service';
 import type { ClientReport } from '../../@shared/model/client.types';
-import type { Partner, TrainsSettings, Wagen } from '../model/trains.types';
+import type {
+  MasterSettings,
+  MasterSheetView,
+  Partner,
+  TrainsSettings,
+  Wagen,
+} from '../model/trains.types';
 import { TrainsBackend } from './trains.backend';
 import { TrainsStore } from './trains.store';
 
@@ -35,6 +45,8 @@ export class TrainsFacade {
   readonly templates = this.#store.templates;
   readonly dokumente = this.#store.dokumente;
   readonly settings = this.#store.settings;
+  readonly master = this.#store.master;
+  readonly masterImportRun = this.#store.masterImportRun;
   readonly events = this.#store.events;
   readonly eventTotal = this.#store.eventTotal;
   readonly counts = this.#store.counts;
@@ -93,6 +105,34 @@ export class TrainsFacade {
 
   async openFolder(folder: string): Promise<void> {
     await this.#backend.openFolder(folder);
+  }
+
+  async loadMaster(): Promise<void> {
+    this.#store.applyTrainsData(await this.#backend.loadMaster());
+  }
+
+  async pickMasterFile(): Promise<void> {
+    this.#store.applyTrainsData(await this.#backend.pickMasterFile());
+  }
+
+  async saveMaster(settings: MasterSettings): Promise<void> {
+    this.#store.applyTrainsData(await this.#backend.saveMaster(settings));
+  }
+
+  async startMasterImport(): Promise<string[]> {
+    const data = await this.#backend.startMasterImport();
+    this.#store.applyTrainsData(data);
+    return data.master?.settings.importRun?.sheets ?? [];
+  }
+
+  async masterSheet(sheet: string): Promise<MasterSheetView | undefined> {
+    return (await this.#backend.getMasterSheet(sheet)).masterSheet;
+  }
+
+  async refreshMaster(): Promise<ClientReport | undefined> {
+    const data = await this.#backend.refreshMaster({ silent: true });
+    this.#store.applyTrainsData(data);
+    return data.message;
   }
 
   async createExport(): Promise<ClientReport | undefined> {

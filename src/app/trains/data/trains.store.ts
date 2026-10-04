@@ -15,6 +15,11 @@
 // every downstream computed, so six of them make the four list facades recompute
 // six times for one command.
 //
+// `masterImportRun` is the one field read on ABSENCE too. Rust sends it with
+// every whole-list answer while a run is open and drops it once the last sheet
+// is committed, so a list answer without it means "closed", not "unchanged" —
+// presence alone would leave the banner standing after the final sheet.
+//
 // `loaded` reads `wagen` because that list is the one every command that could
 // have loaded anything sends back. It is what lets the route resolver do the
 // entry load once instead of five page constructors doing it each.
@@ -33,6 +38,8 @@ import type {
   ImportTemplate,
   Instandhaltung,
   Einbau,
+  MasterImportRun,
+  MasterView,
   Partner,
   StagedImport,
   TrainsCounts,
@@ -52,6 +59,8 @@ type TrainsState = {
   eventTotal: number;
   dokumente: Dokument[] | undefined;
   settings: TrainsSettings;
+  master: MasterView | undefined;
+  masterImportRun: MasterImportRun | undefined;
   counts: TrainsCounts;
   staging: StagedImport | undefined;
 };
@@ -66,6 +75,8 @@ const initial: TrainsState = {
   eventTotal: 0,
   dokumente: undefined,
   settings: { wagennummer: 'compact' },
+  master: undefined,
+  masterImportRun: undefined,
   counts: { wagen: 0, partners: 0, events: 0, radsaetze: 0, dokumente: 0 },
   staging: undefined,
 };
@@ -100,13 +111,17 @@ export const TrainsStore = signalStore(
   withMethods((store) => ({
     applyTrainsData(data: TrainsData): void {
       const next: Partial<TrainsState> = {};
-      if (data.wagen) next.wagen = data.wagen;
+      if (data.wagen) {
+        next.wagen = data.wagen;
+        next.masterImportRun = data.masterImportRun;
+      }
       if (data.partners) next.partners = data.partners;
       if (data.templates) next.templates = data.templates;
       if (data.radsaetze) next.radsaetze = data.radsaetze;
       if (data.einbauten) next.einbauten = data.einbauten;
       if (data.dokumente) next.dokumente = data.dokumente;
       if (data.settings) next.settings = data.settings;
+      if (data.master) next.master = data.master;
       if (data.counts) next.counts = data.counts;
       if (data.staging) next.staging = data.staging;
       if (data.instandhaltungPage) {

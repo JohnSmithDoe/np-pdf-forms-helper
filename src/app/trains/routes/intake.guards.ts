@@ -9,10 +9,11 @@
 // The cleaning hub and the document list are those ways in and deliberately
 // UNGUARDED; a guard on either would have nowhere to redirect but itself.
 //
-// Each step guards on the slot it renders. The import steps need a STAGED
-// DOCUMENT, not merely a staging: the template mapper holds one too, and its
-// staging is not a document anybody may import. The result step needs only
-// the parked report, because the commit has already let go of the staging.
+// Each step guards on the slot it renders. The import steps need a staging
+// whose ORIGIN is the walk's source — a filed document or a master sheet — not
+// merely a staging: the template mapper holds one too, and its staging is not
+// one anybody may import. The result step needs only the parked report,
+// because the commit has already let go of the staging.
 // ────────────────────────────────────────────────────────────────
 
 import { inject } from '@angular/core';
