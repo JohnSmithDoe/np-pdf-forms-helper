@@ -1,8 +1,10 @@
 // ─── why ────────────────────────────────────────────────────────
 // What the settings page needs and only the workbook knows: its sheet names,
-// and the header row of each BOUND sheet, for the key and alias selects. A
-// missing or unreadable file is a `problem` on the view, not an error, so the
-// page can still show the settings that point at it.
+// and the header row of each BOUND sheet, for the key and alias selects. Both
+// come from the SCAN stored in the settings by the last mapping or import
+// (`bindings::sync`), never from the workbook: only mapping and import read the
+// file, and reading a header means deserialising a whole sheet. A missing file is a `problem` on the view, not
+// an error, so the page can still show the settings that point at it.
 //
 // `header_row` and `fields` are shared with `sheet_view`: a header row by
 // POSITION, and the field each position is read as. The sheets repeat header
@@ -12,17 +14,14 @@
 // has no kind, so "column X is field F" is decided once, in Rust.
 // ────────────────────────────────────────────────────────────────
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::Path;
 
 use umya_spreadsheet::Worksheet;
 
-use super::{book, kinds, mirror};
-use crate::error::AppResult;
+use super::{kinds, mirror};
 use crate::trains::db::TrainsDb;
-use crate::trains::model::{
-    FieldKind, ImportTemplate, MasterBinding, MasterSettings, MasterSheet, MasterView,
-};
+use crate::trains::model::{FieldKind, ImportTemplate, MasterBinding, MasterSettings, MasterView};
 use crate::trains::recognise;
 
 pub fn view(settings: &MasterSettings) -> MasterView {
@@ -33,37 +32,27 @@ pub fn view(settings: &MasterSettings) -> MasterView {
     let Some(file) = settings.file.as_deref() else {
         return view;
     };
-    match read_view(Path::new(file), settings) {
-        Ok((sheets, headers)) => {
-            view.sheets = sheets;
-            view.headers = headers;
-        }
-        Err(error) => view.problem = error.into_messages().into_iter().next(),
+    if !Path::new(file).is_file() {
+        view.problem = Some(format!("Die Master-Datei {file} gibt es nicht."));
+        return view;
     }
-    view
-}
-
-fn read_view(path: &Path, settings: &MasterSettings) -> AppResult<(Vec<String>, Vec<MasterSheet>)> {
-    let mut book = book::open(path)?;
-    let sheets = book::names(&book);
-    let bound: HashSet<&str> = settings
-        .bindings
+    let Some(scan) = &settings.scan else {
+        view.problem = Some("Die Master-Datei wurde noch nicht gelesen.".into());
+        return view;
+    };
+    view.sheets = scan.sheets.iter().map(|sheet| sheet.name.clone()).collect();
+    view.headers = scan
+        .sheets
         .iter()
-        .map(|binding| binding.sheet.as_str())
+        .filter(|sheet| {
+            settings
+                .bindings
+                .iter()
+                .any(|binding| binding.sheet == sheet.name)
+        })
+        .cloned()
         .collect();
-    let mut headers = Vec::new();
-    for (index, name) in sheets.iter().enumerate() {
-        if !bound.contains(name.as_str()) {
-            continue;
-        }
-        book::deserialise(&mut book, index, path)?;
-        let row = header_row(&book.sheet_collection_no_check()[index]);
-        headers.push(MasterSheet {
-            name: name.clone(),
-            headers: row.into_iter().map(|(_, text)| text).collect(),
-        });
-    }
-    Ok((sheets, headers))
+    view
 }
 
 pub(super) fn header_row(worksheet: &Worksheet) -> Vec<(u32, String)> {
@@ -78,9 +67,16 @@ pub(super) fn header_row(worksheet: &Worksheet) -> Vec<(u32, String)> {
     row
 }
 
-pub(super) fn template_of(binding: &MasterBinding, db: &TrainsDb) -> Option<ImportTemplate> {
+pub(super) fn template_of(
+    binding: &MasterBinding,
+    db: &TrainsDb,
+    header: &[(u32, String)],
+) -> Option<ImportTemplate> {
     match binding.kind {
-        Some(kind) => Some(kinds::template(kind)),
+        Some(kind) => {
+            let names: Vec<String> = header.iter().map(|(_, text)| text.clone()).collect();
+            Some(kinds::template(kind, &names))
+        }
         None => db.template(&binding.template_id),
     }
 }

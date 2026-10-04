@@ -439,6 +439,7 @@ mod tests {
             mode,
             key: key.map(str::to_string),
             aliases: vec![],
+            auto: false,
         }
     }
 

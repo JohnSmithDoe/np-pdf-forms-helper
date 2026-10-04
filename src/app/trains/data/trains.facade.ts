@@ -115,6 +115,10 @@ export class TrainsFacade {
     this.#store.applyTrainsData(await this.#backend.pickMasterFile());
   }
 
+  async resetMasterBindings(): Promise<void> {
+    this.#store.applyTrainsData(await this.#backend.resetMasterBindings());
+  }
+
   async saveMaster(settings: MasterSettings): Promise<void> {
     this.#store.applyTrainsData(await this.#backend.saveMaster(settings));
   }

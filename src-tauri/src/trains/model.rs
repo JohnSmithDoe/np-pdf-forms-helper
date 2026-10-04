@@ -161,6 +161,15 @@ pub struct MasterBinding {
     pub key: Option<String>,
     #[serde(default)]
     pub aliases: Vec<MasterAlias>,
+    #[serde(default)]
+    pub auto: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MasterScan {
+    pub modified: u64,
+    pub sheets: Vec<MasterSheet>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -185,9 +194,11 @@ pub struct MasterSettings {
     pub bindings: Vec<MasterBinding>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub import_run: Option<MasterImportRun>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scan: Option<MasterScan>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MasterSheet {
     pub name: String,

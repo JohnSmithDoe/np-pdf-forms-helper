@@ -140,6 +140,101 @@ test.describe('Master-Blattansichten', () => {
   });
 });
 
+test.describe('Master-Zuordnung', () => {
+  // What recognition produces is `kinds::recognise`'s; the fake only applies
+  // the seeded defaults, so these tests prove the page's half: the pick and the
+  // reset show what came back, and a hand edit is marked as one.
+  const DEFAULTS: FakeMasterSettings['bindings'] = [
+    {
+      sheet: 'Alle Wagen',
+      templateId: '',
+      kind: 'wagenliste',
+      mode: 'snapshot',
+      aliases: [],
+      auto: true,
+    },
+    {
+      sheet: 'Notizen',
+      templateId: '',
+      mode: 'snapshot',
+      aliases: [],
+      auto: true,
+    },
+  ];
+  const masterPage = (page: Page) => page.locator('app-page-trains-master');
+
+  test('das Wählen der Datei ordnet jedes Blatt von selbst zu', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      masterPicker: 'C:\\Daten\\Übersicht.xlsx',
+      masterDefaults: DEFAULTS,
+      masterSheets: [
+        { name: 'Alle Wagen', headers: ['Wagennummer'] },
+        { name: 'Notizen', headers: ['Text'] },
+      ],
+    });
+    await page.goto('/#/trains/master');
+    await masterPage(page).getByRole('button', { name: 'Wählen …' }).click();
+
+    const rows = masterPage(page).getByTestId('master-binding');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toContainText('importiert: Wagen');
+    await expect(rows.last()).toContainText('nur Ansicht');
+  });
+
+  test('eine Änderung von Hand wird als solche gespeichert', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      master: { file: 'C:\\Daten\\Übersicht.xlsx', bindings: DEFAULTS },
+      masterSheets: [{ name: 'Alle Wagen', headers: ['Wagennummer'] }],
+    });
+    await page.goto('/#/trains/master');
+    const first = masterPage(page).getByTestId('master-binding').first();
+    await first.getByTestId('master-edit').click();
+    await masterPage(page)
+      .getByTestId('master-binding-details')
+      .getByRole('button', { name: 'Umbenannte Spalte zuordnen' })
+      .click();
+
+    await expect(first).toContainText('von Hand angepasst');
+    const save = (await recordedCalls(page)).find(
+      (call) => call.command === 'save_master'
+    );
+    expect(save?.args).toMatchObject({
+      settings: {
+        bindings: [{ sheet: 'Alle Wagen', auto: false }, { auto: true }],
+      },
+    });
+  });
+
+  test('„Standardzuordnung“ stellt die Zuordnung nach Kopfzeile wieder her', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      master: {
+        file: 'C:\\Daten\\Übersicht.xlsx',
+        bindings: [{ ...DEFAULTS[1]!, kind: 'wagenliste', auto: false }],
+      },
+      masterDefaults: DEFAULTS,
+      masterSheets: [
+        { name: 'Alle Wagen', headers: ['Wagennummer'] },
+        { name: 'Notizen', headers: ['Text'] },
+      ],
+    });
+    await page.goto('/#/trains/master');
+    await masterPage(page).getByTestId('master-reset').click();
+    // A hand edit would be lost, so the reset asks first.
+    await page.getByRole('button', { name: 'Bestätigen' }).click();
+
+    const rows = masterPage(page).getByTestId('master-binding');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.last()).toContainText('nur Ansicht');
+    await expect(rows.last()).not.toContainText('von Hand angepasst');
+  });
+});
+
 test.describe('Master-Import auf dem Dashboard', () => {
   test('ein offener Lauf steht als Hinweis über den Kacheln', async ({
     page,

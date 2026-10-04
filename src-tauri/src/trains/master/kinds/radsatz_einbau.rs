@@ -18,6 +18,13 @@ use crate::trains::model::{FieldKind, ImportTemplate};
 
 pub const UPDATES: bool = true;
 
+pub fn claims(names: &[String]) -> bool {
+    super::has_all(
+        names,
+        &["an_wagen", "radsatzid", "radsatz", "einbau_am", "pos"],
+    )
+}
+
 pub fn template() -> ImportTemplate {
     shaped(
         super::id("radsatz-einbau"),

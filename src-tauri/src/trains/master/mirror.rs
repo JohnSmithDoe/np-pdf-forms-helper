@@ -6,8 +6,15 @@
 // customer's own values is right. A mirror never has to — see
 // `docs/decisions.md`, "Der Master wird gespiegelt".
 //
-// `start` empties the facts (`TrainsDb::clear_mirror`) and records the run:
-// which sheets, in binding order, and none done. Each sheet is then staged and
+// `start` first re-reads the header rows if the file changed since the last
+// read (`bindings::sync`), so a sheet new in the file is bound and imported
+// without a visit to the settings. Then it empties the facts
+// (`TrainsDb::clear_mirror`) and records the run:
+// which sheets, and none done. The order is by KIND first — the Wagen lists,
+// then the fitting list with positions, then the stock without — and by
+// binding order inside a kind, because the stock must meet the fittings the
+// positioned list already wrote, or its Radsätze would arrive without positions
+// and the date conflicts could not be asked. Each sheet is then staged and
 // walked on its own, through the same import walk as a filed document, and
 // `done` ticks it off after its commit. A run with sheets left is INCOMPLETE and
 // the page says so — a cancelled walk leaves a partial mirror, and a partial
@@ -46,13 +53,19 @@ use crate::trains::stage::{stage, HeldImport, StageInput};
 use crate::trains::{entities, recognise};
 
 pub fn start(db: &mut TrainsDb, today: &str) -> AppResult<MasterImportRun> {
+    master_file(db.master())?;
+    super::bindings::sync(db, false)?;
     let settings = db.master().clone();
-    master_file(&settings)?;
-    let sheets: Vec<String> = settings
+    let mut bound: Vec<(u8, usize, &MasterBinding)> = settings
         .bindings
         .iter()
-        .filter(|binding| binding.kind.is_some())
-        .map(|binding| binding.sheet.clone())
+        .enumerate()
+        .filter_map(|(at, binding)| binding.kind.map(|kind| (kinds::rank(kind), at, binding)))
+        .collect();
+    bound.sort_by_key(|(rank, at, _)| (*rank, *at));
+    let sheets: Vec<String> = bound
+        .into_iter()
+        .map(|(_, _, binding)| binding.sheet.clone())
         .collect();
     if sheets.is_empty() {
         return Err(AppError::Report(vec![
@@ -90,8 +103,14 @@ pub fn stage_sheet(db: &TrainsDb, sheet: &str) -> AppResult<HeldImport> {
     book::deserialise(&mut workbook, index, path)?;
     let (grid, _) = grid::from_master(&workbook.sheet_collection_no_check()[index])?;
 
-    let template = kinds::template(kind);
-    let plan = recognise::rebind(&template, &header_plan(&grid));
+    let header = header_plan(&grid);
+    let names: Vec<String> = header
+        .columns
+        .iter()
+        .map(|column| column.header.clone())
+        .collect();
+    let template = kinds::template(kind, &names);
+    let plan = recognise::rebind(&template, &header);
     if !plan.missing_required().is_empty() {
         let wanted = template
             .plan
@@ -280,6 +299,7 @@ pub(super) mod tests {
             mode: MasterMode::Snapshot,
             key: None,
             aliases: Vec::new(),
+            auto: false,
         }
     }
 
@@ -294,6 +314,7 @@ pub(super) mod tests {
                 binding("Bestand", SheetKind::RadsatzBestand),
             ],
             import_run: None,
+            scan: None,
         })
         .unwrap();
         db
@@ -588,6 +609,7 @@ pub(super) mod tests {
             file: Some(file.to_string_lossy().into_owned()),
             bindings: vec![binding("Einbauliste", SheetKind::RadsatzEinbau)],
             import_run: None,
+            scan: None,
         })
         .unwrap();
 

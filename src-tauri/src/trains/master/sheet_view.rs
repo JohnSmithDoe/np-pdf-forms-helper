@@ -117,7 +117,7 @@ fn build(db: &TrainsDb, sheet: &str, out: &mut MasterSheetView) -> AppResult<()>
     let index = book::index(&book::names(&workbook), sheet)?;
     book::deserialise(&mut workbook, index, path)?;
     let header = view::header_row(&workbook.sheet_collection_no_check()[index]);
-    let fields = view::fields(&header, view::template_of(binding, db).as_ref());
+    let fields = view::fields(&header, view::template_of(binding, db, &header).as_ref());
     let grain = Grain::of(&fields);
 
     let named: HashMap<u32, &str> = header

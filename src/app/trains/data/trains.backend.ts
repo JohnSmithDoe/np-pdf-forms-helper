@@ -56,6 +56,7 @@ export type TrainsCommand =
   | { command: 'create_trains_export'; payload: Record<string, never> }
   | { command: 'get_master'; payload: Record<string, never> }
   | { command: 'pick_master_file'; payload: Record<string, never> }
+  | { command: 'reset_master_bindings'; payload: Record<string, never> }
   | { command: 'save_master'; payload: { settings: MasterSettings } }
   | { command: 'refresh_master'; payload: Record<string, never> }
   | { command: 'get_master_sheet'; payload: { sheet: string } }
@@ -232,6 +233,10 @@ export class TrainsBackend {
 
   pickMasterFile(): Promise<TrainsData> {
     return this.#call({ command: 'pick_master_file', payload: {} });
+  }
+
+  resetMasterBindings(): Promise<TrainsData> {
+    return this.#call({ command: 'reset_master_bindings', payload: {} });
   }
 
   saveMaster(settings: MasterSettings): Promise<TrainsData> {

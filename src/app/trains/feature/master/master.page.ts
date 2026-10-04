@@ -24,6 +24,19 @@
 // left before its last sheet is INCOMPLETE and says so, with „Fortsetzen“
 // walking only the sheets still open; checking a partial mirror against the
 // customer as if it were whole is the mistake the banner exists to prevent.
+//
+// The real master has 28 sheets, so a binding is ONE ROW — sheet, what it
+// imports, what refreshes it — and its selects open on demand. Five selects on
+// each of 28 sheets would make the list unreadable, and most bindings are
+// never edited by hand.
+//
+// Nobody has to bind anything: picking the file binds EVERY sheet by its
+// header row (Rust, `kinds::recognise`), and „Standardzuordnung“ restores
+// those defaults. A binding the user changes is marked `auto: false` here —
+// the page is the only place a hand edit happens — and its row says
+// „von Hand angepasst“, because that is exactly what a reset would throw away.
+// Reading the file costs seconds on the real master, which is why only the
+// pick, the reset and the import touch it; the busy overlay covers all three.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -31,6 +44,7 @@ import {
   Component,
   computed,
   inject,
+  signal,
 } from '@angular/core';
 import {
   IonBackButton,
@@ -40,6 +54,7 @@ import {
   IonHeader,
   IonIcon,
   IonItem,
+  IonItemGroup,
   IonLabel,
   IonList,
   IonListHeader,
@@ -53,7 +68,9 @@ import { Router, RouterLink } from '@angular/router';
 import { addIcons } from 'ionicons';
 import {
   addOutline,
+  chevronUpOutline,
   cloudDownloadOutline,
+  createOutline,
   eyeOutline,
   folderOpenOutline,
   refreshOutline,
@@ -88,12 +105,25 @@ const NO_KIND = '';
 interface KindOption {
   value: SheetKind;
   label: string;
+  short: string;
 }
 
 const KINDS: readonly KindOption[] = [
-  { value: 'wagenliste', label: 'Wagenliste (eine Zeile je Wagen)' },
-  { value: 'radsatzEinbau', label: 'Radsätze mit Einbauposition' },
-  { value: 'radsatzBestand', label: 'Radsätze ohne Einbauposition' },
+  {
+    value: 'wagenliste',
+    label: 'Wagenliste (eine Zeile je Wagen)',
+    short: 'Wagen',
+  },
+  {
+    value: 'radsatzEinbau',
+    label: 'Radsätze mit Einbauposition',
+    short: 'Radsätze mit Position',
+  },
+  {
+    value: 'radsatzBestand',
+    label: 'Radsätze ohne Einbauposition',
+    short: 'Radsätze ohne Position',
+  },
 ];
 
 @Component({
@@ -110,6 +140,7 @@ const KINDS: readonly KindOption[] = [
     IonHeader,
     IonIcon,
     IonItem,
+    IonItemGroup,
     IonLabel,
     IonList,
     IonListHeader,
@@ -134,6 +165,7 @@ export class TrainsMasterPage {
   protected readonly noKind = NO_KIND;
 
   protected readonly view = this.facade.master;
+  readonly #expanded = signal<number[]>([]);
   protected readonly settings = computed<MasterSettings>(
     () => this.view()?.settings ?? { bindings: [] }
   );
@@ -158,7 +190,9 @@ export class TrainsMasterPage {
   constructor() {
     addIcons({
       addOutline,
+      chevronUpOutline,
       cloudDownloadOutline,
+      createOutline,
       eyeOutline,
       folderOpenOutline,
       refreshOutline,
@@ -166,6 +200,32 @@ export class TrainsMasterPage {
       warningOutline,
     });
     void this.#reports.run(() => this.facade.loadMaster());
+  }
+
+  protected isExpanded(index: number): boolean {
+    return this.#expanded().includes(index);
+  }
+
+  protected toggle(index: number): void {
+    this.#expanded.update((open) =>
+      open.includes(index)
+        ? open.filter((entry) => entry !== index)
+        : [...open, index]
+    );
+  }
+
+  protected summary(binding: MasterBinding): string {
+    const kind = KINDS.find((option) => option.value === binding.kind);
+    const template = this.templates().find(
+      (candidate) => candidate.id === binding.templateId
+    );
+    return [
+      kind ? `importiert: ${kind.short}` : 'nur Ansicht',
+      template ? `aufgefrischt aus „${template.name}“` : undefined,
+      binding.auto ? undefined : 'von Hand angepasst',
+    ]
+      .filter(Boolean)
+      .join(' · ');
   }
 
   protected headersOf(sheet: string): string[] {
@@ -188,6 +248,18 @@ export class TrainsMasterPage {
     void this.#reports.run(() => this.facade.pickMasterFile());
   }
 
+  protected async onReset(): Promise<void> {
+    const edited = this.settings().bindings.some((binding) => !binding.auto);
+    if (edited) {
+      const confirmed = await this.#overlays.confirm(
+        'Standardzuordnung wiederherstellen? Von Hand angepasste Zuordnungen gehen verloren; jedes Blatt wird wieder nach seiner Kopfzeile zugeordnet.'
+      );
+      if (!confirmed) return;
+    }
+    this.#expanded.set([]);
+    await this.#reports.run(() => this.facade.resetMasterBindings());
+  }
+
   protected onAdd(): void {
     const bound = new Set(this.settings().bindings.map((b) => b.sheet));
     const binding: MasterBinding = {
@@ -195,11 +267,14 @@ export class TrainsMasterPage {
       templateId: this.templates()[0]?.id ?? '',
       mode: 'snapshot',
       aliases: [],
+      auto: false,
     };
+    this.#expanded.set([this.settings().bindings.length]);
     this.#save([...this.settings().bindings, binding]);
   }
 
   protected onRemove(index: number): void {
+    this.#expanded.set([]);
     this.#save(this.settings().bindings.filter((_, at) => at !== index));
   }
 
@@ -308,7 +383,7 @@ export class TrainsMasterPage {
   #update(index: number, change: (binding: MasterBinding) => MasterBinding) {
     this.#save(
       this.settings().bindings.map((binding, at) =>
-        at === index ? change(binding) : binding
+        at === index ? { ...change(binding), auto: false } : binding
       )
     );
   }

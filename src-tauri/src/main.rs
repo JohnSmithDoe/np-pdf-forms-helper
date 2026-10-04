@@ -93,6 +93,7 @@ fn main() {
             trains::commands::save_master,
             trains::commands::refresh_master,
             trains::commands::get_master_sheet,
+            trains::commands::reset_master_bindings,
             trains::commands::start_master_import,
             trains::commands::stage_master_sheet,
             trains::commands::pick_import_folder,

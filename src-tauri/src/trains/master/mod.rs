@@ -16,6 +16,7 @@
 // only in `master.json`, bound to a kind there — no name from the customer's
 // file belongs in code.
 //
+//   bindings  every sheet bound by its headers; the header scan, cached per file version
 //   book      opening the workbook the one safe way (lazy, one sheet at a time)
 //   view      what the settings page needs from the workbook
 //   sheet_view  one bound sheet as the mirror holds it, built for display
@@ -23,6 +24,7 @@
 //   source    typing a filed document's cells for the master
 // ────────────────────────────────────────────────────────────────
 
+pub mod bindings;
 mod book;
 pub mod kinds;
 pub mod mirror;

@@ -571,9 +571,21 @@ pub fn pick_master_file(
     else {
         return Ok(TrainsData::nothing());
     };
-    let mut settings = state.trains().master().clone();
-    settings.file = Some(file.to_string_lossy().into_owned());
-    save_master(settings, state)
+    let mut db = state.trains();
+    let mut settings = db.master().clone();
+    let file = file.to_string_lossy().into_owned();
+    let changed = settings.file.as_deref() != Some(file.as_str());
+    settings.file = Some(file);
+    db.save_master(settings)?;
+    master::bindings::sync(&mut db, changed)?;
+    Ok(TrainsData::nothing().master(master::view(db.master())))
+}
+
+#[tauri::command(async)]
+pub fn reset_master_bindings(state: State<'_, AppState>) -> AppResult<TrainsData> {
+    let mut db = state.trains();
+    master::bindings::sync(&mut db, true)?;
+    Ok(TrainsData::nothing().master(master::view(db.master())))
 }
 
 #[tauri::command(async)]
@@ -581,6 +593,7 @@ pub fn save_master(settings: MasterSettings, state: State<'_, AppState>) -> AppR
     let mut db = state.trains();
     let settings = MasterSettings {
         import_run: db.master().import_run.clone(),
+        scan: db.master().scan.clone(),
         ..settings
     };
     db.save_master(settings.clone())?;

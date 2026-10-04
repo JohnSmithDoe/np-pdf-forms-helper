@@ -145,7 +145,8 @@ across two documents, two profiles. Trains: Wagen with computed UIC check digits
 roles, a sender-scoped Radsatz alias, a closed Einbau beside the open ones, an Instandhaltung with no
 date and one against a Radsatz — the cases every screen needs one of and no clean file produces.
 Master: three bindings (a Wagen list and a Radsatz list with a kind, a refresh-only sheet without
-one), an import run left HALF done so both „unvollständig“ banners show, and two hand-written sheet
+one, edited by hand so „Standardzuordnung“ visibly undoes it — the defaults are seeded as
+`masterDefaults`, because recognising a sheet by its header row is Rust's), an import run left HALF done so both „unvollständig“ banners show, and two hand-written sheet
 views — the third sheet has none, so the fake's headers-only answer has a sheet to show on.
 
 Five commands are answered in `dev/main.mock.ts` rather than by the fake, always for the same

@@ -46,6 +46,9 @@
 // which is all `get_master` reads of it — and `seed.masterPicker` the path the
 // file picker returns. `refresh_master` writes nothing and only reports one line
 // per binding: snapshot, feed, typing and formulas are `cargo test`'s.
+// Recognising a sheet by its header row is `kinds::recognise`'s too, so the
+// defaults are SEEDED (`seed.masterDefaults`): a picked new path and
+// `reset_master_bindings` apply them, the same path keeps what is bound.
 //
 // The master IMPORT is faked at the same depth. `start_master_import` empties
 // the facts and records the run over the bindings that have a `kind`;
@@ -382,6 +385,7 @@ export interface FakeMasterSettings {
     mode: 'snapshot' | 'feed';
     key?: string;
     aliases: { master: string; source: string }[];
+    auto?: boolean;
   }[];
   importRun?: { startedAt: string; sheets: string[]; done: string[] };
 }
@@ -424,6 +428,8 @@ export interface FakeSeed {
   masterSheets?: FakeMasterSheet[];
   /** What the master file picker hands back. `null` = cancelled. */
   masterPicker?: string | null;
+  /** The bindings recognition would produce — `pick_master_file` on a new path and `reset_master_bindings` apply them. */
+  masterDefaults?: FakeMasterSettings['bindings'];
   /** What `stage_master_sheet` stages, whatever sheet; falls back to `document`, then `staging`. */
   masterStaging?: FakeStaging | null;
   /** What `get_master_sheet` answers per sheet name. */
@@ -485,6 +491,7 @@ export function install(seed: FakeSeed): void {
     master: FakeMasterSettings;
     masterSheets: FakeMasterSheet[];
     masterPicker: string | null;
+    masterDefaults: FakeMasterSettings['bindings'];
     masterStaging: FakeStaging | null;
     masterSheetViews: Record<string, FakeMasterSheetView>;
     committed: number[];
@@ -512,6 +519,7 @@ export function install(seed: FakeSeed): void {
     master: seed.master ?? { bindings: [] },
     masterSheets: seed.masterSheets ?? [],
     masterPicker: seed.masterPicker ?? null,
+    masterDefaults: seed.masterDefaults ?? [],
     masterStaging: seed.masterStaging ?? null,
     masterSheetViews: seed.masterSheetViews ?? {},
     committed: [],
@@ -928,7 +936,17 @@ export function install(seed: FakeSeed): void {
 
     pick_master_file: () => {
       if (!state.masterPicker) return {};
-      state.master = { ...state.master, file: state.masterPicker };
+      const fresh = state.master.file !== state.masterPicker;
+      state.master = {
+        ...state.master,
+        file: state.masterPicker,
+        bindings: fresh ? copy(state.masterDefaults) : state.master.bindings,
+      };
+      return masterView();
+    },
+
+    reset_master_bindings: () => {
+      state.master = { ...state.master, bindings: copy(state.masterDefaults) };
       return masterView();
     },
 

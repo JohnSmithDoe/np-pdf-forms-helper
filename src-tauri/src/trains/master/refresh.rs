@@ -277,8 +277,10 @@ mod tests {
                 mode: MasterMode::Snapshot,
                 key: None,
                 aliases: vec![],
+                auto: false,
             }],
             import_run: None,
+            scan: None,
         })
         .unwrap();
     }
@@ -415,11 +417,17 @@ mod tests {
         let mut db = TrainsDb::load(&folder.config()).unwrap();
         let file = master(&folder);
         bound(&mut db, &file);
+        crate::trains::master::bindings::sync(&mut db, false).unwrap();
 
         let view = view(db.master());
         assert_eq!(view.sheets, ["Überblick", "Telematik"]);
-        assert_eq!(view.headers.len(), 1);
-        assert_eq!(view.headers[0].headers, ["Asset", "Anbaudatum", "Stadt"]);
+        assert_eq!(
+            view.headers.len(),
+            2,
+            "the unbound sheet was bound by default"
+        );
+        let telematik = view.headers.iter().find(|sheet| sheet.name == "Telematik");
+        assert_eq!(telematik.unwrap().headers, ["Asset", "Anbaudatum", "Stadt"]);
         assert_eq!(view.problem, None);
     }
 

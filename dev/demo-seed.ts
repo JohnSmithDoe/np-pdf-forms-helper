@@ -48,7 +48,9 @@
 // "nur fehlerfreie Zeilen" default cannot be seen with a clean file.
 //
 // THE MASTER is bound three ways — a Wagen list and a Radsatz list with a kind,
-// and a refresh-only sheet without one — and its import run is left HALF done,
+// and a refresh-only sheet without one, edited by hand so „von Hand angepasst“
+// shows and „Standardzuordnung“ visibly undoes it (`masterDefaults` makes it
+// view-only again) — and its import run is left HALF done,
 // so the „unvollständig“ banners show. The sheet views are written out by hand
 // like `demoDocument()`'s groups: building them is `sheet_view.rs`'s, and a
 // TypeScript projection here would be a second one. The Werkstattliste has no
@@ -1138,6 +1140,7 @@ const master: FakeMasterSettings = {
       kind: 'wagenliste',
       mode: 'snapshot',
       aliases: [],
+      auto: true,
     },
     {
       sheet: 'Radsätze aktuell',
@@ -1145,12 +1148,14 @@ const master: FakeMasterSettings = {
       kind: 'radsatzEinbau',
       mode: 'snapshot',
       aliases: [],
+      auto: true,
     },
     {
       sheet: 'Werkstattliste',
       templateId: 'tpl-bremen',
       mode: 'feed',
       aliases: [],
+      auto: false,
     },
   ],
   importRun: {
@@ -1159,6 +1164,17 @@ const master: FakeMasterSettings = {
     done: ['Alle Wagen'],
   },
 };
+
+const masterDefaults: FakeMasterSettings['bindings'] = [
+  ...master.bindings.slice(0, 2),
+  {
+    sheet: 'Werkstattliste',
+    templateId: '',
+    mode: 'snapshot',
+    aliases: [],
+    auto: true,
+  },
+];
 
 const masterSheetViews: Record<string, FakeMasterSheetView> = {
   'Alle Wagen': {
@@ -1225,6 +1241,7 @@ export const DEMO_SEED: FakeSeed = {
   events,
   templates,
   master,
+  masterDefaults,
   masterSheetViews,
   masterPicker: 'C:\\Daten\\Wagenmut Übersicht.xlsx',
   masterSheets: [

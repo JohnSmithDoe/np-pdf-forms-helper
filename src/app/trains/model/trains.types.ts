@@ -94,6 +94,12 @@ export interface MasterBinding {
   mode: MasterMode;
   key?: string;
   aliases: MasterAlias[];
+  auto: boolean;
+}
+
+export interface MasterScan {
+  modified: number;
+  sheets: MasterSheet[];
 }
 
 export interface MasterImportRun {
@@ -106,6 +112,7 @@ export interface MasterSettings {
   file?: string;
   bindings: MasterBinding[];
   importRun?: MasterImportRun;
+  scan?: MasterScan;
 }
 
 export interface MasterSheet {
