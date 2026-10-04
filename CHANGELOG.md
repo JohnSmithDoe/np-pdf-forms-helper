@@ -1,3 +1,15 @@
+### Version 2.0.1
+
+- New: the customer's master file (Master-Datei)
+  - Pick it once, it is copied into the app and cleaned: empty rows below the data cut, numbers and dates stored as text retyped where unambiguous, edge whitespace trimmed — formulas inside the data and row order are never touched
+  - Kept in versions; the current one is pinned on top of the Dokumente list
+- New: „Master aktualisieren“ on every document, once a master file exists
+  - Wizard: choose sheets, match columns, preview every changed cell, approve, summary
+  - Always incremental: rows are matched by key, existing rows updated, nothing deleted; new rows only where switched on
+  - Every sheet the document's data would change is pre-selected
+  - The result is saved as the next version of the master file
+- „Importieren“ and the status chip on the Dokumente list are hidden for now
+
 ### Version 2.0.0
 
 - New desktop shell: Tauri 2 with a Rust backend replaces Electron

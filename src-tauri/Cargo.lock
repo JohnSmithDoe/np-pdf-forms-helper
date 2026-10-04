@@ -2441,7 +2441,7 @@ dependencies = [
 
 [[package]]
 name = "np-office-document-helper"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "indexmap 2.14.0",
  "lopdf",
