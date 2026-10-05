@@ -164,8 +164,27 @@ test.describe('Zug-Import', () => {
     await expect(page.getByTestId('import-commit')).toHaveCount(0);
   });
 
+  test('ohne npdh.full zeigt das Dashboard nur Bereinigen und Dokumente', async ({
+    page,
+  }) => {
+    await installFakeBackend(page);
+    await page.goto('/#/trains');
+
+    const dashboard = page.locator('app-page-trains-dashboard');
+    await expect(
+      dashboard.getByRole('button', { name: 'Bereinigen', exact: true })
+    ).toBeVisible();
+    await expect(dashboard.locator('ion-card')).toHaveCount(2);
+    await expect(
+      dashboard.getByRole('button', { name: 'Dokumente', exact: true })
+    ).toBeVisible();
+    await expect(page.getByTestId('trains-export')).toHaveCount(0);
+  });
+
   test('ein Export meldet sich mit seinem Ordner', async ({ page }) => {
     await installFakeBackend(page);
+    // „Export erstellen“ is behind the full-app toggle.
+    await page.addInitScript(() => localStorage.setItem('npdh.full', 'on'));
     await page.goto('/#/trains');
     await page.getByTestId('trains-export').click();
     await expect(

@@ -27,7 +27,11 @@
 // unfinished and hidden from the UI until `npdh.master` is `on`. It has no
 // setter on purpose — the e2e and the developer set the key by hand.
 // `importEnabled` (`npdh.import`) is the same kind of switch for the document
-// list's „Importieren“ and its bereinigt/importiert chip, hidden for now.
+// list's „Importieren“ and its bereinigt/importiert chip, and for the batch
+// summary's „Importieren“ / „Alle importieren“, hidden for now.
+// `fullEnabled` (`npdh.full`) likewise: the app is scaled back to Bereinigen
+// and Dokumente, and every other dashboard tile plus „Export erstellen“ waits
+// behind it.
 // ────────────────────────────────────────────────────────────────
 
 import { Injectable, signal } from '@angular/core';
@@ -37,6 +41,7 @@ const VIEW_MODE_KEY = 'npdh.viewMode';
 const DEFAULT_VIEW_MODE: ViewMode = 'wizard';
 const MASTER_KEY = 'npdh.master';
 const IMPORT_KEY = 'npdh.import';
+const FULL_KEY = 'npdh.full';
 
 function isViewMode(value: unknown): value is ViewMode {
   return value === 'expert' || value === 'wizard';
@@ -68,6 +73,8 @@ export class SettingsService {
   readonly masterEnabled = read(MASTER_KEY) === 'on';
 
   readonly importEnabled = read(IMPORT_KEY) === 'on';
+
+  readonly fullEnabled = read(FULL_KEY) === 'on';
 
   setViewMode(mode: ViewMode): void {
     this.#viewMode.set(mode);

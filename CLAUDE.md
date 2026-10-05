@@ -229,7 +229,9 @@ than a second menu — `counts` from the backend for Wagen, Radsätze and Instan
 list is paged, so its loaded length would lie), and the three partner roles derived from the loaded
 list, because nothing counts them server-side. The spokes therefore take `backHref="/trains"` on the
 list shell, which replaces the burger with a back button: a screen reached from a hub needs the way
-up, not the menu that no longer links to it.
+up, not the menu that no longer links to it. **The app is scaled back for now:** without the
+`npdh.full` switch (`SettingsService.fullEnabled`) the dashboard shows only Bereinigen and Dokumente,
+and „Export erstellen“ is hidden too — the other screens still exist and are reachable by URL.
 
 **Getting a file in is TWO walks, Bereinigen and Import, and the URLs say which.** See
 [docs/decisions.md](docs/decisions.md), "Bereinigen und Import getrennt".
@@ -243,7 +245,7 @@ up, not the menu that no longer links to it.
   the template's readings learned — and the batch ends at `clean/summary`. An unknown file goes to
   `clean/template`, the mapper, whose only exit is a saved template; the hub then rescans that file.
   Nothing on this side writes an entity, and the header chip says „Bereinigen“.
-- **`/trains/documents` is the ledger** and the import's way in, beside the batch summary. Its „Importieren“ and bereinigt/importiert chip are hidden for now behind the `npdh.import` switch (`SettingsService.importEnabled`), like `npdh.master`.
+- **`/trains/documents` is the ledger** and the import's way in, beside the batch summary. Its „Importieren“ and bereinigt/importiert chip — and the batch summary's „Importieren“ / „Alle importieren“ — are hidden for now behind the `npdh.import` switch (`SettingsService.importEnabled`), like `npdh.master`.
 - **`/trains/import/*` walks ONE document by type** — `partners` → `wagons` → `wheelsets` →
   `entries` → `summary` → `result`, the chip saying „Import ins Schattensystem“. One decision per
   entity group (`entities::group` in Rust), a declined Wagen dropping its rows, nothing written until

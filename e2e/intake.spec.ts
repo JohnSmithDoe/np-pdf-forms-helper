@@ -319,7 +319,9 @@ test.describe('Bereinigen', () => {
     await expect(batch.getByTestId('batch-row')).toContainText(
       '„auftraege.xlsx“ wurde bereinigt'
     );
-    await expect(batch.getByTestId('batch-import')).toBeVisible();
+    // „Importieren“ and „Alle importieren“ are behind `npdh.import`.
+    await expect(batch.getByTestId('batch-import')).toHaveCount(0);
+    await expect(batch.getByTestId('batch-import-all')).toHaveCount(0);
     await expect(page.locator('ion-modal')).toHaveCount(0);
     const calls = (await recordedCalls(page)).map((call) => call.command);
     expect(calls).not.toContain('commit_document');

@@ -10,8 +10,12 @@
   (next)="onDone()"
 >
   <ion-note>
-    Die bereinigten Dateien liegen jetzt im Programm. Ins Schattensystem kommen
-    sie erst mit „Importieren“ — jetzt oder später unter Dokumente.
+    @if (importEnabled) {
+      Die bereinigten Dateien liegen jetzt im Programm. Ins Schattensystem
+      kommen sie erst mit „Importieren“ — jetzt oder später unter Dokumente.
+    } @else {
+      Die bereinigten Dateien liegen jetzt im Programm, unter Dokumente.
+    }
   </ion-note>
 
   <ion-list lines="full" data-testid="batch-list">
@@ -53,18 +57,20 @@
               >
                 Bereinigte Datei
               </ion-button>
-              @if (!dokument.importiertAm) {
-                <ion-button
-                  size="small"
-                  fill="clear"
-                  color="success"
-                  (click)="onImport(dokument.id)"
-                  data-testid="batch-import"
-                >
-                  Importieren
-                </ion-button>
-              } @else {
-                <ion-note>importiert am {{ dokument.importiertAm }}</ion-note>
+              @if (importEnabled) {
+                @if (!dokument.importiertAm) {
+                  <ion-button
+                    size="small"
+                    fill="clear"
+                    color="success"
+                    (click)="onImport(dokument.id)"
+                    data-testid="batch-import"
+                  >
+                    Importieren
+                  </ion-button>
+                } @else {
+                  <ion-note>importiert am {{ dokument.importiertAm }}</ion-note>
+                }
               }
             </p>
           }
@@ -76,7 +82,7 @@
     }
   </ion-list>
 
-  @if (facade.importable().length) {
+  @if (importEnabled && facade.importable().length) {
     <ion-button
       wizardFooter
       fill="clear"

@@ -7,6 +7,7 @@
 //
 // Each filed file offers its folder, its two copies and its own „Importieren“; „Alle
 // importieren“ walks the filed-but-not-imported ones one document at a time.
+// Both are behind `importEnabled` (`npdh.import`), like the document list's.
 // A file the app already owned before this batch is listed with that document,
 // so a re-dropped folder still leads to what was made of it.
 //
@@ -24,6 +25,7 @@ import {
   IonList,
   IonNote,
 } from '@ionic/angular/standalone';
+import { SettingsService } from '../../../@shared/data/settings/settings.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { WizardShellComponent } from '../../../@shared/ui/wizard-shell/wizard-shell.component';
@@ -60,6 +62,7 @@ const OUTCOME: Record<SummaryRow['outcome'], Chip> = {
 })
 export class CleanBatchPage {
   protected readonly facade = inject(IntakeFacade);
+  protected readonly importEnabled = inject(SettingsService).importEnabled;
   readonly #walk = inject(ImportWalkFacade);
   readonly #reports = inject(ReportPresenterService);
   readonly #router = inject(Router);

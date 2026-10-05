@@ -4,21 +4,22 @@
       <ion-menu-button aria-label="Menü öffnen" />
     </ion-buttons>
     <ion-title>Schattensystem</ion-title>
-    <ion-buttons slot="end">
-      <ion-button (click)="onExport()" data-testid="trains-export">
-        <ion-icon slot="start" name="cloud-upload-outline" aria-hidden="true" />
-        Export erstellen
-      </ion-button>
-    </ion-buttons>
+    @if (fullEnabled) {
+      <ion-buttons slot="end">
+        <ion-button (click)="onExport()" data-testid="trains-export">
+          <ion-icon
+            slot="start"
+            name="cloud-upload-outline"
+            aria-hidden="true"
+          />
+          Export erstellen
+        </ion-button>
+      </ion-buttons>
+    }
   </ion-toolbar>
 </ion-header>
 
 <ion-content class="ion-padding">
-  <p class="dashboard__lead">
-    Der eigene Datenbestand zu den Wagen: was aus den Dateien der Absender
-    übernommen wurde, neben dem führenden System und ohne es zu verändern.
-  </p>
-
   @if (openSheets().length) {
     <ion-list data-testid="dashboard-master-open">
       <ion-item lines="none">
@@ -78,11 +79,4 @@
       </ion-card>
     }
   </div>
-
-  @if (loaded()) {
-    <ion-note class="dashboard__hint">
-      Nur die Wagennummer ist gesichert — alles andere ist übernommen, wie es in
-      der Datei stand.
-    </ion-note>
-  }
 </ion-content>

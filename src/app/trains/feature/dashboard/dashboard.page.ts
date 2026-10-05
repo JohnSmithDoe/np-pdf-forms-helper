@@ -40,6 +40,8 @@
 //
 // The master tile and that banner exist only while `masterEnabled` is on; the
 // master workbook is unfinished.
+// Without `fullEnabled` the page is scaled back to Bereinigen and Dokumente:
+// every other tile and „Export erstellen“ are hidden, not removed.
 // „Master-Datei“ right after Dokumente is NOT that tile: it takes the customer's
 // workbook in as a file (`/trains/master-file`) and is always there.
 // ────────────────────────────────────────────────────────────────
@@ -66,7 +68,6 @@ import {
   IonLabel,
   IonList,
   IonMenuButton,
-  IonNote,
   IonTitle,
   IonToolbar,
 } from '@ionic/angular/standalone';
@@ -122,7 +123,6 @@ interface DashboardTile {
     IonHeader,
     IonIcon,
     IonMenuButton,
-    IonNote,
     IonTitle,
     IonToolbar,
   ],
@@ -133,8 +133,7 @@ export class TrainsDashboardPage {
   readonly #router = inject(Router);
   readonly #reports = inject(ReportPresenterService);
   readonly #masterEnabled = inject(SettingsService).masterEnabled;
-
-  protected readonly loaded = this.#facade.loaded;
+  protected readonly fullEnabled = inject(SettingsService).fullEnabled;
 
   protected readonly importTile: DashboardTile = {
     route: '/trains/clean',
@@ -153,7 +152,13 @@ export class TrainsDashboardPage {
     subtitle: 'Import, Ansicht, Kopie',
   };
 
-  protected readonly tiles = computed<DashboardTile[]>(() => {
+  protected readonly tiles = computed<DashboardTile[]>(() =>
+    this.fullEnabled
+      ? this.#allTiles()
+      : this.#allTiles().filter((tile) => tile.route === '/trains/documents')
+  );
+
+  readonly #allTiles = computed<DashboardTile[]>(() => {
     const counts = this.#facade.counts();
     const loaded = this.#facade.loaded();
     return [
