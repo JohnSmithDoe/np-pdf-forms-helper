@@ -841,6 +841,8 @@ Vorlage, das `RSmonitoring` mangels Bindung nicht war.
   der Vorlage trägt, wird ohne Klick ihr Blatt, mit Schlüssel `Radsatz ID` ← `RadsatzID`
   (`bindings::default`). Kein Blattname im Code — der steht nur in `master.json`. Gegen die echte Master
   geprüft: genau `RSmonitoring`; `nodepit` fehlt das Einbaudatum, `aktuelleNodepit` die Wagennummer.
-  Wirkt bei neuen Bindungen — frische Installation oder „Standardzuordnung“; eine bestehende Bindung
-  bleibt, wie sie ist.
+  Wirkt auch auf bestehende Installationen: jede Bindung, die niemand angefasst hat (`auto`), wird bei
+  jedem `sync` aus der gespeicherten Kopfzeile neu abgeleitet — eine bessere Vorgabe in einem Update
+  erreicht sie also. Eine von Hand geänderte Bindung (`auto: false`, Masterseite oder „Merken“) bleibt,
+  wie sie ist.
 

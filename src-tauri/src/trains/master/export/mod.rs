@@ -405,9 +405,12 @@ mod tests {
         filed(folder, &mut db, headers, "Neuhof");
         crate::testing::client_master(&mut db, &file);
         crate::trains::master::bindings::sync(&mut db, false).unwrap();
+        // Shaped by hand from here on, as the app marks every hand change, or
+        // the next sync would derive them again.
         let mut settings = db.master().clone();
         for binding in &mut settings.bindings {
             binding.kind = None;
+            binding.auto = false;
         }
         db.save_master(settings).unwrap();
         (db, file)

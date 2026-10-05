@@ -4,8 +4,12 @@
 // and as export source the one template whose mapped headers it carries
 // (`recognise::matching`, and only when exactly one does). A sheet no kind
 // claims is bound view-only — it still gets a sheet view, it is just not
-// imported. What the user changes by hand stays: `sync` only ADDS bindings for
-// sheets not bound yet, and `auto` marks the ones nobody touched.
+// imported. What the user changes by hand stays: `auto` marks the bindings
+// nobody touched, and only those are re-derived — on EVERY `sync`, from the
+// stored header row, so a better default in a program update reaches an
+// existing install and not only a fresh one. A sheet not bound yet is added;
+// a binding with `auto: false` is never rewritten. The file is written only
+// when a derivation actually changed.
 //
 // A shipped template may know its master sheet better (`builtin::master_hint`):
 // headers the master spells differently are read back to the template's
@@ -41,7 +45,8 @@ use crate::error::AppResult;
 use crate::trains::builtin;
 use crate::trains::db::TrainsDb;
 use crate::trains::model::{
-    ColumnBinding, FieldKind, ImportTemplate, MasterAlias, MasterBinding, MasterScan, MasterSheet,
+    ColumnBinding, FieldKind, ImportTemplate, MasterAlias, MasterBinding, MasterScan,
+    MasterSettings, MasterSheet,
 };
 use crate::trains::recognise;
 
@@ -76,7 +81,7 @@ pub fn sync(db: &mut TrainsDb, reset: bool) -> AppResult<()> {
         .is_some_and(|scan| scan.modified == modified)
         && prepare::copy_path(db, path).is_file();
     if fresh && !reset {
-        return Ok(());
+        return rederive(db, settings);
     }
 
     let scan = match settings.scan.take() {
@@ -89,18 +94,45 @@ pub fn sync(db: &mut TrainsDb, reset: bool) -> AppResult<()> {
     if reset {
         settings.bindings.clear();
     }
-    let templates = db.templates();
+    settings.scan = Some(scan);
+    let changed = derive(&mut settings, &db.templates());
+    if changed || !fresh || reset {
+        db.save_master(settings)?;
+    }
+    Ok(())
+}
+
+fn rederive(db: &mut TrainsDb, mut settings: MasterSettings) -> AppResult<()> {
+    if derive(&mut settings, &db.templates()) {
+        db.save_master(settings)?;
+    }
+    Ok(())
+}
+
+fn derive(settings: &mut MasterSettings, templates: &[ImportTemplate]) -> bool {
+    let Some(scan) = settings.scan.as_ref() else {
+        return false;
+    };
+    let mut changed = false;
     for sheet in &scan.sheets {
-        if settings
+        let derived = default(sheet, templates);
+        match settings
             .bindings
-            .iter()
-            .all(|bound| bound.sheet != sheet.name)
+            .iter_mut()
+            .find(|bound| bound.sheet == sheet.name)
         {
-            settings.bindings.push(default(sheet, &templates));
+            Some(bound) if bound.auto && *bound != derived => {
+                *bound = derived;
+                changed = true;
+            }
+            Some(_) => {}
+            None => {
+                settings.bindings.push(derived);
+                changed = true;
+            }
         }
     }
-    settings.scan = Some(scan);
-    db.save_master(settings)
+    changed
 }
 
 pub fn default(sheet: &MasterSheet, templates: &[ImportTemplate]) -> MasterBinding {
@@ -303,6 +335,51 @@ mod tests {
         assert_eq!(binding.template_id, "builtin:radsatz-monitoring");
         assert_eq!(binding.key.as_deref(), Some("RadsatzID"));
         assert!(binding.aliases.is_empty());
+    }
+
+    // A binding derived by an older program — no template, no key — is derived
+    // again on the next sync, without the file being rescanned; one the user
+    // changed is left exactly as it is.
+    #[test]
+    fn an_untouched_binding_is_derived_again_and_a_hand_set_one_is_kept() {
+        let folder = TempDir::new("bindings-rederive");
+        let file = workbook(
+            &folder,
+            "Master.xlsx",
+            &[
+                (
+                    "Monitoring",
+                    &[&[
+                        "Wagennr.",
+                        "Radsatz ID",
+                        "Radsatznummer",
+                        "Einbaudatum NACH letzter IS2/3",
+                    ]],
+                ),
+                ("Telematik", &[&["Asset", "Anbaudatum"]]),
+            ],
+        );
+        let mut db = TrainsDb::load(&folder.config()).unwrap();
+        crate::testing::client_master(&mut db, &file);
+        sync(&mut db, false).unwrap();
+
+        let mut settings = db.master().clone();
+        let stale = &mut settings.bindings[0];
+        stale.template_id = String::new();
+        stale.key = None;
+        stale.aliases.clear();
+        let hand = &mut settings.bindings[1];
+        hand.template_id = String::new();
+        hand.auto = false;
+        db.save_master(settings).unwrap();
+
+        sync(&mut db, false).unwrap();
+        let bindings = &db.master().bindings;
+        assert_eq!(bindings[0].template_id, "builtin:radsatz-monitoring");
+        assert_eq!(bindings[0].key.as_deref(), Some("Radsatz ID"));
+        assert!(bindings[0].auto);
+        assert_eq!(bindings[1].template_id, "", "hand-set, kept");
+        assert!(!bindings[1].auto);
     }
 
     // A sheet missing one of the template's columns stays unbound, respelling
