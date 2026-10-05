@@ -4,20 +4,17 @@
 // (`bindings::sync`, one `stat` when nothing changed), never by opening sheets —
 // the real master has 28 of them.
 //
-// A sheet is SUGGESTED — pre-ticked — when the document's data would change it,
-// and says why:
-//   • remembered  its binding names the document's template (or a user copy of
-//                 the same shipped one): the sheet the template's documents
-//                 live in. Only here are new rows APPENDED by default
-//   • affected    it has a key and shares at least one more column with the
-//                 document, so the incremental update writes into it. Only its
-//                 existing rows are updated: a project list must not grow every
-//                 Wagen of a telematics export
-// The KEY is the binding's, else the sheet's Wagen column (`kinds::wagen_column`
-// — Radsatz sheets name a Wagen per Radsatz, so not theirs), linked to the
-// document's Wagennummer column by an alias when the headers differ
-// (`TRANSPORTMITTELNR` ← `Asset`). Nothing is blocked: every sheet can be
-// ticked, and the preview shows every cell before anything is written.
+// A sheet is SUGGESTED — pre-ticked — only when its binding names the
+// document's template (or a user copy of the same shipped one): the sheet the
+// template's documents live in, and the only one where new rows are APPENDED
+// by default. The client updates ONE sheet per document, so a sheet that merely
+// shares a column (`TelematikProjekt` beside `Telematik`) is not pre-ticked any
+// more — it is still offered, and ticking it by hand updates its known rows.
+// Its KEY is worked out either way: the binding's, else the sheet's Wagen column
+// (`kinds::wagen_column` — Radsatz sheets name a Wagen per Radsatz, so not
+// theirs), linked to the document's Wagennummer column by an alias when the
+// headers differ (`TRANSPORTMITTELNR` ← `Asset`). Nothing is blocked, and the
+// preview shows every cell before anything is written.
 //
 // Suggested sheets come FIRST, the rest in workbook order: the real master has
 // 28 sheets and the two that matter must not be scrolled for.
@@ -103,27 +100,12 @@ pub fn start(db: &mut TrainsDb, dokument_id: &str) -> AppResult<MasterExportStar
                 })
                 .collect();
             let remembered = related.contains(&binding.template_id);
-            let affected = key.is_some() && !shared.is_empty();
-            let reason = if remembered {
-                Some(format!(
+            let reason = remembered.then(|| {
+                format!(
                     "Blatt der Vorlage „{}“ · neue Zeilen werden angehängt",
                     dokument.template_name
-                ))
-            } else if affected {
-                let named: Vec<String> = shared
-                    .iter()
-                    .take(3)
-                    .map(|header| format!("„{header}“"))
-                    .collect();
-                Some(format!(
-                    "betroffen über {}{} · Schlüssel „{}“ · nur vorhandene Zeilen",
-                    named.join(", "),
-                    if shared.len() > 3 { " …" } else { "" },
-                    key.as_deref().unwrap_or_default()
-                ))
-            } else {
-                None
-            };
+                )
+            });
             MasterExportSheet {
                 sheet: sheet.name.clone(),
                 kind: binding.kind,

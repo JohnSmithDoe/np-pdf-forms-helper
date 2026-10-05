@@ -802,3 +802,45 @@ Nebenbei, auf Martins Wunsch: „Importieren“ und der Status-Chip in der Dokum
 dem Schalter `npdh.import` versteckt (`SettingsService.importEnabled`); der Import-Weg selbst ist
 unverändert.
 
+## Vorausgewählt wird nur das Blatt der Vorlage (appended 2026-10-05)
+
+Ändert „Die Master-Aktualisierung ist immer inkrementell“ in einem Punkt. Entschieden mit Martin am
+2026-10-05, nach Rückmeldung des Kunden: je Dokument wird **ein** Blatt aktualisiert. Ein
+Telematik-Export bekam bisher `Telematik` und `TelematikProjekt` vorausgewählt; gewollt ist nur
+`Telematik`.
+
+- **Vorausgewählt ist nur noch das Blatt, dessen Bindung die Vorlage des Dokuments nennt**
+  (`export::suggest::start`, `suggested = remembered`). „Betroffen“ — Schlüssel plus eine gemeinsame
+  Spalte — wählt nichts mehr vor und trägt keinen Grund mehr.
+- **Angeboten wird weiter jedes Blatt**, und Schlüssel samt Alias werden für jedes ermittelt: wer ein
+  weiteres Blatt von Hand ankreuzt, bekommt dort die vorhandenen Zeilen aktualisiert wie bisher.
+
+## Spalten werden im Abgleich frei zugeordnet (appended 2026-10-05)
+
+Entschieden mit Martin am 2026-10-05. Anlass: `Radsatzmonitoring KNE ….xlsx` gehört in das Blatt
+`RSmonitoring`, aber die Datei heißt die Spalte `RadsatzID` und das Blatt `Radsatz ID`. Spalten werden
+nur über die gleiche Überschrift gepaart, also fand sich nichts — und gefragt wurde nur auf dem Blatt der
+Vorlage, das `RSmonitoring` mangels Bindung nicht war.
+
+- **Schritt 2 („Spalten abgleichen“) zeigt je Blatt jede Zuordnung** Dokument-Spalte → Blatt-Spalte, ob
+  über den Namen oder von Hand, und lässt beide Seiten ändern, eine entfernen („nicht übertragen“) oder
+  eine aus den freien Spalten hinzufügen. Auf jedem angekreuzten Blatt, nicht nur dem der Vorlage. Der
+  Ort ist der Assistent und keine Vorlagenseite: er ist mit der Kürzung der App der einzige erreichbare,
+  und gemerkt wird ohnehin an der Bindung des Blatts.
+- **Eine Dokument-Spalte landet in genau einer Blatt-Spalte.** Eine Spalte, die von Hand woandershin
+  zeigt oder „nicht übertragen“ ist, wird nicht zusätzlich über ihren Namen gepaart
+  (`paste::classify`); eine zweite Zuordnung derselben Spalte wird verworfen und gesagt. Mehrfach-
+  Zuordnungen (eine Spalte in zwei Blatt-Spalten) sind bewusst nicht vorgesehen.
+- **Der Schlüssel ist ein Paar**: Schlüsselspalte des Dokuments → Schlüsselspalte des Blatts, in einem
+  Schritt gepaart und zum Schlüssel gemacht. Für `RSmonitoring` ist das `RadsatzID` → `Radsatz ID` —
+  ein Radsatzblatt nennt einen Wagen je Radsatz, über die Wagennummer wäre der Schlüssel nie eindeutig.
+- **Formelspalten bleiben außen vor**: angeboten werden nur Spalten, die schon gepaart oder von Hand
+  gepflegt sind (`targets`).
+- **Radsatz-Monitoring bringt seine Master-Zuordnung mit** (`builtin::master_hint`): Schlüssel `RadsatzID`,
+  und `RadsatzID` heißt in der Master `Radsatz ID`. Ein Blatt, das unter dieser Schreibweise alle Spalten
+  der Vorlage trägt, wird ohne Klick ihr Blatt, mit Schlüssel `Radsatz ID` ← `RadsatzID`
+  (`bindings::default`). Kein Blattname im Code — der steht nur in `master.json`. Gegen die echte Master
+  geprüft: genau `RSmonitoring`; `nodepit` fehlt das Einbaudatum, `aktuelleNodepit` die Wagennummer.
+  Wirkt bei neuen Bindungen — frische Installation oder „Standardzuordnung“; eine bestehende Bindung
+  bleibt, wie sie ist.
+

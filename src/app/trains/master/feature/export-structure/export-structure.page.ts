@@ -10,18 +10,34 @@
 // column is open or a sheet cannot be written at all — leaving it would mean
 // the preview shows a sheet the export then refuses.
 //
-// The key select is offered on every sheet: the update is incremental and
-// matches rows by it, so a sheet without one — or with a key the document names
-// twice — cannot be written. Only a sheet that takes new rows asks about
+// The key is offered on every sheet as a PAIR — the document's identifier
+// column and the sheet's — because the update is incremental and matches rows
+// by it, so a sheet without one — or with a key the document names twice —
+// cannot be written. Choosing both sides pairs them and makes them the key in
+// one go; a half-chosen key is the page's draft, like a half-chosen pair. Only a sheet that takes new rows asks about
 // columns; a sheet that is only updated takes what it shares.
+//
+// „Zuordnung“ lists every pair of a ticked sheet — document column → master
+// column, by name or set by hand — and each side can be changed, a pair
+// removed („nicht übertragen“) or added from the columns still free. That is
+// how a column whose header is spelled differently in the master
+// (`RadsatzID` → `Radsatz ID`) is fed, on any sheet and not only the one that
+// asks. A new pair is sent once both sides are chosen; until then it is the
+// page's own draft, not the store's.
 //
 // Every select re-runs the dry run (the facade), so step three always shows
 // what these answers write.
 // ────────────────────────────────────────────────────────────────
 
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import {
+  IonButton,
   IonCard,
   IonCardContent,
   IonCardHeader,
@@ -32,15 +48,25 @@ import {
   IonLabel,
   IonList,
   IonListHeader,
+  IonNote,
   IonSelect,
   IonSelectOption,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { alertCircleOutline, warningOutline } from 'ionicons/icons';
+import {
+  alertCircleOutline,
+  arrowForwardOutline,
+  closeOutline,
+  warningOutline,
+} from 'ionicons/icons';
 import { ReportPresenterService } from '../../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { WizardShellComponent } from '../../../../@shared/ui/wizard-shell/wizard-shell.component';
-import { MasterExportFacade } from '../../../data';
+import {
+  MasterExportFacade,
+  type PairView,
+  type StructureView,
+} from '../../../data';
 import {
   EXPORT_PHASE,
   EXPORT_STEPS,
@@ -50,12 +76,19 @@ import {
 const IGNORE = '\u0000nicht-uebertragen';
 const NO_KEY = '\u0000kein-schluessel';
 
+interface Draft {
+  source?: string;
+  master?: string;
+}
+
 @Component({
   selector: 'app-page-export-structure',
   templateUrl: 'export-structure.page.html',
+  styleUrls: ['export-structure.page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BusyOverlayComponent,
+    IonButton,
     IonCard,
     IonCardContent,
     IonCardHeader,
@@ -66,6 +99,7 @@ const NO_KEY = '\u0000kein-schluessel';
     IonLabel,
     IonList,
     IonListHeader,
+    IonNote,
     IonSelect,
     IonSelectOption,
     WizardShellComponent,
@@ -81,9 +115,43 @@ export class ExportStructurePage {
   protected readonly appendLabels = APPEND_LABELS;
   protected readonly ignore = IGNORE;
   protected readonly noKey = NO_KEY;
+  protected readonly draft = signal<Record<string, Draft | undefined>>({});
+  protected readonly keyDraft = signal<Record<string, Draft | undefined>>({});
 
   constructor() {
-    addIcons({ alertCircleOutline, warningOutline });
+    addIcons({
+      alertCircleOutline,
+      arrowForwardOutline,
+      closeOutline,
+      warningOutline,
+    });
+  }
+
+  protected onPairSource(sheet: string, pair: PairView, event: Event): void {
+    const source = this.#value(event);
+    if (!source || source === pair.source) return;
+    void this.#reports.run(() => this.facade.pair(sheet, source, pair.master));
+  }
+
+  protected onPairMaster(sheet: string, pair: PairView, event: Event): void {
+    const master = this.#value(event);
+    if (!master || master === pair.master) return;
+    void this.#reports.run(() => this.facade.pair(sheet, pair.source, master));
+  }
+
+  protected onUnpair(sheet: string, source: string): void {
+    void this.#reports.run(() => this.facade.unpair(sheet, source));
+  }
+
+  protected onDraft(sheet: string, side: keyof Draft, event: Event): void {
+    const draft = { ...this.draft()[sheet], [side]: this.#value(event) };
+    const { source, master } = draft;
+    if (source && master) {
+      this.draft.update((drafts) => ({ ...drafts, [sheet]: undefined }));
+      void this.#reports.run(() => this.facade.pair(sheet, source, master));
+    } else {
+      this.draft.update((drafts) => ({ ...drafts, [sheet]: draft }));
+    }
   }
 
   protected onAnswer(sheet: string, column: string, event: Event): void {
@@ -94,11 +162,30 @@ export class ExportStructurePage {
     );
   }
 
-  protected onKey(sheet: string, event: Event): void {
+  protected onKey(view: StructureView, side: keyof Draft, event: Event): void {
+    const sheet = view.run.sheet;
     const value = this.#value(event);
-    void this.#reports.run(() =>
-      this.facade.setKey(sheet, value === NO_KEY ? undefined : value)
-    );
+    if (value === NO_KEY) {
+      this.keyDraft.update((drafts) => ({ ...drafts, [sheet]: undefined }));
+      void this.#reports.run(() => this.facade.setKey(sheet, undefined));
+      return;
+    }
+    const draft = {
+      source: view.keySource,
+      master: view.run.key,
+      ...this.keyDraft()[sheet],
+      [side]: value,
+    };
+    const { source, master } = draft;
+    if (source && master) {
+      if (source === view.keySource && master === view.run.key) return;
+      this.keyDraft.update((drafts) => ({ ...drafts, [sheet]: undefined }));
+      void this.#reports.run(() =>
+        this.facade.setIdentifier(sheet, source, master)
+      );
+    } else {
+      this.keyDraft.update((drafts) => ({ ...drafts, [sheet]: draft }));
+    }
   }
 
   protected async onBack(): Promise<void> {

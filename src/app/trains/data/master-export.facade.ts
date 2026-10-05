@@ -18,6 +18,14 @@
 // column, or „nicht übertragen“; a sheet that is only updated asks nothing. That is the conflict rule of
 // this wizard: a value difference is the update, a structure difference is a
 // question (docs/decisions.md, „Export in die Master-Datei“).
+//
+// Beyond the questions, every pair of a sheet can be set by hand (`pair`):
+// document column → master column, one place per document column, stored as
+// an alias. Removing a pair (`unpair`) means „nicht übertragen“, so a column of
+// the same name in the sheet does not quietly take it back. The key is set the
+// same way, as a pair (`setIdentifier`): the document's identifier column and
+// the sheet's, paired and made the key in one dry run — `RadsatzID` →
+// `Radsatz ID` on RSmonitoring, where no column of the same name exists.
 // ────────────────────────────────────────────────────────────────
 
 import { computed, inject, Injectable } from '@angular/core';
@@ -45,9 +53,21 @@ export interface ColumnAnswer {
   options: string[];
 }
 
+export interface PairView {
+  source: string;
+  master: string;
+  sources: string[];
+  masters: string[];
+}
+
 export interface StructureView {
   run: MasterExportSheetRun;
+  keySource: string | undefined;
+  keyMasters: string[];
   answers: ColumnAnswer[];
+  pairs: PairView[];
+  unpaired: string[];
+  untransferred: string[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -102,10 +122,25 @@ export class MasterExportFacade {
   });
 
   readonly structure = computed<StructureView[]>(() =>
-    (this.preview()?.sheets ?? []).map((run) => ({
-      run,
-      answers: this.#answers(run),
-    }))
+    (this.preview()?.sheets ?? []).map((run) => {
+      const paired = new Set(run.pairs.map((pair) => pair.source));
+      const unpaired = run.sources.filter((source) => !paired.has(source));
+      return {
+        run,
+        keySource: run.pairs.find((pair) => pair.master === run.key)?.source,
+        keyMasters: [
+          ...new Set([...run.pairs.map((pair) => pair.master), ...run.targets]),
+        ],
+        answers: this.#answers(run),
+        pairs: run.pairs.map((pair) => ({
+          ...pair,
+          sources: [pair.source, ...unpaired],
+          masters: [pair.master, ...run.targets],
+        })),
+        unpaired,
+        untransferred: unpaired.filter((source) => !run.open.includes(source)),
+      };
+    })
   );
 
   readonly unanswered = computed(() =>
@@ -150,16 +185,53 @@ export class MasterExportFacade {
     column: string,
     target: string | undefined
   ): Promise<void> {
+    if (target) await this.pair(sheet, column, target);
+    else await this.unpair(sheet, column);
+  }
+
+  async pair(sheet: string, source: string, master: string): Promise<void> {
     const choice = this.#choice(sheet);
     this.#store.choose({
       ...choice,
       aliases: [
-        ...choice.aliases.filter((alias) => alias.source !== column),
-        ...(target ? [{ master: target, source: column }] : []),
+        ...choice.aliases.filter(
+          (alias) => alias.source !== source && alias.master !== master
+        ),
+        { master, source },
       ],
+      ignored: choice.ignored.filter((ignored) => ignored !== source),
+    });
+    await this.run();
+  }
+
+  async setIdentifier(
+    sheet: string,
+    source: string,
+    master: string
+  ): Promise<void> {
+    const choice = this.#choice(sheet);
+    this.#store.choose({
+      ...choice,
+      key: master,
+      aliases: [
+        ...choice.aliases.filter(
+          (alias) => alias.source !== source && alias.master !== master
+        ),
+        { master, source },
+      ],
+      ignored: choice.ignored.filter((ignored) => ignored !== source),
+    });
+    await this.run();
+  }
+
+  async unpair(sheet: string, source: string): Promise<void> {
+    const choice = this.#choice(sheet);
+    this.#store.choose({
+      ...choice,
+      aliases: choice.aliases.filter((alias) => alias.source !== source),
       ignored: [
-        ...choice.ignored.filter((ignored) => ignored !== column),
-        ...(target ? [] : [column]),
+        ...choice.ignored.filter((ignored) => ignored !== source),
+        source,
       ],
     });
     await this.run();

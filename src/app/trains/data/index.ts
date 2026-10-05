@@ -41,6 +41,7 @@ export type {
 } from './import-walk.facade';
 export type {
   ColumnAnswer,
+  PairView,
   ExportSheetView,
   StructureView,
 } from './master-export.facade';

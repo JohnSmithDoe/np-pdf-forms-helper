@@ -59,7 +59,8 @@
 // and gets a `MasterExportRun` back — the dry run, or after writing a new
 // version of the client master, the same shape plus `target`. `file` is derived
 // in Rust: always the client master's current version, never set from here. Per sheet, `open` are the document columns that
-// still need an answer (an alias onto one of `targets`, or `ignored`);
+// still need an answer (an alias onto one of `targets`, or `ignored`); `pairs`
+// is what every fed master column takes, `sources` every document column;
 // `conflicts` are remembered answers the sheet no longer fits, already dropped.
 //
 // A staging says where it came from in `origin`: a file being mapped, a filed
@@ -211,6 +212,8 @@ export interface MasterExportSheetRun {
   aliases: MasterAlias[];
   ignored: string[];
   matched: string[];
+  pairs: MasterAlias[];
+  sources: string[];
   targets: string[];
   open: string[];
   conflicts: string[];

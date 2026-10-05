@@ -15,7 +15,10 @@
 // hand-kept column or by „nicht übertragen“ (`ignored`), both remembered on the
 // binding, so the next document of the template asks again only when the
 // structure moved. A remembered alias or key the sheet no longer has is
-// dropped and SAID (`conflicts`), never silently re-pointed. Only a sheet that
+// dropped and SAID (`conflicts`), never silently re-pointed. Beyond those
+// questions every pair can be set by hand — `pairs` is what each master column
+// is fed from, `sources` every document column — and a second pair for one
+// document column is dropped and said: one column lands in one place. Only a sheet that
 // takes new rows (`append` — the one the document's template belongs to) asks:
 // a sheet that is only UPDATED shares a few columns with the document by
 // design, and the rest of the document's columns simply do not go there. A
@@ -182,7 +185,16 @@ fn sheet(
         let has = |name: &str| header.iter().any(|own| own == name.trim());
         binding.aliases.clear();
         for alias in &choice.aliases {
-            if has(&alias.master) && table.column(alias.source.trim()).is_some() {
+            let doubled = binding
+                .aliases
+                .iter()
+                .find(|kept| kept.source.trim() == alias.source.trim());
+            if let Some(kept) = doubled {
+                out.conflicts.push(format!(
+                    "„{}“ ist schon „{}“ zugeordnet; „{}“ wurde verworfen.",
+                    alias.source, kept.master, alias.master
+                ));
+            } else if has(&alias.master) && table.column(alias.source.trim()).is_some() {
                 binding.aliases.push(alias.clone());
             } else {
                 out.conflicts.push(format!(
@@ -202,6 +214,7 @@ fn sheet(
             _ => None,
         };
 
+        binding.ignored = choice.ignored.clone();
         let structure = paste::structure(worksheet, &binding, table)?;
         binding.ignored = choice
             .ignored
@@ -218,6 +231,13 @@ fn sheet(
                 .collect();
         }
         out.matched = structure.matched;
+        out.pairs = structure.pairs;
+        out.sources = table
+            .headers
+            .iter()
+            .filter(|header| !header.is_empty())
+            .cloned()
+            .collect();
         out.targets = structure.hand;
 
         let before = grid::from_worksheet(worksheet)?;
@@ -414,11 +434,12 @@ mod tests {
 
     const HEADERS: [&str; 3] = ["Asset", "Anbaudatum", "Stadt"];
 
-    // The template's own sheet takes new rows; a sheet that merely shares a
-    // column is pre-ticked too, but only updated, its Wagen column linked to the
-    // document's by an alias; a sheet sharing nothing but the key is left.
+    // Only the template's own sheet is pre-ticked, and it takes new rows. A
+    // sheet that merely shares a column is offered unticked — the client
+    // updates one sheet per document — but its Wagen column is still linked to
+    // the document's by an alias, so ticking it by hand updates its rows.
     #[test]
-    fn the_template_sheet_appends_and_an_affected_sheet_only_updates() {
+    fn only_the_template_sheet_is_suggested_and_appends() {
         let folder = TempDir::new("export-suggest");
         let (mut db, _) = setup(&folder, &HEADERS);
         let mut settings = db.master().clone();
@@ -432,7 +453,7 @@ mod tests {
         assert_eq!(sheet("Telematik").key.as_deref(), Some("Asset"));
 
         let projekt = sheet("Projekt");
-        assert!(projekt.suggested && !projekt.append, "{projekt:?}");
+        assert!(!projekt.suggested && !projekt.append, "{projekt:?}");
         assert_eq!(projekt.key.as_deref(), Some("TRANSPORTMITTELNR"));
         assert_eq!(
             projekt.aliases,
@@ -441,7 +462,8 @@ mod tests {
                 source: "Asset".into(),
             }]
         );
-        assert!(projekt.reason.as_deref().unwrap().contains("„Stadt“"));
+        assert_eq!(projekt.reason, None);
+        assert_eq!(projekt.matched, 1, "„Stadt“ is shared");
 
         assert!(!sheet("Überblick").suggested, "only the key in common");
         assert_eq!(start.bases.len(), 1);
@@ -642,5 +664,62 @@ mod tests {
             .unwrap_err()
             .into_messages();
         assert!(messages[0].contains("verändert"), "{messages:?}");
+    }
+
+    // A hand-set pair moves a document column: „Stadt“ into „Projekt“ leaves the
+    // sheet's own „Stadt“ kept by hand, and a second pair for the same document
+    // column is dropped and said rather than writing it twice.
+    #[test]
+    fn a_hand_set_pair_moves_a_column_and_a_second_pair_for_it_is_dropped() {
+        let folder = TempDir::new("export-pairs");
+        let (db, _) = setup(&folder, &HEADERS);
+        let choice = MasterExportChoice {
+            sheet: "Projekt".into(),
+            key: Some("TRANSPORTMITTELNR".into()),
+            aliases: vec![
+                MasterAlias {
+                    master: "TRANSPORTMITTELNR".into(),
+                    source: "Asset".into(),
+                },
+                MasterAlias {
+                    master: "Projekt".into(),
+                    source: "Stadt".into(),
+                },
+                MasterAlias {
+                    master: "Stadt".into(),
+                    source: "Stadt".into(),
+                },
+            ],
+            ignored: vec![],
+            append: false,
+        };
+        let run = preview(&db, &request(&db, choice)).unwrap();
+        let sheet = &run.sheets[0];
+        assert_eq!(sheet.problem, None, "{sheet:?}");
+        assert_eq!(
+            sheet.pairs,
+            [
+                MasterAlias {
+                    master: "TRANSPORTMITTELNR".into(),
+                    source: "Asset".into(),
+                },
+                MasterAlias {
+                    master: "Projekt".into(),
+                    source: "Stadt".into(),
+                },
+            ]
+        );
+        assert_eq!(sheet.targets, ["Stadt"]);
+        assert_eq!(sheet.sources, HEADERS);
+        assert_eq!(sheet.conflicts.len(), 1, "{:?}", sheet.conflicts);
+        assert!(sheet.conflicts[0].contains("„Stadt“ ist schon „Projekt“ zugeordnet"));
+        assert!(
+            sheet
+                .changes
+                .iter()
+                .any(|change| change.column == "Projekt" && change.after == "Neuhof"),
+            "{:?}",
+            sheet.changes
+        );
     }
 }

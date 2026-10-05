@@ -50,7 +50,7 @@
 //
 // The master EXPORT wizard is faked shallow. `open_master_export` offers every
 // seeded sheet, suggested ones first — those bound to the document's template,
-// with `append` on; which other sheets the data would affect, their key and its
+// with `append` on and the only ones pre-ticked; the other sheets' key and its
 // alias are `cargo test`'s. `preview_master_export` and `write_master_export` serve
 // `seed.masterExport[sheet]` — hand-written runs with their structure and cell
 // changes — and only ECHO the request's answers back: an answered column leaves
@@ -494,6 +494,8 @@ export function clientMaster(path: string): FakeMasterFile {
 
 export interface FakeExportSheetRun {
   matched: string[];
+  pairs?: { master: string; source: string }[];
+  sources?: string[];
   targets: string[];
   open: string[];
   conflicts?: string[];
@@ -762,6 +764,18 @@ export function install(seed: FakeSeed): void {
         ...choice.aliases.map((alias) => alias.source),
         ...choice.ignored,
       ]);
+      // Echoes the answers onto the seeded pairs, no more: which column a
+      // header pairs with is `paste::classify`'s, proved by `cargo test`.
+      const seededPairs =
+        seeded.pairs ??
+        seeded.matched.map((master) => ({ master, source: master }));
+      const aliased = new Set(choice.aliases.map((alias) => alias.master));
+      const pairs = [
+        ...seededPairs.filter(
+          (pair) => !answered.has(pair.source) && !aliased.has(pair.master)
+        ),
+        ...copy(choice.aliases),
+      ];
       return {
         ...copy(seeded),
         sheet: choice.sheet,
@@ -769,6 +783,17 @@ export function install(seed: FakeSeed): void {
         key: choice.key,
         aliases: copy(choice.aliases),
         ignored: copy(choice.ignored),
+        matched: pairs.map((pair) => pair.master),
+        pairs,
+        sources: copy(
+          seeded.sources ?? [
+            ...new Set([
+              ...seededPairs.map((pair) => pair.source),
+              ...seeded.open,
+            ]),
+          ]
+        ),
+        targets: seeded.targets.filter((target) => !aliased.has(target)),
         open: seeded.open.filter((column) => !answered.has(column)),
         conflicts: copy(seeded.conflicts ?? []),
         notes: copy(seeded.notes ?? []),

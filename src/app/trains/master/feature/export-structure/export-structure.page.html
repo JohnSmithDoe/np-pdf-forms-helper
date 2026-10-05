@@ -56,23 +56,137 @@
             </ion-item>
           }
 
-          <ion-item>
-            <ion-select
-              label="Schlüsselspalte"
-              interface="popover"
-              [value]="view.run.key ?? noKey"
-              (ionChange)="onKey(view.run.sheet, $event)"
-            >
-              <ion-select-option [value]="noKey"
-                >kein Schlüssel</ion-select-option
+          <ion-list-header>Schlüssel</ion-list-header>
+          @let keyPending = keyDraft()[view.run.sheet];
+          <ion-item data-testid="export-structure-key">
+            <div class="pair">
+              <ion-select
+                aria-label="Schlüsselspalte des Dokuments"
+                interface="popover"
+                placeholder="Spalte des Dokuments"
+                [value]="keyPending?.source ?? view.keySource"
+                (ionChange)="onKey(view, 'source', $event)"
               >
-              @for (column of view.run.matched; track column) {
-                <ion-select-option [value]="column">{{
-                  column
-                }}</ion-select-option>
-              }
-            </ion-select>
+                @for (source of view.run.sources; track source) {
+                  <ion-select-option [value]="source">{{
+                    source
+                  }}</ion-select-option>
+                }
+              </ion-select>
+              <ion-icon
+                name="arrow-forward-outline"
+                color="medium"
+                aria-hidden="true"
+              />
+              <ion-select
+                aria-label="Schlüsselspalte des Blatts"
+                interface="popover"
+                placeholder="Spalte des Blatts"
+                [value]="keyPending?.master ?? view.run.key ?? noKey"
+                (ionChange)="onKey(view, 'master', $event)"
+              >
+                <ion-select-option [value]="noKey"
+                  >kein Schlüssel</ion-select-option
+                >
+                @for (master of view.keyMasters; track master) {
+                  <ion-select-option [value]="master">{{
+                    master
+                  }}</ion-select-option>
+                }
+              </ion-select>
+            </div>
           </ion-item>
+
+          <ion-list-header>Zuordnung</ion-list-header>
+          @for (pair of view.pairs; track pair.master) {
+            <ion-item data-testid="export-structure-pair">
+              <div class="pair">
+                <ion-select
+                  aria-label="Spalte des Dokuments"
+                  interface="popover"
+                  [value]="pair.source"
+                  (ionChange)="onPairSource(view.run.sheet, pair, $event)"
+                >
+                  @for (source of pair.sources; track source) {
+                    <ion-select-option [value]="source">{{
+                      source
+                    }}</ion-select-option>
+                  }
+                </ion-select>
+                <ion-icon
+                  name="arrow-forward-outline"
+                  color="medium"
+                  aria-hidden="true"
+                />
+                <ion-select
+                  aria-label="Spalte des Blatts"
+                  interface="popover"
+                  [value]="pair.master"
+                  (ionChange)="onPairMaster(view.run.sheet, pair, $event)"
+                >
+                  @for (master of pair.masters; track master) {
+                    <ion-select-option [value]="master">{{
+                      master
+                    }}</ion-select-option>
+                  }
+                </ion-select>
+              </div>
+              <ion-button
+                slot="end"
+                fill="clear"
+                color="medium"
+                aria-label="Zuordnung entfernen"
+                (click)="onUnpair(view.run.sheet, pair.source)"
+              >
+                <ion-icon slot="icon-only" name="close-outline" />
+              </ion-button>
+            </ion-item>
+          }
+          @if (view.unpaired.length && view.run.targets.length) {
+            @let pending = draft()[view.run.sheet];
+            <ion-item data-testid="export-structure-add">
+              <div class="pair">
+                <ion-select
+                  aria-label="Spalte des Dokuments"
+                  interface="popover"
+                  placeholder="Spalte des Dokuments"
+                  [value]="pending?.source"
+                  (ionChange)="onDraft(view.run.sheet, 'source', $event)"
+                >
+                  @for (source of view.unpaired; track source) {
+                    <ion-select-option [value]="source">{{
+                      source
+                    }}</ion-select-option>
+                  }
+                </ion-select>
+                <ion-icon
+                  name="arrow-forward-outline"
+                  color="medium"
+                  aria-hidden="true"
+                />
+                <ion-select
+                  aria-label="Spalte des Blatts"
+                  interface="popover"
+                  placeholder="Spalte des Blatts"
+                  [value]="pending?.master"
+                  (ionChange)="onDraft(view.run.sheet, 'master', $event)"
+                >
+                  @for (master of view.run.targets; track master) {
+                    <ion-select-option [value]="master">{{
+                      master
+                    }}</ion-select-option>
+                  }
+                </ion-select>
+              </div>
+            </ion-item>
+          }
+          @if (view.untransferred.length) {
+            <ion-item data-testid="export-structure-untransferred">
+              <ion-note class="ion-text-wrap"
+                >Nicht übertragen: {{ view.untransferred.join(', ') }}</ion-note
+              >
+            </ion-item>
+          }
 
           @if (view.answers.length) {
             <ion-list-header>Spalten ohne Gegenstück im Blatt</ion-list-header>

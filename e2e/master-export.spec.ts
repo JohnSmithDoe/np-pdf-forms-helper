@@ -225,6 +225,39 @@ test.describe('Master aktualisieren', () => {
     ).toBeDisabled();
   });
 
+  // A header spelled differently in the master is fed by a pair set by hand,
+  // on any sheet: the step lists every pair, offers a new one while a
+  // document column and a hand-kept column are free, and names the rest.
+  test('der Abgleich zeigt jede Zuordnung und bietet eine neue an', async ({
+    page,
+  }) => {
+    await installFakeBackend(
+      page,
+      seed({
+        ...TELEMATIK,
+        matched: ['Asset'],
+        sources: ['Asset', 'RadsatzID'],
+        targets: ['Radsatz ID'],
+        open: [],
+      })
+    );
+    await open(page);
+    await step(page, 'export-sheets')
+      .getByRole('button', { name: 'Weiter' })
+      .click();
+
+    const structure = step(page, 'export-structure');
+    await expect(structure.getByTestId('export-structure-key')).toHaveCount(1);
+    await expect(structure.getByTestId('export-structure-pair')).toHaveCount(1);
+    await expect(structure.getByTestId('export-structure-add')).toHaveCount(1);
+    await expect(
+      structure.getByTestId('export-structure-untransferred')
+    ).toContainText('RadsatzID');
+    await expect(
+      structure.getByRole('button', { name: 'Weiter' })
+    ).toBeEnabled();
+  });
+
   test('ein kalter Link in den Assistenten führt zu den Dokumenten', async ({
     page,
   }) => {

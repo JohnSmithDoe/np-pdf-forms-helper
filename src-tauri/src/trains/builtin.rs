@@ -24,6 +24,14 @@
 // feed is dated by the workshop exit, the wheelset snapshot is fittings plus the
 // sender's own wheelset id, and the telematics export contributes only the
 // Wagennummer until telematics has a model of its own.
+//
+// `master_hint` is what a template knows about its sheet in the customer's
+// master — the SHAPE again, never a sheet name, which lives only in
+// `master.json`: the column that identifies a row there, and the headers the
+// master spells differently (`RadsatzID` is `Radsatz ID`). The wheelset
+// snapshot needs both: its sheet holds one row per Radsatz, so the Wagennummer
+// would never be a unique key, and without the respelling the sheet is not
+// even recognised as the template's.
 // ────────────────────────────────────────────────────────────────
 
 use super::model::{ColumnBinding, FieldKind, ImportPlan, ImportTemplate};
@@ -60,6 +68,21 @@ pub fn all() -> Vec<ImportTemplate> {
             &[("Asset", FieldKind::Wagennummer)],
         ),
     ]
+}
+
+pub struct MasterHint {
+    pub key: &'static str,
+    pub renamed: &'static [(&'static str, &'static str)],
+}
+
+pub fn master_hint(id: &str) -> Option<MasterHint> {
+    match id.strip_prefix(PREFIX)? {
+        "radsatz-monitoring" => Some(MasterHint {
+            key: "RadsatzID",
+            renamed: &[("RadsatzID", "Radsatz ID")],
+        }),
+        _ => None,
+    }
 }
 
 pub fn is_builtin(id: &str) -> bool {

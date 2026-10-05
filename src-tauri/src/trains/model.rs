@@ -336,6 +336,8 @@ pub struct MasterExportSheetRun {
     pub aliases: Vec<MasterAlias>,
     pub ignored: Vec<String>,
     pub matched: Vec<String>,
+    pub pairs: Vec<MasterAlias>,
+    pub sources: Vec<String>,
     pub targets: Vec<String>,
     pub open: Vec<String>,
     pub conflicts: Vec<String>,

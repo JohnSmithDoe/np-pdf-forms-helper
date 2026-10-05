@@ -6,7 +6,10 @@
 //
 // Every master column is one of three things, decided once per sheet:
 //   • matched  its header (or the alias the binding names for it) is a source
-//              header, and the source owns it
+//              header, and the source owns it. A source column the binding
+//              aliases elsewhere, or `ignored`, is never matched BY NAME too:
+//              one document column lands in one master column, and „nicht
+//              übertragen“ holds even where the sheet has a column of that name
 //   • formula  a data row holds a formula — the customer's own derived column
 //              (`TODAY()-D`, a lookup into a sibling sheet) — re-emitted per row
 //   • hand     neither: something a person keeps in the sheet by hand
@@ -42,8 +45,9 @@
 // formatted as dates.
 //
 // `structure` is the same classification without the write, for the export
-// wizard's Abgleich: which master columns have a source, which are kept by
-// hand, and which source columns land nowhere — a renamed or dropped column.
+// wizard's Abgleich: which master columns have a source (`pairs`, the source
+// named), which are kept by hand, and which source columns land nowhere — a
+// renamed or dropped column.
 // `Outcome.columns` names what a write may have changed (formula columns are
 // re-emitted, not changed), so the wizard's cell diff looks only there.
 // ────────────────────────────────────────────────────────────────
@@ -54,7 +58,7 @@ use umya_spreadsheet::{Cell, Style, Worksheet};
 
 use super::source::{Out, Table};
 use crate::error::{AppError, AppResult};
-use crate::trains::model::MasterBinding;
+use crate::trains::model::{MasterAlias, MasterBinding};
 use crate::trains::sheet::grid;
 
 #[derive(Debug, Default, PartialEq)]
@@ -68,6 +72,7 @@ pub struct Outcome {
 #[derive(Debug, Default, PartialEq)]
 pub struct Structure {
     pub matched: Vec<String>,
+    pub pairs: Vec<MasterAlias>,
     pub hand: Vec<String>,
     pub unmatched: Vec<String>,
 }
@@ -121,9 +126,12 @@ pub fn structure(
         match kind {
             Kind::Matched { index, .. } => {
                 used.push(*index);
-                structure
-                    .matched
-                    .push(classified.master.text(*col, 1).trim().to_string());
+                let master = classified.master.text(*col, 1).trim().to_string();
+                structure.pairs.push(MasterAlias {
+                    master: master.clone(),
+                    source: table.headers[*index].clone(),
+                });
+                structure.matched.push(master);
             }
             Kind::Hand(header) => structure.hand.push(header.clone()),
             Kind::Formula(_) => {}
@@ -164,21 +172,32 @@ fn classify(
         }
     }
 
-    let source_of = |header: &str| -> String {
-        binding
+    let source_of = |header: &str| -> Option<String> {
+        if let Some(alias) = binding
             .aliases
             .iter()
             .find(|alias| alias.master.trim() == header)
-            .map_or(header, |alias| alias.source.trim())
-            .to_string()
+        {
+            return Some(alias.source.trim().to_string());
+        }
+        let taken = binding
+            .aliases
+            .iter()
+            .any(|alias| alias.source.trim() == header)
+            || binding
+                .ignored
+                .iter()
+                .any(|ignored| ignored.trim() == header);
+        (!taken).then(|| header.to_string())
     };
 
     let mut columns = BTreeMap::new();
     for col in 1..=last_col {
         let header = master.text(col, 1).trim().to_string();
         let kind = if let Some(index) = (!header.is_empty())
-            .then(|| table.column(&source_of(&header)))
+            .then(|| source_of(&header))
             .flatten()
+            .and_then(|source| table.column(&source))
         {
             Kind::Matched {
                 index,
@@ -665,6 +684,65 @@ mod tests {
         // The formula column has no header and is neither.
         assert_eq!(structure.hand, ["Stadt", "Notiz"]);
         assert_eq!(structure.unmatched, ["Ort", "Extra"]);
+    }
+
+    // A pair says which document column feeds each master column, aliased or
+    // matched by name.
+    #[test]
+    fn the_structure_names_each_pair_with_its_source() {
+        let sheet = worksheet();
+        let mut bound = binding(None);
+        bound.aliases.push(MasterAlias {
+            master: "Stadt".into(),
+            source: "ort".into(),
+        });
+        let source = table(&["Wagen", "ort"], &[&[n(2.0), t("x")]]);
+        let structure = structure(&sheet, &bound, &source).unwrap();
+        assert_eq!(
+            structure.pairs,
+            [
+                MasterAlias {
+                    master: "Wagen".into(),
+                    source: "Wagen".into(),
+                },
+                MasterAlias {
+                    master: "Stadt".into(),
+                    source: "ort".into(),
+                },
+            ]
+        );
+    }
+
+    // A source column paired elsewhere lands there ONLY: the master column of
+    // its own name is left to whoever keeps it by hand.
+    #[test]
+    fn a_source_paired_elsewhere_is_not_also_matched_by_name() {
+        let mut sheet = worksheet();
+        let mut bound = binding(Some("Wagen"));
+        bound.aliases.push(MasterAlias {
+            master: "Notiz".into(),
+            source: "Stadt".into(),
+        });
+        let source = table(&["Wagen", "Stadt"], &[&[n(2.0), t("Neuhof")]]);
+        assert_eq!(structure(&sheet, &bound, &source).unwrap().hand, ["Stadt"]);
+        write(&mut sheet, &bound, &source, false).unwrap();
+        assert_eq!(value(&sheet, 4, 3), "Neuhof");
+        assert_eq!(value(&sheet, 3, 3), "Alt");
+    }
+
+    // „nicht übertragen“ holds even where the sheet has a column of that name.
+    #[test]
+    fn an_ignored_source_is_not_written_into_its_namesake() {
+        let mut sheet = worksheet();
+        let mut bound = binding(Some("Wagen"));
+        bound.ignored.push("Stadt".into());
+        let source = table(&["Wagen", "Stadt"], &[&[n(2.0), t("Neuhof")]]);
+        assert_eq!(
+            structure(&sheet, &bound, &source).unwrap().unmatched,
+            ["Stadt"]
+        );
+        write(&mut sheet, &bound, &source, false).unwrap();
+        assert_eq!(value(&sheet, 3, 3), "Alt");
     }
 
     #[test]

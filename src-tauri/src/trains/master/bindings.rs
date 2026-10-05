@@ -7,6 +7,13 @@
 // imported. What the user changes by hand stays: `sync` only ADDS bindings for
 // sheets not bound yet, and `auto` marks the ones nobody touched.
 //
+// A shipped template may know its master sheet better (`builtin::master_hint`):
+// headers the master spells differently are read back to the template's
+// spelling for recognition, and the binding starts with that template's key
+// and those respellings as aliases — so the Radsatz-Monitoring sheet is the
+// template's, keyed by `Radsatz ID` ← `RadsatzID`, on a fresh install without a
+// click. A user copy takes the hint of the built-in it came from.
+//
 // ONLY MAPPING, IMPORT, EXPORT AND A SHEET VIEW READ THE FILE. `sync` runs when
 // a version is taken over or written, on „Standardzuordnung“, when an import
 // starts, when the export wizard opens, when a sheet view opens, and for the
@@ -31,9 +38,10 @@ use std::path::Path;
 
 use super::{kinds, prepare};
 use crate::error::AppResult;
+use crate::trains::builtin;
 use crate::trains::db::TrainsDb;
 use crate::trains::model::{
-    ColumnBinding, FieldKind, ImportTemplate, MasterBinding, MasterScan, MasterSheet,
+    ColumnBinding, FieldKind, ImportTemplate, MasterAlias, MasterBinding, MasterScan, MasterSheet,
 };
 use crate::trains::recognise;
 
@@ -96,14 +104,68 @@ pub fn sync(db: &mut TrainsDb, reset: bool) -> AppResult<()> {
 }
 
 pub fn default(sheet: &MasterSheet, templates: &[ImportTemplate]) -> MasterBinding {
-    MasterBinding {
+    let template_id = source_template(&sheet.headers, templates)
+        .or_else(|| respelled_template(&sheet.headers, templates))
+        .unwrap_or_default();
+    let mut binding = MasterBinding {
         sheet: sheet.name.clone(),
-        template_id: source_template(&sheet.headers, templates).unwrap_or_default(),
+        template_id,
         kind: kinds::recognise(&sheet.headers),
         key: None,
         aliases: Vec::new(),
         ignored: Vec::new(),
         auto: true,
+    };
+    if let Some(hint) = hint(&binding.template_id, templates) {
+        let has = |name: &str| sheet.headers.iter().any(|own| own.trim() == name);
+        binding.aliases = hint
+            .renamed
+            .iter()
+            .filter(|(_, master)| has(master))
+            .map(|(source, master)| MasterAlias {
+                master: master.to_string(),
+                source: source.to_string(),
+            })
+            .collect();
+        let key = binding
+            .aliases
+            .iter()
+            .find(|alias| alias.source == hint.key)
+            .map_or(hint.key, |alias| alias.master.as_str());
+        binding.key = has(key).then(|| key.to_string());
+    }
+    binding
+}
+
+fn hint(template_id: &str, templates: &[ImportTemplate]) -> Option<builtin::MasterHint> {
+    let template = templates
+        .iter()
+        .find(|template| template.id == template_id)?;
+    builtin::master_hint(template.origin.as_deref().unwrap_or(&template.id))
+}
+
+fn respelled_template(headers: &[String], templates: &[ImportTemplate]) -> Option<String> {
+    let found: Vec<&ImportTemplate> = templates
+        .iter()
+        .filter(|template| {
+            let Some(hint) = hint(&template.id, templates) else {
+                return false;
+            };
+            let respelled: Vec<String> = headers
+                .iter()
+                .map(|header| {
+                    hint.renamed
+                        .iter()
+                        .find(|(_, master)| *master == header.trim())
+                        .map_or_else(|| header.clone(), |(source, _)| source.to_string())
+                })
+                .collect();
+            source_template(&respelled, std::slice::from_ref(*template)).is_some()
+        })
+        .collect();
+    match found.as_slice() {
+        [only] => Some(only.id.clone()),
+        _ => None,
     }
 }
 
@@ -189,6 +251,68 @@ mod tests {
         let telematik = &db.master().bindings[4];
         assert_eq!(telematik.template_id, "builtin:telematik");
         assert_eq!(db.master().bindings[5].template_id, "", "view-only");
+    }
+
+    fn bound(folder: &TempDir, headers: &[&str]) -> MasterBinding {
+        let file = workbook(folder, "Master.xlsx", &[("Monitoring", &[headers])]);
+        let mut db = TrainsDb::load(&folder.config()).unwrap();
+        crate::testing::client_master(&mut db, &file);
+        sync(&mut db, false).unwrap();
+        db.master().bindings[0].clone()
+    }
+
+    // The master spells the snapshot's `RadsatzID` as `Radsatz ID`; the sheet is
+    // still the template's, keyed by that column — one row per Radsatz, so the
+    // Wagennummer could never be the key.
+    #[test]
+    fn a_respelled_header_still_binds_the_template_with_its_key_and_alias() {
+        let folder = TempDir::new("bindings-hint");
+        let binding = bound(
+            &folder,
+            &[
+                "Wagennr.",
+                "gemeldet an",
+                "Radsatz ID",
+                "Radsatznummer",
+                "Einbaudatum NACH letzter IS2/3",
+            ],
+        );
+        assert_eq!(binding.template_id, "builtin:radsatz-monitoring");
+        assert_eq!(binding.key.as_deref(), Some("Radsatz ID"));
+        assert_eq!(
+            binding.aliases,
+            [MasterAlias {
+                master: "Radsatz ID".into(),
+                source: "RadsatzID".into(),
+            }]
+        );
+    }
+
+    #[test]
+    fn the_template_spelling_binds_with_the_key_and_no_alias() {
+        let folder = TempDir::new("bindings-hint-plain");
+        let binding = bound(
+            &folder,
+            &[
+                "Wagennr.",
+                "RadsatzID",
+                "Radsatznummer",
+                "Einbaudatum NACH letzter IS2/3",
+            ],
+        );
+        assert_eq!(binding.template_id, "builtin:radsatz-monitoring");
+        assert_eq!(binding.key.as_deref(), Some("RadsatzID"));
+        assert!(binding.aliases.is_empty());
+    }
+
+    // A sheet missing one of the template's columns stays unbound, respelling
+    // or not — the older Radsatz export has no Einbaudatum.
+    #[test]
+    fn a_respelled_sheet_missing_a_column_is_not_the_template() {
+        let folder = TempDir::new("bindings-hint-missing");
+        let binding = bound(&folder, &["Wagennr.", "Radsatz ID", "Radsatznummer"]);
+        assert_eq!(binding.template_id, "");
+        assert_eq!(binding.key, None);
     }
 
     #[test]
