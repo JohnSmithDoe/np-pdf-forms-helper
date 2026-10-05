@@ -106,9 +106,16 @@ jobs:
       - name: Production build (angular)
         run: pnpm exec ng build --configuration production
 
-      # The Playwright suite in e2e/ is NOT wired in here yet: it needs a browser
-      # download on the runner, and it has never been run anywhere but a
-      # developer machine. Adding it is a deliberate step, not a drive-by.
+      # Opens the build above under the packaged app's CSP (e2e/release/serve.ts).
+      # v2.0.1 shipped unstyled because nothing ever loaded this artefact: the
+      # CSP and the critical-CSS inlining exist only here, not under `ng serve`.
+      # `channel: 'chrome'` uses the runner's preinstalled Chrome, no download.
+      - name: Release build under the shipped CSP (playwright)
+        run: pnpm exec playwright test --config playwright.release.config.ts
+
+      # The rest of the Playwright suite in e2e/ is NOT wired in here yet: it has
+      # never been run anywhere but a developer machine. Adding it is a
+      # deliberate step, not a drive-by.
 
   # Packaging runs on a NATIVE Windows runner, never cross-compiled: the NSIS
   # bundle and the MSVC link need the host toolchain. Only on a `v*` tag (draft

@@ -52,6 +52,7 @@ rewritten whole, so the last save wins silently.
 | `pnpm run rust:check` / `rust:fmt` / `rust:lint` | `cargo check` / `fmt` / `clippy` on `src-tauri/`                     |
 | `pnpm run rust:test`                             | **`cargo test`** over `src-tauri/` — the Rust unit tests             |
 | `pnpm run e2e` / `e2e:ui`                        | **Playwright** over `e2e/`, against a faked Tauri transport          |
+| `pnpm run e2e:release`                           | Production build, then `e2e/release/` under the shipped CSP          |
 
 ### The two test layers
 
@@ -105,6 +106,13 @@ those assert Ionic's internals, break on its upgrades, and say nothing about thi
 correctness is a property of bytes — parsing, resolution, the commit gates — is proved by `cargo test`
 instead, and the fake never re-implements it: a TypeScript copy of `sanitise` would agree with itself
 and drift from Rust.
+
+**`e2e/release/` is the one spec that opens the artefact that SHIPS** — `dist/renderer` from a
+production build, served by `serve.ts` with the CSP read from `tauri.conf.json` and rewritten the way
+Tauri rewrites it (a nonce per `<style>`). Everything else runs against `ng serve`, which has neither
+that CSP nor critical-CSS inlining, and v2.0.1 shipped unstyled for exactly that reason — see
+`docs/footguns.md`. Its own config (`playwright.release.config.ts`, port **4401**, never a reused
+server), ignored by the main one; CI runs it after its production build.
 
 The `test.fail()` block at the bottom of `filler.spec.ts` pins known-open defects: the suite stays
 green while they are open, and Playwright reports "expected to fail but passed" the moment one is

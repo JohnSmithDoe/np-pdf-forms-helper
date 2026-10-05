@@ -78,6 +78,15 @@ Measured 2026-08-22 in Chrome against `@ionic/angular@8`, while reworking the ex
   only ever exempt.** A ban written as a `filter` regex reads exactly like a working rule and catches
   nothing. **`custom` with `match: false`** is the assertion form — that is what makes a pattern an error.
   This is why the `I`/`T`-prefix ban in `eslint.config.js` is spelled the way it is.
+- **The packaged app has a CSP that `ng serve` and `tauri dev` never apply** — v2.0.1 opened unstyled on
+  the customer's PC because of it. Tauri stamps a nonce on each `<style>` in `index.html` and appends it to
+  `style-src`, and **a nonce makes the browser ignore `'unsafe-inline'`**, so every component style Angular
+  injects at runtime is refused; hence `dangerousDisableAssetCspModification: ["style-src"]` in
+  `tauri.conf.json`. And Angular's critical-CSS inlining loads `styles.css` through `<link media="print"
+  onload=…>`, an inline handler `script-src 'self'` refuses, so all of Ionic's CSS stayed print-only; hence
+  `inlineCritical: false` in `angular.json`. CSP refusals throw nothing — the only trace is the console.
+  `pnpm run e2e:release` (and CI) opens the production build under the real policy; each of the two lines
+  removed alone turns it red.
 
 ## Reading xlsx
 
