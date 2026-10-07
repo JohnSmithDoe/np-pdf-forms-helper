@@ -40,8 +40,8 @@
 //
 // The master tile and that banner exist only while `masterEnabled` is on; the
 // master workbook is unfinished.
-// Without `fullEnabled` the page is scaled back to Bereinigen and Dokumente:
-// every other tile and „Export erstellen“ are hidden, not removed.
+// Without `fullEnabled` the page is scaled back to Bereinigen, Dokumente and
+// Wagen: every other tile and „Export erstellen“ are hidden, not removed.
 // „Master-Datei“ right after Dokumente is NOT that tile: it takes the customer's
 // workbook in as a file (`/trains/master-file`) and is always there.
 // ────────────────────────────────────────────────────────────────
@@ -102,6 +102,8 @@ interface DashboardTile {
   subtitle?: string;
 }
 
+const SCALED_BACK = new Set(['/trains/documents', '/trains/wagen']);
+
 @Component({
   selector: 'app-page-trains-dashboard',
   templateUrl: 'dashboard.page.html',
@@ -155,7 +157,7 @@ export class TrainsDashboardPage {
   protected readonly tiles = computed<DashboardTile[]>(() =>
     this.fullEnabled
       ? this.#allTiles()
-      : this.#allTiles().filter((tile) => tile.route === '/trains/documents')
+      : this.#allTiles().filter((tile) => SCALED_BACK.has(tile.route))
   );
 
   readonly #allTiles = computed<DashboardTile[]>(() => {

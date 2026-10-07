@@ -164,7 +164,7 @@ test.describe('Zug-Import', () => {
     await expect(page.getByTestId('import-commit')).toHaveCount(0);
   });
 
-  test('ohne npdh.full zeigt das Dashboard nur Bereinigen und Dokumente', async ({
+  test('ohne npdh.full zeigt das Dashboard nur Bereinigen, Dokumente und Wagen', async ({
     page,
   }) => {
     await installFakeBackend(page);
@@ -174,9 +174,12 @@ test.describe('Zug-Import', () => {
     await expect(
       dashboard.getByRole('button', { name: 'Bereinigen', exact: true })
     ).toBeVisible();
-    await expect(dashboard.locator('ion-card')).toHaveCount(2);
+    await expect(dashboard.locator('ion-card')).toHaveCount(3);
     await expect(
       dashboard.getByRole('button', { name: 'Dokumente', exact: true })
+    ).toBeVisible();
+    await expect(
+      dashboard.getByRole('button', { name: 'Wagen', exact: true })
     ).toBeVisible();
     await expect(page.getByTestId('trains-export')).toHaveCount(0);
   });
