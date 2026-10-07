@@ -58,6 +58,16 @@
               Neue Zeilen anhängen
             </ion-toggle>
           </ion-item>
+          <ion-item lines="none" data-testid="export-sheet-remove">
+            <ion-toggle
+              justify="space-between"
+              color="danger"
+              [checked]="view.remove"
+              (ionChange)="onRemove(view.sheet.sheet, $event)"
+            >
+              Fehlende Zeilen leeren
+            </ion-toggle>
+          </ion-item>
         }
       }
     </ion-list>

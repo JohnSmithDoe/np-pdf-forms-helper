@@ -74,7 +74,10 @@ const TELEMATIK: FakeExportSheetRun = {
   ],
 };
 
-const seed = (telematik: FakeExportSheetRun): FakeSeed => ({
+const seed = (
+  telematik: FakeExportSheetRun,
+  removeFor: string[] = []
+): FakeSeed => ({
   dokumente: [DOKUMENT],
   master: {
     file: 'C:/Daten/Übersicht.xlsx',
@@ -90,6 +93,7 @@ const seed = (telematik: FakeExportSheetRun): FakeSeed => ({
         templateId: 't-telematik',
         key: 'Asset',
         aliases: [],
+        removeFor,
       },
     ],
   },
@@ -135,6 +139,10 @@ test.describe('Master aktualisieren', () => {
     await expect(
       sheets.getByTestId('export-sheet-append').locator('ion-toggle')
     ).toHaveAttribute('aria-checked', 'true');
+    // Deleting rows is never a default: off until remembered for the template.
+    await expect(
+      sheets.getByTestId('export-sheet-remove').locator('ion-toggle')
+    ).toHaveAttribute('aria-checked', 'false');
     await expect(rows.nth(1).locator('ion-checkbox')).not.toHaveAttribute(
       'aria-disabled',
       'true'
@@ -171,7 +179,12 @@ test.describe('Master aktualisieren', () => {
       (call) => call.command === 'write_master_export'
     );
     const request = write?.args['request'] as {
-      sheets: { sheet: string; key?: string; append: boolean }[];
+      sheets: {
+        sheet: string;
+        key?: string;
+        append: boolean;
+        remove: boolean;
+      }[];
       remember: boolean;
     };
     expect(request.sheets).toEqual([
@@ -179,6 +192,7 @@ test.describe('Master aktualisieren', () => {
         sheet: 'Telematik',
         key: 'Asset',
         append: true,
+        remove: false,
       }),
     ]);
     expect(request.remember).toBe(true);
@@ -189,6 +203,40 @@ test.describe('Master aktualisieren', () => {
     await expect(
       step(page, 'document-list').getByTestId('documents-master-row')
     ).toContainText('aktualisiert mit „assets.xlsx“');
+  });
+
+  test('leert fehlende Zeilen, wenn es für die Vorlage gemerkt ist', async ({
+    page,
+  }) => {
+    await installFakeBackend(
+      page,
+      seed({ ...TELEMATIK, removed: ['338506590011'] }, ['t-telematik'])
+    );
+    await open(page);
+
+    const sheets = step(page, 'export-sheets');
+    await expect(
+      sheets.getByTestId('export-sheet-remove').locator('ion-toggle')
+    ).toHaveAttribute('aria-checked', 'true');
+    await sheets.getByRole('button', { name: 'Weiter' }).click();
+
+    const structure = step(page, 'export-structure');
+    await expect(structure.getByTestId('export-structure-sheet')).toContainText(
+      'fehlende Zeilen werden geleert'
+    );
+    await structure.getByRole('button', { name: 'Weiter' }).click();
+
+    // The rows to be emptied are listed by key before anything is written.
+    await expect(
+      step(page, 'export-preview').getByTestId('export-preview-removed')
+    ).toContainText('1 Zeile(n) werden geleert: 338506590011');
+    const previewed = (await recordedCalls(page)).find(
+      (call) => call.command === 'preview_master_export'
+    );
+    expect(
+      (previewed?.args['request'] as { sheets: { remove: boolean }[] })
+        .sheets[0].remove
+    ).toBe(true);
   });
 
   test('ohne Master-Datei gibt es nichts zu aktualisieren', async ({

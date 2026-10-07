@@ -166,6 +166,7 @@ fn sheet(
     let mut out = MasterExportSheetRun {
         sheet: choice.sheet.clone(),
         append: choice.append,
+        remove: choice.remove,
         ..MasterExportSheetRun::default()
     };
     let result = (|| -> AppResult<()> {
@@ -241,9 +242,12 @@ fn sheet(
         out.targets = structure.hand;
 
         let before = grid::from_worksheet(worksheet)?;
-        let outcome = paste::write(worksheet, &binding, table, choice.append)?;
+        let outcome = paste::write(worksheet, &binding, table, choice.append, choice.remove)?;
         let after = grid::from_worksheet(worksheet)?;
-        (out.changed, out.changes) = diff::changes(&before, &after, &outcome.columns, outcome.key);
+        let removed: Vec<u32> = outcome.removed.iter().map(|(row, _)| *row).collect();
+        (out.changed, out.changes) =
+            diff::changes(&before, &after, &outcome.columns, outcome.key, &removed);
+        out.removed = outcome.removed.into_iter().map(|(_, key)| key).collect();
         out.line = outcome.line;
         out.notes = outcome.notes;
         Ok(())
@@ -265,6 +269,7 @@ fn unbound(sheet: &str) -> MasterBinding {
         key: None,
         aliases: Vec::new(),
         ignored: Vec::new(),
+        remove_for: Vec::new(),
         auto: true,
     }
 }
@@ -283,6 +288,10 @@ fn remember(
                     binding.template_id = template_id.to_string();
                 } else if related.contains(&binding.template_id) {
                     binding.template_id = String::new();
+                }
+                binding.remove_for.retain(|id| !related.contains(id));
+                if sheet.remove {
+                    binding.remove_for.push(template_id.to_string());
                 }
                 binding.key = sheet.key.clone();
                 binding.aliases = sheet.aliases.clone();
@@ -432,6 +441,7 @@ mod tests {
             aliases: vec![],
             ignored: vec![],
             append: true,
+            remove: false,
         }
     }
 
@@ -488,6 +498,7 @@ mod tests {
             aliases: projekt.aliases.clone(),
             ignored: vec![],
             append: projekt.append,
+            remove: projekt.remove,
         };
         let run = preview(&db, &request(&db, choice)).unwrap();
         let sheet = &run.sheets[0];
@@ -591,6 +602,48 @@ mod tests {
         assert!(!binding.auto);
     }
 
+    // „Fehlende Zeilen leeren“ is the user's knowledge that this template's
+    // documents are COMPLETE for this sheet, so it comes back on for the next
+    // document of the template — and off again once the user turns it off.
+    #[test]
+    fn removing_missing_rows_is_written_said_and_remembered_per_template() {
+        let folder = TempDir::new("export-remove");
+        let (mut db, _) = setup(&folder, &HEADERS);
+        let wanted = request(
+            &db,
+            MasterExportChoice {
+                remove: true,
+                ..telematik()
+            },
+        );
+        let run = write(&mut db, &wanted, "2026-10-07").unwrap();
+        assert_eq!(run.sheets[0].removed, ["338506590011"]);
+        assert!(
+            run.sheets[0].line.contains("1 geleert"),
+            "{}",
+            run.sheets[0].line
+        );
+
+        let book = umya_spreadsheet::reader::xlsx::read(run.target.unwrap()).unwrap();
+        let sheet = book.sheet_by_name("Telematik").unwrap();
+        assert_eq!(sheet.cell((4u32, 2u32)).unwrap().value(), "Neuhof");
+        assert!(sheet
+            .cell((1u32, 3u32))
+            .is_none_or(|cell| cell.value().is_empty()));
+
+        let offered = start(&mut db, "d-1").unwrap();
+        let sheet = |name: &str| offered.sheets.iter().find(|s| s.sheet == name).unwrap();
+        assert!(sheet("Telematik").remove);
+        assert!(
+            !sheet("Projekt").remove,
+            "remembered for its own sheet only"
+        );
+
+        let again = request(&db, telematik());
+        write(&mut db, &again, "2026-10-07").unwrap();
+        assert!(!start(&mut db, "d-1").unwrap().sheets[0].remove);
+    }
+
     // The master renamed „Stadt“ to „Ort“: the document's column has nowhere to
     // go, which is a question until answered — by an alias or by ignoring it.
     #[test]
@@ -649,6 +702,7 @@ mod tests {
             aliases: vec![],
             ignored: vec![],
             append: true,
+            remove: false,
         };
         let wanted = request(&db, choice);
         let messages = write(&mut db, &wanted, "2026-10-04")
@@ -695,6 +749,7 @@ mod tests {
             ],
             ignored: vec![],
             append: false,
+            remove: false,
         };
         let run = preview(&db, &request(&db, choice)).unwrap();
         let sheet = &run.sheets[0];

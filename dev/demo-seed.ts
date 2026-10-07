@@ -1246,6 +1246,7 @@ const masterExport: Record<string, FakeExportSheetRun> = {
     open: ['Werkstatt'],
     line: '„Werkstattliste“: 2 Zeile(n) angehängt, 1 aktualisiert aus „Schienenbein Mai 2026.xlsx“.',
     changed: 9,
+    removed: ['318133445565', '378045567815'],
     changes: [
       [
         'C4',

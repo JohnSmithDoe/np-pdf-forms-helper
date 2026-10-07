@@ -33,6 +33,14 @@
               <ion-note>{{ note }}</ion-note>
             </p>
           }
+          @if (sheet.removed.length) {
+            <p data-testid="export-preview-removed">
+              <ion-note color="danger"
+                >{{ sheet.removed.length }} Zeile(n) werden geleert:
+                {{ sheet.removed.join(', ') }}</ion-note
+              >
+            </p>
+          }
           <app-cell-changes
             [changes]="sheet.changes"
             [changed]="sheet.changed"

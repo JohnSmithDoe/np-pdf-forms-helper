@@ -22,11 +22,25 @@
 //
 // THE UPDATE IS INCREMENTAL, ALWAYS (decisions.md): rows are matched by KEY, a
 // known key has its matched cells overwritten — formula and hand columns of
-// that row are never touched — and nothing is ever deleted. An unknown key is
-// appended only with `append`; otherwise it is counted and said. A document
-// that names one key twice cannot say which of its rows is the update, so the
-// sheet is refused rather than letting the last row win silently; a key the
-// SHEET holds twice updates its first row, and that is said too.
+// that row are never touched. An unknown key is appended only with `append`;
+// otherwise it is counted and said. A document that names one key twice cannot
+// say which of its rows is the update, so the sheet is refused rather than
+// letting the last row win silently; a key the SHEET holds twice updates its
+// first row, and that is said too.
+//
+// `remove` EMPTIES every sheet row whose key the document lacks — every cell
+// of it, value and formula, style kept — and every copy of a doubled key. A row
+// without a key is never one of them: totals, notes and the formula tail have
+// none. The row is emptied, NOT deleted: no row moves, so no reference
+// anywhere shifts — not this sheet's, and not the other sheets' into it, which
+// a deletion could not reach because only this sheet is deserialised. A
+// reference to an emptied row reads empty, which is what it now is. The cost
+// is a gap, and it is never refilled: appending goes below the last row, or an
+// old reference would silently read ANOTHER Wagen's values. A sheet of which not one
+// key is in the document would be emptied whole; that is a wrong key column
+// far more often than an intended wipe, so the sheet is refused. A SHARED
+// formula keeps its text only in its first cell, so a group whose first cell is
+// emptied is made plain first, or the rest of it would be orphaned.
 //
 // A key that reads as a Wagennummer — twelve digits once spaces, dashes and
 // dots are gone — is compared by its digits: the cleaned copy writes the
@@ -52,7 +66,7 @@
 // re-emitted, not changed), so the wizard's cell diff looks only there.
 // ────────────────────────────────────────────────────────────────
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use umya_spreadsheet::{Cell, Style, Worksheet};
 
@@ -67,6 +81,7 @@ pub struct Outcome {
     pub notes: Vec<String>,
     pub columns: Vec<u32>,
     pub key: Option<u32>,
+    pub removed: Vec<(u32, String)>,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -101,9 +116,10 @@ pub fn write(
     binding: &MasterBinding,
     table: &Table,
     append: bool,
+    remove: bool,
 ) -> AppResult<Outcome> {
     let layout = layout(worksheet, binding, table)?;
-    let mut outcome = incremental(worksheet, &layout, binding, table, append)?;
+    let mut outcome = incremental(worksheet, &layout, binding, table, append, remove)?;
     outcome.columns = layout
         .columns
         .iter()
@@ -288,6 +304,7 @@ fn incremental(
     binding: &MasterBinding,
     table: &Table,
     append: bool,
+    remove: bool,
 ) -> AppResult<Outcome> {
     let sheet = &binding.sheet;
     let Some((key_col, key_index)) = layout.key else {
@@ -320,13 +337,38 @@ fn incremental(
     }
 
     let master = grid::from_worksheet(worksheet)?;
-    let mut rows: HashMap<String, u32> = HashMap::new();
-    let mut doubled = 0_u32;
+    let mut keyed: Vec<(u32, String)> = Vec::new();
     for row in 2..=layout.last_row {
         let key = match_key(master.text(key_col, row));
-        if key.is_empty() {
-            continue;
+        if !key.is_empty() {
+            keyed.push((row, key));
         }
+    }
+
+    let removed: Vec<(u32, String)> = if remove {
+        keyed
+            .iter()
+            .filter(|(_, key)| !seen.contains_key(key))
+            .cloned()
+            .collect()
+    } else {
+        Vec::new()
+    };
+    if !removed.is_empty() && removed.len() == keyed.len() {
+        return Err(AppError::Report(vec![format!(
+            "„{sheet}“: Kein Schlüssel aus „{}“ steht im Blatt — es würden alle {} Zeilen geleert. Bitte die Schlüsselspalte prüfen.",
+            table.name,
+            keyed.len()
+        )]));
+    }
+    let gone: HashSet<u32> = removed.iter().map(|(row, _)| *row).collect();
+    if !gone.is_empty() {
+        empty_rows(worksheet, &gone);
+    }
+
+    let mut rows: HashMap<String, u32> = HashMap::new();
+    let mut doubled = 0_u32;
+    for (row, key) in keyed.into_iter().filter(|(row, _)| !gone.contains(row)) {
         match rows.entry(key) {
             std::collections::hash_map::Entry::Occupied(_) => doubled += 1,
             std::collections::hash_map::Entry::Vacant(free) => {
@@ -390,12 +432,18 @@ fn incremental(
             "„{sheet}“: {keyless} Zeile(n) ohne Schlüssel wurden übersprungen."
         ));
     }
+    let removal = if remove {
+        format!(", {} geleert", removed.len())
+    } else {
+        String::new()
+    };
     Ok(Outcome {
         line: format!(
-            "„{sheet}“: {updated} Zeile(n) aktualisiert, {appended} angehängt aus „{}“.",
+            "„{sheet}“: {updated} Zeile(n) aktualisiert, {appended} angehängt{removal} aus „{}“.",
             table.name
         ),
         notes,
+        removed,
         ..Outcome::default()
     })
 }
@@ -432,6 +480,41 @@ fn write_new_row(worksheet: &mut Worksheet, layout: &Layout, row: u32, values: &
             }
             Kind::Hand(_) => {}
         }
+    }
+}
+
+fn empty_rows(worksheet: &mut Worksheet, gone: &HashSet<u32>) {
+    let orphaning: HashSet<u32> = worksheet
+        .cells()
+        .into_iter()
+        .filter(|cell| gone.contains(&cell.coordinate().row_num()))
+        .filter_map(|cell| {
+            let formula = cell.formula_obj()?;
+            (!formula.reference().is_empty())
+                .then(|| cell.formula_shared_index())
+                .flatten()
+        })
+        .collect();
+    let cells: Vec<((u32, u32), Option<String>)> = worksheet
+        .cells()
+        .into_iter()
+        .filter_map(|cell| {
+            let (col, row) = (cell.coordinate().col_num(), cell.coordinate().row_num());
+            if gone.contains(&row) {
+                Some(((col, row), None))
+            } else {
+                cell.formula_shared_index()
+                    .filter(|index| orphaning.contains(index))
+                    .map(|_| ((col, row), Some(cell.formula().to_string())))
+            }
+        })
+        .collect();
+    for (coordinate, plain) in cells {
+        let cell = worksheet.cell_mut(coordinate);
+        match plain {
+            Some(formula) => cell.set_formula(formula),
+            None => cell.set_blank(),
+        };
     }
 }
 
@@ -519,6 +602,7 @@ mod tests {
             key: key.map(str::to_string),
             aliases: vec![],
             ignored: Vec::new(),
+            remove_for: Vec::new(),
             auto: false,
         }
     }
@@ -565,7 +649,7 @@ mod tests {
             &["Wagen", "Stadt"],
             &[&[n(2.0), t("Neuhof")], &[n(7.0), t("Fulda")]],
         );
-        let outcome = write(&mut sheet, &binding(Some("Wagen")), &source, true).unwrap();
+        let outcome = write(&mut sheet, &binding(Some("Wagen")), &source, true, false).unwrap();
 
         assert_eq!(
             value(&sheet, 3, 2),
@@ -609,7 +693,7 @@ mod tests {
             &["Wagen", "Stadt"],
             &[&[n(2.0), t("Neuhof")], &[n(7.0), t("Fulda")]],
         );
-        let outcome = write(&mut sheet, &binding(Some("Wagen")), &source, false).unwrap();
+        let outcome = write(&mut sheet, &binding(Some("Wagen")), &source, false, false).unwrap();
         assert_eq!(value(&sheet, 3, 3), "Neuhof");
         assert!(sheet.cell((1u32, 4u32)).is_none());
         assert!(
@@ -617,6 +701,98 @@ mod tests {
             "{:?}",
             outcome.notes
         );
+    }
+
+    #[test]
+    fn remove_empties_rows_the_document_lacks_and_moves_nothing() {
+        let mut sheet = worksheet();
+        let source = table(
+            &["Wagen", "Stadt"],
+            &[&[n(2.0), t("Neuhof")], &[n(7.0), t("Fulda")]],
+        );
+        let outcome = write(&mut sheet, &binding(Some("Wagen")), &source, true, true).unwrap();
+
+        assert_eq!(outcome.removed, vec![(2, "1".to_string())]);
+        // Row 2 is empty — key, formula and hand note — but still there.
+        for col in 1..=4 {
+            assert_eq!(value(&sheet, col, 2), "", "column {col}");
+            assert_eq!(sheet.cell((col, 2u32)).map(|cell| cell.formula()), Some(""));
+        }
+        // Wagen 2 stayed in row 3 and was updated there; nothing moved up.
+        assert_eq!(sheet.cell((1u32, 3u32)).unwrap().value_number(), Some(2.0));
+        assert_eq!(value(&sheet, 3, 3), "Neuhof");
+        assert_eq!(
+            sheet.cell((2u32, 3u32)).unwrap().formula(),
+            "TODAY()-A3+$A$1+COUNT(A:A)"
+        );
+        assert_eq!(sheet.cell((1u32, 4u32)).unwrap().value_number(), Some(7.0));
+        assert!(
+            outcome.line.contains("1 angehängt, 1 geleert"),
+            "{}",
+            outcome.line
+        );
+    }
+
+    #[test]
+    fn remove_never_takes_a_row_without_a_key() {
+        let mut sheet = worksheet();
+        sheet.cell_mut((3u32, 4u32)).set_value_string("Summe");
+        let source = table(&["Wagen", "Stadt"], &[&[n(2.0), t("Neuhof")]]);
+        let outcome = write(&mut sheet, &binding(Some("Wagen")), &source, false, true).unwrap();
+        assert_eq!(outcome.removed.len(), 1);
+        assert_eq!(value(&sheet, 3, 4), "Summe");
+    }
+
+    #[test]
+    fn remove_refuses_a_sheet_that_would_lose_every_keyed_row() {
+        let mut sheet = worksheet();
+        let source = table(&["Wagen", "Stadt"], &[&[n(8.0), t("Fulda")]]);
+        let error = write(&mut sheet, &binding(Some("Wagen")), &source, true, true).unwrap_err();
+        assert!(
+            error.into_messages()[0].contains("alle 2 Zeilen"),
+            "the wrong key column must not wipe the sheet"
+        );
+        assert_eq!(value(&sheet, 3, 2), "Alt");
+    }
+
+    #[test]
+    fn without_remove_a_missing_key_stays() {
+        let mut sheet = worksheet();
+        let source = table(&["Wagen", "Stadt"], &[&[n(2.0), t("Neuhof")]]);
+        let outcome = write(&mut sheet, &binding(Some("Wagen")), &source, false, false).unwrap();
+        assert!(outcome.removed.is_empty());
+        assert_eq!(value(&sheet, 3, 2), "Alt");
+        assert!(!outcome.line.contains("geleert"), "{}", outcome.line);
+    }
+
+    #[test]
+    fn a_shared_formula_survives_emptying_its_first_row() {
+        use umya_spreadsheet::structs::{CellFormula, CellFormulaValues};
+
+        let mut sheet = worksheet();
+        // Column E as Excel stores a pulled-down formula: the text in its first
+        // cell only, the rest pointing at it by `si`.
+        for row in 2u32..=3 {
+            let mut formula = CellFormula::default();
+            formula.set_formula_type(CellFormulaValues::Shared);
+            formula.set_shared_index(0);
+            if row == 2 {
+                formula.set_text("A2*2").set_reference("E2:E3");
+            } else {
+                formula.set_text_view("A3*2");
+            }
+            sheet
+                .cell_mut((5u32, row))
+                .cell_value_mut()
+                .set_formula_obj(formula);
+        }
+        let source = table(&["Wagen", "Stadt"], &[&[n(2.0), t("Neuhof")]]);
+        write(&mut sheet, &binding(Some("Wagen")), &source, false, true).unwrap();
+
+        assert_eq!(sheet.cell((5u32, 2u32)).unwrap().formula(), "");
+        let cell = sheet.cell((5u32, 3u32)).unwrap();
+        assert_eq!(cell.formula(), "A3*2");
+        assert_eq!(cell.formula_shared_index(), None);
     }
 
     #[test]
@@ -629,7 +805,7 @@ mod tests {
             .set_value_number(338_506_591_522.0);
         sheet.cell_mut((2u32, 2u32)).set_value_string("Alt");
         let source = table(&["Wagen", "Stadt"], &[&[t("3385 0659 152-2"), t("Neuhof")]]);
-        write(&mut sheet, &binding(Some("Wagen")), &source, false).unwrap();
+        write(&mut sheet, &binding(Some("Wagen")), &source, false, false).unwrap();
         assert_eq!(value(&sheet, 2, 2), "Neuhof");
     }
 
@@ -640,7 +816,7 @@ mod tests {
             &["Wagen", "Stadt"],
             &[&[n(2.0), t("Neuhof")], &[n(2.0), t("Fulda")]],
         );
-        let error = write(&mut sheet, &binding(Some("Wagen")), &source, true).unwrap_err();
+        let error = write(&mut sheet, &binding(Some("Wagen")), &source, true, false).unwrap_err();
         assert!(error.into_messages()[0].contains("nicht eindeutig"));
         assert_eq!(value(&sheet, 3, 3), "Alt");
     }
@@ -649,7 +825,7 @@ mod tests {
     fn without_a_key_the_sheet_is_refused() {
         let mut sheet = worksheet();
         let source = table(&["Wagen"], &[&[n(2.0)]]);
-        let error = write(&mut sheet, &binding(None), &source, true).unwrap_err();
+        let error = write(&mut sheet, &binding(None), &source, true, false).unwrap_err();
         assert!(error.into_messages()[0].contains("Schlüsselspalte"));
     }
 
@@ -662,7 +838,7 @@ mod tests {
             source: "ort".into(),
         });
         let source = table(&["Wagen", "ort"], &[&[n(2.0), t("Neuhof")]]);
-        write(&mut sheet, &bound, &source, false).unwrap();
+        write(&mut sheet, &bound, &source, false, false).unwrap();
         assert_eq!(value(&sheet, 3, 3), "Neuhof");
     }
 
@@ -670,7 +846,7 @@ mod tests {
     fn a_sheet_sharing_no_header_with_the_source_is_refused_untouched() {
         let mut sheet = worksheet();
         let source = table(&["Etwas anderes"], &[&[t("x")]]);
-        let error = write(&mut sheet, &binding(None), &source, true).unwrap_err();
+        let error = write(&mut sheet, &binding(None), &source, true, false).unwrap_err();
         assert!(error.into_messages()[0].contains("keine Spalte"));
         assert_eq!(value(&sheet, 3, 2), "Alt");
     }
@@ -725,7 +901,7 @@ mod tests {
         });
         let source = table(&["Wagen", "Stadt"], &[&[n(2.0), t("Neuhof")]]);
         assert_eq!(structure(&sheet, &bound, &source).unwrap().hand, ["Stadt"]);
-        write(&mut sheet, &bound, &source, false).unwrap();
+        write(&mut sheet, &bound, &source, false, false).unwrap();
         assert_eq!(value(&sheet, 4, 3), "Neuhof");
         assert_eq!(value(&sheet, 3, 3), "Alt");
     }
@@ -741,7 +917,7 @@ mod tests {
             structure(&sheet, &bound, &source).unwrap().unmatched,
             ["Stadt"]
         );
-        write(&mut sheet, &bound, &source, false).unwrap();
+        write(&mut sheet, &bound, &source, false, false).unwrap();
         assert_eq!(value(&sheet, 3, 3), "Alt");
     }
 
@@ -750,7 +926,7 @@ mod tests {
         let mut sheet = worksheet();
         sheet.set_auto_filter("A1:D3");
         let source = table(&["Wagen"], &[&[n(1.0)], &[n(2.0)], &[n(3.0)], &[n(4.0)]]);
-        write(&mut sheet, &binding(Some("Wagen")), &source, true).unwrap();
+        write(&mut sheet, &binding(Some("Wagen")), &source, true, false).unwrap();
         assert_eq!(sheet.auto_filter().unwrap().range().range(), "A1:D5");
     }
 
@@ -767,7 +943,7 @@ mod tests {
                 &[t("46′559"), t("x")],
             ],
         );
-        write(&mut sheet, &binding(Some("Wagen")), &source, true).unwrap();
+        write(&mut sheet, &binding(Some("Wagen")), &source, true, false).unwrap();
         assert_eq!(
             sheet.cell((1u32, 4u32)).unwrap().value_number(),
             Some(180_028_676.0)

@@ -16,6 +16,10 @@
 // headers differ (`TRANSPORTMITTELNR` ← `Asset`). Nothing is blocked, and the
 // preview shows every cell before anything is written.
 //
+// `remove` comes back on where the user last left it on for this sheet and
+// this template (`remove_for`, any copy of the same shipped template), and is
+// off everywhere else: unlike `append`, a wrong default empties rows.
+//
 // Suggested sheets come FIRST, the rest in workbook order: the real master has
 // 28 sheets and the two that matter must not be scrolled for.
 //
@@ -113,6 +117,7 @@ pub fn start(db: &mut TrainsDb, dokument_id: &str) -> AppResult<MasterExportStar
                 aliases,
                 ignored: binding.ignored.clone(),
                 append: remembered,
+                remove: binding.remove_for.iter().any(|id| related.contains(id)),
                 matched: shared.len() as u32,
                 suggested: reason.is_some(),
                 reason,

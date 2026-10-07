@@ -301,6 +301,7 @@ pub(super) mod tests {
             key: None,
             aliases: Vec::new(),
             ignored: Vec::new(),
+            remove_for: Vec::new(),
             auto: false,
         }
     }

@@ -1,9 +1,11 @@
 // ─── why ────────────────────────────────────────────────────────
-// Step three, the approval: what the update WILL write, per sheet — the paste's own line, its
-// notes, and every cell that changes. It is a real write into an in-memory
-// copy of the workbook, diffed before and after, so this is the result and not
-// a prediction of it. „Übernehmen“ runs the same code once more and saves it
-// as the master's next version.
+// Step three, the approval: what the update WILL write, per sheet — the paste's
+// own line, its notes, every cell that changes, and the key of every row it
+// empties: a wipe nobody saw listed is the one mistake the preview exists to
+// stop. It is a real write into an in-memory copy of the workbook, diffed
+// before and after, so this is the result and not a prediction of it.
+// „Übernehmen“ runs the same code once more and saves it as the master's next
+// version.
 //
 // „Zuordnung merken“ stores the ticks and the column answers on the master
 // bindings, so the next document of this template opens with the same sheets

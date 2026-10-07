@@ -13,7 +13,10 @@
 //
 // The update is incremental; `append` per sheet says whether a key the sheet
 // lacks becomes a new row — on, by Rust's default, only for the sheet the
-// document's template belongs to. On such a sheet a document column with
+// document's template belongs to. `remove` says whether a sheet row whose key
+// the document lacks is emptied in place — offered on every ticked sheet, because only
+// the user knows which documents are complete, and on where Rust remembered it
+// for this template. On such a sheet a document column with
 // nowhere to go blocks Weiter until answered — an alias onto a hand-kept
 // column, or „nicht übertragen“; a sheet that is only updated asks nothing. That is the conflict rule of
 // this wizard: a value difference is the update, a structure difference is a
@@ -44,6 +47,7 @@ export interface ExportSheetView {
   sheet: MasterExportSheet;
   ticked: boolean;
   append: boolean;
+  remove: boolean;
 }
 
 export interface ColumnAnswer {
@@ -92,6 +96,7 @@ export class MasterExportFacade {
       sheet,
       ticked: ticked[sheet.sheet] ?? false,
       append: choices[sheet.sheet]?.append ?? sheet.append,
+      remove: choices[sheet.sheet]?.remove ?? sheet.remove,
     }));
   });
 
@@ -116,6 +121,7 @@ export class MasterExportFacade {
               aliases: [],
               ignored: [],
               append: view.sheet.append,
+              remove: view.sheet.remove,
             }
         ),
     };
@@ -167,6 +173,10 @@ export class MasterExportFacade {
 
   setAppend(sheet: string, append: boolean): void {
     this.#store.choose({ ...this.#choice(sheet), append });
+  }
+
+  setRemove(sheet: string, remove: boolean): void {
+    this.#store.choose({ ...this.#choice(sheet), remove });
   }
 
   setRemember(remember: boolean): void {
@@ -269,6 +279,7 @@ export class MasterExportFacade {
         aliases: [],
         ignored: [],
         append: false,
+        remove: false,
       }
     );
   }

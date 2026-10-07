@@ -9,11 +9,16 @@
 // formula columns are re-emitted with stale cached results on purpose, so
 // comparing them would report every row of every formula as changed.
 //
+// Rows the paste EMPTIED are not diffed — the run names them by key, and one
+// line per row says more than a cleared cell per column.
+//
 // A cell is compared as the user SEES it — a date-formatted serial as
 // `dd.mm.yyyy`, everything else as its text — so a value whose type alone moved
 // (text `180028676` to the number) is not a change worth listing. The list is
 // capped; `changed` still counts every cell.
 // ────────────────────────────────────────────────────────────────
+
+use std::collections::HashSet;
 
 use crate::trains::model::CellChange;
 use crate::trains::sanitise::{date, format};
@@ -26,11 +31,13 @@ pub fn changes(
     after: &Grid,
     columns: &[u32],
     key: Option<u32>,
+    removed: &[u32],
 ) -> (u32, Vec<CellChange>) {
+    let removed: HashSet<u32> = removed.iter().copied().collect();
     let last = before.rows.max(after.rows);
     let mut changed = 0_u32;
     let mut shown = Vec::new();
-    for row in 2..=last {
+    for row in (2..=last).filter(|row| !removed.contains(row)) {
         for col in columns {
             let old = shown_as(before.cell(*col, row));
             let new = shown_as(after.cell(*col, row));
@@ -120,7 +127,7 @@ mod tests {
             ],
         );
         // Column 3 is not one the paste wrote, so its change is not reported.
-        let (changed, shown) = changes(&before, &after, &[1, 2], Some(1));
+        let (changed, shown) = changes(&before, &after, &[1, 2], Some(1), &[]);
         assert_eq!(changed, 3);
         assert_eq!(shown[0].cell, "B3");
         assert_eq!(shown[0].key, "2");
@@ -136,8 +143,20 @@ mod tests {
     fn a_removed_row_keeps_its_old_key() {
         let before = Grid::from_text("Blatt", &[&["Wagen"], &["1"]]);
         let after = Grid::from_text("Blatt", &[&["Wagen"]]);
-        let (_, shown) = changes(&before, &after, &[1], Some(1));
+        let (_, shown) = changes(&before, &after, &[1], Some(1), &[]);
         assert_eq!(shown[0].key, "1");
         assert_eq!(shown[0].after, "");
+    }
+
+    #[test]
+    fn an_emptied_row_is_not_listed_cell_by_cell() {
+        let before = Grid::from_text(
+            "Blatt",
+            &[&["Wagen", "Stadt"], &["1", "Alt"], &["2", "Alt"]],
+        );
+        let after = Grid::from_text("Blatt", &[&["Wagen", "Stadt"], &["", ""], &["2", "Neu"]]);
+        let (changed, shown) = changes(&before, &after, &[1, 2], Some(1), &[2]);
+        assert_eq!(changed, 1);
+        assert_eq!(shown[0].cell, "B3");
     }
 }

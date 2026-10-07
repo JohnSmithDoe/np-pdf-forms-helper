@@ -114,6 +114,13 @@ Measured 2026-08-22 in Chrome against `@ionic/angular@8`, while reworking the ex
   answers and the window keeps spinning. 3.1.0 reads all 28 sheets (measured 2026-10-03, macOS). Every
   umya and lopdf read now runs inside `AppError::reading`, so the next parser bug is a German dialog.
 
+- **umya 3.1.0 `Worksheet::remove_row` STILL panics on a whole-column range.** The read was fixed; the
+  remove path (`adjustment_remove_formula_coordinate`) still `unwrap`s the missing row of `A:A`, so a
+  single `COUNT(A:A)` anywhere in the sheet kills it (found 2026-10-07). Translating one cell with
+  `Cell::set_coordinate` does not panic. The master update does not need either: it EMPTIES rows
+  rather than deleting them (decisions.md, „Fehlende Zeilen leeren“), because a deletion would also
+  leave every reference from the other, never-deserialised sheets pointing one row off.
+
 - **A full `read` deserialises every sheet, whichever one you wanted.** The same workbook had two
   sheets filled with `0` down to row 1,048,576: 6.5 s and 2.6 GB for a full read, 0.4 s and 300 MB for
   `lazy_read` plus the one sheet. `grid::read` therefore reads one sheet, and so does the master

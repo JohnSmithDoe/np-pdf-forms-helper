@@ -10,7 +10,11 @@
 // carries „Neue Zeilen anhängen“: the update is incremental either way, the
 // toggle only decides whether a key the sheet lacks becomes a row. Rust turns it
 // on for the template's own sheet only, so a project list does not grow every
-// Wagen of a telematics export.
+// Wagen of a telematics export. „Fehlende Zeilen leeren“ is the opposite
+// direction — a sheet row whose key the document lacks is emptied, never moved — and is
+// offered on EVERY ticked sheet: whether a document is complete for a sheet is
+// the user's knowledge, not the code's. It starts where it was last left for
+// this template, and off everywhere else.
 //
 // The label sits INSIDE `ion-checkbox`, so the whole row toggles it; a separate
 // `ion-label` beside a slotted checkbox leaves only the box itself clickable.
@@ -61,6 +65,13 @@ export class ExportSheetsPage {
 
   protected onTick(sheet: string, event: Event): void {
     this.facade.tick(
+      sheet,
+      (event as CustomEvent<{ checked: boolean }>).detail.checked
+    );
+  }
+
+  protected onRemove(sheet: string, event: Event): void {
+    this.facade.setRemove(
       sheet,
       (event as CustomEvent<{ checked: boolean }>).detail.checked
     );

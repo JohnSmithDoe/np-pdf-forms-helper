@@ -50,7 +50,8 @@
 //
 // The master EXPORT wizard is faked shallow. `open_master_export` offers every
 // seeded sheet, suggested ones first — those bound to the document's template,
-// with `append` on and the only ones pre-ticked; the other sheets' key and its
+// with `append` on and the only ones pre-ticked, `remove` on where the binding
+// remembers it for the template; the other sheets' key and its
 // alias are `cargo test`'s. `preview_master_export` and `write_master_export` serve
 // `seed.masterExport[sheet]` — hand-written runs with their structure and cell
 // changes — and only ECHO the request's answers back: an answered column leaves
@@ -403,6 +404,7 @@ export interface FakeMasterSettings {
     key?: string;
     aliases: { master: string; source: string }[];
     ignored?: string[];
+    removeFor?: string[];
     auto?: boolean;
   }[];
   importRun?: { startedAt: string; sheets: string[]; done: string[] };
@@ -503,6 +505,7 @@ export interface FakeExportSheetRun {
   line: string;
   notes?: string[];
   changed: number;
+  removed?: string[];
   changes: {
     cell: string;
     row: number;
@@ -522,6 +525,7 @@ interface FakeExportRequest {
     aliases: { master: string; source: string }[];
     ignored: string[];
     append: boolean;
+    remove: boolean;
   }[];
   remember: boolean;
 }
@@ -780,6 +784,8 @@ export function install(seed: FakeSeed): void {
         ...copy(seeded),
         sheet: choice.sheet,
         append: choice.append,
+        remove: choice.remove,
+        removed: choice.remove ? copy(seeded.removed ?? []) : [],
         key: choice.key,
         aliases: copy(choice.aliases),
         ignored: copy(choice.ignored),
@@ -1266,6 +1272,8 @@ export function install(seed: FakeSeed): void {
                 aliases: copy(bound?.aliases ?? []),
                 ignored: copy(bound?.ignored ?? []),
                 append: remembered,
+                remove:
+                  bound?.removeFor?.includes(dokument.templateId) ?? false,
                 matched: state.masterExport[sheet.name]?.matched.length ?? 0,
                 suggested: remembered,
                 reason: remembered

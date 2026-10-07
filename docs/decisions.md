@@ -846,3 +846,56 @@ Vorlage, das `RSmonitoring` mangels Bindung nicht war.
   erreicht sie also. Eine von Hand geänderte Bindung (`auto: false`, Masterseite oder „Merken“) bleibt,
   wie sie ist.
 
+## Fehlende Zeilen leeren, je Blatt umschaltbar (appended 2026-10-07)
+
+Ändert „Die Master-Aktualisierung ist immer inkrementell“ in einem Punkt: „gelöscht wird nie“ gilt
+nur noch als Vorgabe. Entschieden mit Martin am 2026-10-07: drei Schritte, unabhängig voneinander —
+vorhandene Zeilen aktualisieren (immer), neue anhängen (`append`), fehlende leeren (`remove`).
+
+- **Geleert, nicht gelöscht.** Jede Zelle der Zeile verliert Wert und Formel, ihr Format bleibt; die
+  Zeile selbst bleibt stehen. Keine Zeile rückt nach, also verschiebt sich KEIN Bezug — weder im Blatt
+  noch aus anderen Blättern, die ein Löschen nicht hätte nachziehen können, weil nur das eine Blatt
+  gelesen wird. Ein Bezug auf die geleerte Zeile liest leer, und das ist sie jetzt. Ein erster Entwurf
+  löschte Zeilen und nahm verschobene Bezüge in Kauf; das war nicht akzeptabel. Der Preis ist eine
+  Lücke im Blatt; angehängt wird weiter unter der letzten Zeile.
+- **Lücken werden nie aufgefüllt** (Martin, 2026-10-07). Ein Bezug auf eine geleerte Zeile liest leer
+  — richtig. Füllte ein neuer Wagen die Lücke, zeigte derselbe Bezug still die Werte eines ANDEREN
+  Wagens.
+- **Angeboten auf JEDEM angekreuzten Blatt**, nicht nur dem der Vorlage. Ob ein Dokument für ein
+  Blatt vollständig ist, weiß nur der Benutzer; eine Einschränkung im Code wäre geraten.
+- **Gemerkt je Blatt UND Vorlage** (`MasterBinding.remove_for`, Vorlagen-IDs; jede Kopie derselben
+  mitgelieferten Vorlage zählt), über „Merken“ in der Vorschau. Für dieselbe Art Dokument ist die
+  Antwort immer dieselbe. Sonst aus: anders als ein falsches `append` leert ein falsches `remove`.
+- **Geleert wird jede Kopie eines doppelten Schlüssels**, **eine Zeile ohne Schlüssel nie** — Summen,
+  Notizen, der Formel-Schwanz haben keinen.
+- **Stünde kein einziger Schlüssel des Dokuments im Blatt, wird das Blatt abgelehnt** statt geleert:
+  das ist fast immer eine falsche Schlüsselspalte, nicht eine gewollte Leerung.
+- **Die Vorschau nennt jede geleerte Zeile mit ihrem Schlüssel**, statt sie Zelle für Zelle als
+  Änderung zu listen (`diff::changes`).
+- **Eine geteilte Formel, deren erste Zelle geleert wird, wird vorher zu einfachen Formeln** — nur
+  ihren Text trägt nur die erste Zelle, der Rest der Gruppe stünde sonst ohne da.
+
+## Ein älteres Dokument wird gewarnt, nicht abgewiesen (appended 2026-10-07)
+
+Entschieden mit Martin am 2026-10-07. **Entschieden, noch nicht gebaut** (→ state.md).
+
+Anlass: Die Master-Aktualisierung vom 05.10. schrieb einen Telematik-Export vom 02.10. über einen
+Master, der schon den Stand vom 05.10. hatte. Danach war „Timestamp“ in 360 von 403 Zeilen älter, in
+keiner neuer, und der Standort fiel mit zurück. Gesagt wurde nichts. `paste::incremental` überschreibt
+mit Absicht (jedes Dokument ist ein Inkrement) und vergleicht nicht, welche Seite aktueller ist.
+
+- **Die Vorschau warnt je geschriebener Spalte**, wenn mehr Daten zurückgingen als vorrückten, und nennt
+  beide Zahlen, etwa: „„Timestamp“: 360 Daten würden älter, 0 neuer. Ist das Dokument älter als der Stand
+  der Master-Datei?“ Abgewiesen wird nichts, je Zeile entschieden wird nichts. Ob ein älteres Dokument
+  gewollt ist (eine Korrektur, ein nachgereichter Stand), weiß nur der Benutzer.
+- **Kein „neuer gewinnt“ je Zeile.** Das wäre eine Vorrangregel im Einfügen, und solche Regeln bleiben aus
+  dem Master-Weg heraus (der Benutzer entscheidet, siehe „Der Master wird gespiegelt“). Welche Spalte den
+  Stand trägt, ist auch nicht vorher bekannt. Die Warnung braucht keine Bindung, sie gilt für jede
+  Datumsspalte.
+- **Geplante Form:** direkt neben `diff::changes`, auf denselben Rastern vorher und nachher und denselben
+  Spalten. So beurteilt sie genau das, was geschrieben würde, und hat nichts vorherzusagen. Ein Datum ist
+  eine Seriennummer mit Datumsformat oder ein Text, den `date::parse_text` ohne Warnung liest.
+  Zweistellige Jahre zählen nicht, damit Schadcodes wie `3.3.4` keine Daten werden. Eine Zahl ohne
+  Datumsformat ist kein Datum. Verglichen wird nach Kalendertag. Ein eigenes Feld `warnings` an
+  `MasterExportSheetRun` (Vertrag doppelt: `model.rs` und `trains.types.ts`, dazu der Fake). In der
+  Vorschau wird es dargestellt wie die Konflikte in Schritt 2.

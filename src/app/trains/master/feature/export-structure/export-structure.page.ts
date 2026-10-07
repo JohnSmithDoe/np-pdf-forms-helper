@@ -71,6 +71,7 @@ import {
   EXPORT_PHASE,
   EXPORT_STEPS,
   APPEND_LABELS,
+  REMOVE_LABEL,
 } from '../../../model/master-export';
 
 const IGNORE = '\u0000nicht-uebertragen';
@@ -113,6 +114,7 @@ export class ExportStructurePage {
   protected readonly phase = EXPORT_PHASE;
   protected readonly steps = EXPORT_STEPS;
   protected readonly appendLabels = APPEND_LABELS;
+  protected readonly removeLabel = REMOVE_LABEL;
   protected readonly ignore = IGNORE;
   protected readonly noKey = NO_KEY;
   protected readonly draft = signal<Record<string, Draft | undefined>>({});

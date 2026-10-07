@@ -77,17 +77,27 @@ front of a screen, or a piece of the migration that does not exist yet. Settled 
   template and re-import a second file from the same sender; commit; export a document into the
   master and confirm a hand-kept column travelled with its key; and corrupt one cell to confirm the row is reported
   rather than the run aborting.
-- **The master write path has run against the real master only from a test.** The former one-click
+- **The master write path has run against the real master ONCE, in `tauri:dev`.** The former one-click
   refresh pasted `Telematik`, `aktuelleNodepit` and `ECHO_Eingänge` of the real workbook straight from
   the three sender files (1.9 s, only those three sheets changed, every dashboard key still found), and
   Excel opened umya's write cleanly. Its replacement, the „Master aktualisieren“ wizard (2026-10-04, `master/export/`,
-  `/trains/master/export/*`, writing a new client-master version), runs the same `paste` and is covered by `cargo test` and Playwright
-  only: it has never run against the real master. Worth measuring there first: a dry run deserialises
-  every ticked sheet of the current version on every answer, so a sheet filled to row 1,048,576 makes each
-  preview cost what the read copy was built to avoid — and a sheet that size is refused by the grid's
-  row limit in the first place. Also unrun: the pages in `tauri:dev`. Every sheet recognised by a Wagen
-  key column is bound as the overview kind; the wizard no longer blocks those, it only refuses to
-  SUGGEST one without a remembered template and warns on it.
+  `/trains/master/export/*`, writing a new client-master version), runs the same `paste`. It wrote one
+  client-master version on 2026-10-05 from the telematics export into `Telematik` (checked read-only
+  2026-10-07). The header mapping held despite the export lacking the sheet's header-less formula column,
+  that formula was re-emitted per row, and the key was written as a number. The same run showed two
+  gaps:
+  - **An older document silently rolls dates back.** The export was from 02.10 and the master already held
+    05.10, so 360 of 403 `Timestamp`s went backwards and none forwards. A preview warning is decided and
+    not built (decisions.md, „Ein älteres Dokument wird gewarnt, nicht abgewiesen“).
+  - **Cached formula results stay stale after the write.** Excel recalculates on open (umya writes a
+    lower `calcId`, and `HEUTE()` is volatile), but the app's own readers (the read copy, `sheet_view`)
+    see the old numbers.
+
+  Still worth measuring: a dry run deserialises every ticked sheet of the current version on every
+  answer, so a sheet filled to row 1,048,576 makes each preview cost what the read copy was built to
+  avoid. A sheet that size is refused by the grid's row limit in the first place. Every sheet recognised
+  by a Wagen key column is bound as the overview kind; the wizard no longer blocks those, it only refuses
+  to SUGGEST one without a remembered template and warns on it.
 - **The master IMPORT (Phase 1: Wagen, Halter, Radsatz, Einbau) has run against the real master only
   from a temporary test**, 2026-10-04, through `mirror::start` / `stage_sheet` / `commit` with every
   group answered „neu anlegen“: dashboard, fitting list and stock in 3.5 s, peak ~750 MB for the test

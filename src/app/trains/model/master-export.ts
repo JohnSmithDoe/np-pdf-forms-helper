@@ -12,3 +12,5 @@ export const APPEND_LABELS = {
   on: 'neue Zeilen werden angehängt',
   off: 'nur vorhandene Zeilen werden aktualisiert',
 } as const;
+
+export const REMOVE_LABEL = 'fehlende Zeilen werden geleert';

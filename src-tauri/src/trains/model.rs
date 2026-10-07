@@ -90,13 +90,17 @@
 //
 // The master EXPORT is a wizard over one filed Dokument: `MasterExportStart`
 // offers the sheets and the base file, a `MasterExportRequest` is the user's
-// whole answer — sheets, keys, aliases, `append` — sent again on every change like
+// whole answer — sheets, keys, aliases, `append`, `remove` — sent again on every change like
 // `restage_import`'s plan, and a `MasterExportRun` is the dry run or the
 // written copy, with each sheet's structure and its changed cells.
 // The update is ALWAYS incremental: rows are matched by `key`, a known key is
-// updated, nothing is deleted, and an unknown key is appended only where the
-// sheet's `append` is on. There is no replace mode any more — a `mode` left in
-// an old `master.json` is ignored on read and dropped on the next write.
+// updated, an unknown key is appended only where the sheet's `append` is on,
+// and a sheet row whose key the document lacks is emptied — never moved —
+// only where its `remove` is on. `remove` is remembered per sheet AND template
+// (`MasterBinding.remove_for`, template ids): only the user knows which
+// documents are complete for which sheet. There is no replace mode any more — a
+// `mode` left in an old `master.json` is ignored on read and dropped on the next
+// write.
 // What it writes is a new `MasterFileVersion`, its `quelle` the document.
 // `MasterSettings.file` is derived — always the current version's cleaned copy
 // (`bindings::follow`) — and the backend owns it, like `import_run`.
@@ -172,6 +176,8 @@ pub struct MasterBinding {
     pub aliases: Vec<MasterAlias>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ignored: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remove_for: Vec<String>,
     #[serde(default)]
     pub auto: bool,
 }
@@ -268,6 +274,8 @@ pub struct MasterExportChoice {
     pub ignored: Vec<String>,
     #[serde(default)]
     pub append: bool,
+    #[serde(default)]
+    pub remove: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -298,6 +306,7 @@ pub struct MasterExportSheet {
     pub aliases: Vec<MasterAlias>,
     pub ignored: Vec<String>,
     pub append: bool,
+    pub remove: bool,
     pub matched: u32,
     pub suggested: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -331,6 +340,7 @@ pub struct CellChange {
 pub struct MasterExportSheetRun {
     pub sheet: String,
     pub append: bool,
+    pub remove: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     pub aliases: Vec<MasterAlias>,
@@ -347,6 +357,7 @@ pub struct MasterExportSheetRun {
     pub notes: Vec<String>,
     pub changed: u32,
     pub changes: Vec<CellChange>,
+    pub removed: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]

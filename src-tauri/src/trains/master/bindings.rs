@@ -146,6 +146,7 @@ pub fn default(sheet: &MasterSheet, templates: &[ImportTemplate]) -> MasterBindi
         key: None,
         aliases: Vec::new(),
         ignored: Vec::new(),
+        remove_for: Vec::new(),
         auto: true,
     };
     if let Some(hint) = hint(&binding.template_id, templates) {

@@ -101,6 +101,7 @@ export interface MasterBinding {
   key?: string;
   aliases: MasterAlias[];
   ignored?: string[];
+  removeFor?: string[];
   auto: boolean;
 }
 
@@ -161,6 +162,7 @@ export interface MasterExportChoice {
   aliases: MasterAlias[];
   ignored: string[];
   append: boolean;
+  remove: boolean;
 }
 
 export interface MasterExportRequest {
@@ -182,6 +184,7 @@ export interface MasterExportSheet {
   aliases: MasterAlias[];
   ignored: string[];
   append: boolean;
+  remove: boolean;
   matched: number;
   suggested: boolean;
   reason?: string;
@@ -208,6 +211,7 @@ export interface CellChange {
 export interface MasterExportSheetRun {
   sheet: string;
   append: boolean;
+  remove: boolean;
   key?: string;
   aliases: MasterAlias[];
   ignored: string[];
@@ -222,6 +226,7 @@ export interface MasterExportSheetRun {
   notes: string[];
   changed: number;
   changes: CellChange[];
+  removed: string[];
 }
 
 export interface MasterExportRun {
