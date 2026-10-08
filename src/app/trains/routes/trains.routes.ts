@@ -176,7 +176,7 @@ const pages: Routes = [
   },
   {
     path: 'master',
-    title: 'Master-Datei',
+    title: 'Master-Import',
     loadComponent: () =>
       import('../feature/master/master.page').then((m) => m.TrainsMasterPage),
   },
@@ -244,6 +244,33 @@ const pages: Routes = [
     loadComponent: () =>
       import('../feature/radsatz-list/radsatz-list.page').then(
         (m) => m.RadsatzListPage
+      ),
+  },
+  {
+    path: 'wagen/:id',
+    title: 'Wagen',
+    data: { kind: 'wagen' },
+    loadComponent: () =>
+      import('../feature/entity-detail/entity-detail.page').then(
+        (m) => m.EntityDetailPage
+      ),
+  },
+  {
+    path: 'radsaetze/:id',
+    title: 'Radsatz',
+    data: { kind: 'radsatz' },
+    loadComponent: () =>
+      import('../feature/entity-detail/entity-detail.page').then(
+        (m) => m.EntityDetailPage
+      ),
+  },
+  {
+    path: 'partner/:id',
+    title: 'Partner',
+    data: { kind: 'partner' },
+    loadComponent: () =>
+      import('../feature/entity-detail/entity-detail.page').then(
+        (m) => m.EntityDetailPage
       ),
   },
   {

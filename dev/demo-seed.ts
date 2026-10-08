@@ -69,6 +69,11 @@
 // readings are dated relative to NOW (`vorTagen`), or „funkte vor N Tagen“
 // would grow every day the seed is not touched.
 //
+// THE DETAIL PAGES are hand-written for wg-1, its Radsatz rs-1 and the
+// Werkstatt Schienenbein, linked to each other, so the walk Wagen → Radsatz →
+// Werkstatt → Wagen can be clicked through; building them is `trains::detail`'s.
+// Every other entity answers with its bare title.
+//
 // THE MASTER FILE starts with one taken-over version, and a pick answers a
 // second one as pending — with a cut tail, a retyped Wagennummer, a text date,
 // a note and a formula tail, every kind of line its report renders.
@@ -79,6 +84,7 @@ import type {
   FakeDokument,
   FakeDocument,
   FakeEinbau,
+  FakeEntityDetail,
   FakeExportSheetRun,
   FakeInstandhaltung,
   FakeMasterFileVersion,
@@ -383,6 +389,204 @@ const zustand: FakeWagenZustand = {
       source: quelle('P8.xlsx', 3),
     },
   ],
+};
+
+const entityDetails: Record<string, FakeEntityDetail> = {
+  'wagen:wg-1': {
+    kind: 'wagen',
+    id: 'wg-1',
+    title: '218124712173',
+    subtitle: 'Tanoos',
+    fields: [
+      {
+        label: 'Halter',
+        value: 'Wagenmut AG',
+        link: { kind: 'partner', id: 'p-wagenmut' },
+      },
+      {
+        label: 'Eigentümer',
+        value: 'Nietenzähler Rail Leasing GmbH',
+        link: { kind: 'partner', id: 'p-nieten' },
+      },
+      { label: 'Bauart', value: 'Tanoos' },
+      { label: 'Angelegt am', value: '02.02.2026' },
+    ],
+    sections: [
+      {
+        title: 'Telematik',
+        empty: 'Keine Telematik-Meldung.',
+        rows: [
+          {
+            title: 'Letzte Meldung 06.10.2026 08:15',
+            lines: [
+              'Neuhof (Kr Fulda), DE',
+              'BEWEGUNG',
+              '227734 km',
+              'Energie 98 %',
+            ],
+          },
+          { title: 'Gerät PI1703372', lines: ['angebaut am 15.04.2024'] },
+        ],
+      },
+      {
+        title: 'Eingebaute Radsätze',
+        empty: 'Kein Radsatz eingebaut.',
+        rows: [
+          {
+            title: 'RS-2024-0815',
+            lines: ['Position 1', 'eingebaut 02.02.2026'],
+            link: { kind: 'radsatz', id: 'rs-1' },
+          },
+        ],
+      },
+      {
+        title: 'Schadensmeldungen',
+        empty: 'Keine Schadensmeldung.',
+        rows: [
+          {
+            title: 'Schaden 3.3.4 · offen',
+            lines: [
+              'gemeldet am 29.09.2026',
+              'von Disposition',
+              'Bremsklotz fehlt',
+              'ausgesetzt',
+              'Werkstatt beauftragen',
+            ],
+            tone: 'warning',
+          },
+        ],
+      },
+      {
+        title: 'Werkstattaufträge',
+        empty: 'Kein Werkstattauftrag.',
+        rows: [
+          {
+            title: 'Auftrag 24094-26/01',
+            lines: [
+              'BS_FREIGABE',
+              'Schienenbein Waggonwerk GmbH',
+              'erfasst 30.09.2026',
+            ],
+            link: { kind: 'partner', id: 'p-werk-schienenbein' },
+            tone: 'medium',
+          },
+        ],
+      },
+      {
+        title: 'Prüfungen',
+        empty: 'Keine Prüfung.',
+        rows: [
+          { title: 'P8 fällig 31.03.2027', lines: ['G'] },
+          { title: 'G4.2 fällig 30.06.2030', lines: ['Abgeschlossen'] },
+        ],
+      },
+      { title: 'Frühere Radsätze', empty: 'Kein Radsatz ausgebaut.', rows: [] },
+      {
+        title: 'Instandhaltungen',
+        empty: 'Keine Instandhaltung.',
+        rows: [
+          {
+            title: 'Radsatz getauscht',
+            lines: [
+              '02.02.2026',
+              'Schienenbein Waggonwerk GmbH',
+              '3420,00 €',
+              'Laufflächenschaden',
+              'Radsatz RS-2024-0815',
+            ],
+            link: { kind: 'partner', id: 'p-werk-schienenbein' },
+          },
+        ],
+      },
+    ],
+  },
+  'radsatz:rs-1': {
+    kind: 'radsatz',
+    id: 'rs-1',
+    title: 'RS-2024-0815',
+    subtitle: 'eingebaut',
+    fields: [
+      {
+        label: 'Eingebaut in',
+        value: '218124712173',
+        link: { kind: 'wagen', id: 'wg-1' },
+      },
+      { label: 'Position', value: '1' },
+      { label: 'Bauart', value: 'BA 004' },
+      { label: 'Radsatzwellennummer', value: 'W-88431' },
+      { label: 'Radsatz-ID', value: '180002238' },
+      {
+        label: 'Schreibweisen',
+        value: 'rs 815 (Schienenbein Waggonwerk GmbH)',
+      },
+    ],
+    sections: [
+      {
+        title: 'Einbauten',
+        empty: 'Noch nie eingebaut.',
+        rows: [
+          {
+            title: '218124712173',
+            lines: ['Position 1', 'eingebaut 02.02.2026', 'läuft noch'],
+            link: { kind: 'wagen', id: 'wg-1' },
+          },
+        ],
+      },
+      {
+        title: 'Instandhaltungen',
+        empty: 'Keine Instandhaltung.',
+        rows: [
+          {
+            title: 'Radsatz getauscht',
+            lines: [
+              '02.02.2026',
+              'Schienenbein Waggonwerk GmbH',
+              '3420,00 €',
+              'Laufflächenschaden',
+              '218124712173',
+            ],
+            link: { kind: 'wagen', id: 'wg-1' },
+          },
+        ],
+      },
+    ],
+  },
+  'partner:p-werk-schienenbein': {
+    kind: 'partner',
+    id: 'p-werk-schienenbein',
+    title: 'Schienenbein Waggonwerk GmbH',
+    subtitle: 'Werkstatt',
+    fields: [{ label: 'Angelegt am', value: '02.02.2026' }],
+    sections: [
+      {
+        title: 'Werkstattaufträge',
+        empty: 'Kein Werkstattauftrag.',
+        rows: [
+          {
+            title: 'Auftrag 24094-26/01',
+            lines: ['218124712173', 'BS_FREIGABE'],
+            link: { kind: 'wagen', id: 'wg-1' },
+          },
+        ],
+      },
+      {
+        title: 'Instandhaltungen',
+        empty: 'Keine Instandhaltung.',
+        rows: [
+          {
+            title: 'Radsatz getauscht',
+            lines: [
+              '02.02.2026',
+              '218124712173',
+              '3420,00 €',
+              'Laufflächenschaden',
+            ],
+            link: { kind: 'wagen', id: 'wg-1' },
+          },
+        ],
+      },
+    ],
+  },
 };
 
 const radsaetze: FakeRadsatz[] = [
@@ -1538,6 +1742,7 @@ export const DEMO_SEED: FakeSeed = {
   radsaetze,
   einbauten,
   zustand,
+  entityDetails,
   events,
   templates,
   master,

@@ -5,6 +5,9 @@
 // is CALCULATED from the reading's moment, never stored, and a stored number
 // would be stale the next morning.
 //
+// The card's facts only; everything else about a Wagen is its detail page,
+// built in Rust (`trains::detail`).
+//
 // `STUMM_AB_TAGEN` is the dashboard's own threshold (red above 7 days). An open
 // Schadensmeldung has no `erledigtAm` — the orange row; an open Auftrag no
 // `ausgangAm`. The next Prüfung is the earliest due one per Art that is not done,
@@ -39,7 +42,6 @@ export interface ZustandSummary {
   offeneSchaeden: number;
   offeneAuftraege: number;
   naechstePruefung: string;
-  details: string[];
 }
 
 export function indexZustand(zustand: WagenZustand): ZustandIndex {
@@ -74,18 +76,7 @@ export function summarise(
     offeneSchaeden: offeneSchaeden.length,
     offeneAuftraege: offeneAuftraege.length,
     naechstePruefung: erste ? pruefungText(erste) : '',
-    details: [
-      ...(meldung ? [meldungText(meldung)] : []),
-      ...offeneSchaeden.map(schadenText),
-      ...offeneAuftraege.map(auftragText),
-      ...faellig.map(pruefungText),
-    ],
   };
-}
-
-export function formatZeitpunkt(iso: string): string {
-  const [date = '', time = ''] = iso.split('T');
-  return `${formatIsoDate(date)} ${time.slice(0, 5)}`.trim();
 }
 
 function group<T extends { wagenId: string }>(items: T[]): Map<string, T[]> {
@@ -128,44 +119,6 @@ function naechste(pruefungen: Pruefung[]): Pruefung[] {
     seen.add(art);
     return true;
   });
-}
-
-function meldungText(meldung: TelematikMeldung): string {
-  const parts = [
-    `Telematik ${formatZeitpunkt(meldung.zeitpunkt)}`,
-    ort(meldung),
-    meldung.bewegung ?? '',
-    meldung.laufleistungKm !== undefined
-      ? `${meldung.laufleistungKm.toLocaleString('de-DE')} km`
-      : '',
-    meldung.energieProzent !== undefined
-      ? `Energie ${meldung.energieProzent} %`
-      : '',
-  ];
-  return parts.filter(Boolean).join(' · ');
-}
-
-function schadenText(schaden: Schadensmeldung): string {
-  const parts = [
-    'Schaden offen',
-    schaden.gemeldetAm ? `gemeldet ${formatIsoDate(schaden.gemeldetAm)}` : '',
-    schaden.schadcode ?? '',
-    schaden.notiz ?? '',
-    schaden.ausgesetzt ? 'ausgesetzt' : '',
-    schaden.aktion ?? '',
-  ];
-  return parts.filter(Boolean).join(' · ');
-}
-
-function auftragText(auftrag: Werkstattauftrag): string {
-  const parts = [
-    `Auftrag ${auftrag.bestellnummer}`,
-    auftrag.status ?? '',
-    auftrag.eingangAm
-      ? `Eingang ${formatIsoDate(auftrag.eingangAm)}`
-      : 'noch nicht in der Werkstatt',
-  ];
-  return parts.filter(Boolean).join(' · ');
 }
 
 function pruefungText(pruefung: Pruefung): string {

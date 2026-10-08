@@ -56,16 +56,29 @@
 <ion-content>
   <ng-content select="[beforeList]" />
 
-  <ion-list #ionList>
-    @for (item of facade.items(); track item.id) {
-      <ng-container
-        *ngTemplateOutlet="
-          itemTemplate();
-          context: { $implicit: item, ionList: ionList }
-        "
-      />
-    }
-  </ion-list>
+  @if (layout() === 'cards') {
+    <div class="list-page__cards">
+      @for (item of facade.items(); track item.id) {
+        <ng-container
+          *ngTemplateOutlet="
+            itemTemplate();
+            context: { $implicit: item, ionList: undefined }
+          "
+        />
+      }
+    </div>
+  } @else {
+    <ion-list #ionList>
+      @for (item of facade.items(); track item.id) {
+        <ng-container
+          *ngTemplateOutlet="
+            itemTemplate();
+            context: { $implicit: item, ionList: ionList }
+          "
+        />
+      }
+    </ion-list>
+  }
 
   <app-item-list-empty
     [isKnownEmpty]="isKnownEmpty()"

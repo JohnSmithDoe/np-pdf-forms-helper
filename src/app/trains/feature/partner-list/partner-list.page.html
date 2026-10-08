@@ -1,20 +1,21 @@
 <app-list-page
   class="ion-page"
   backHref="/trains"
+  layout="cards"
   [heading]="heading()"
   emptyText="Partner entstehen beim Import, sobald ein Name bestätigt wird."
-  [itemTemplate]="partnerRow"
+  [itemTemplate]="partnerCard"
 />
 
-<ng-template #partnerRow let-row let-ionList="ionList">
-  <app-list-item
-    [ionList]="ionList"
+<ng-template #partnerCard let-row>
+  <app-entity-card
     [title]="row.name"
-    leadingIcon="business-outline"
-    (deleteItem)="onRemove(row)"
+    [note]="row.rollen"
+    icon="business-outline"
+    (open)="onOpen(row.id)"
   >
     @if (row.aliasCount) {
-      <span itemDetails>{{ row.aliasCount }} bekannte Schreibweise(n)</span>
+      <ion-note>{{ row.aliasCount }} bekannte Schreibweise(n)</ion-note>
     }
-  </app-list-item>
+  </app-entity-card>
 </ng-template>

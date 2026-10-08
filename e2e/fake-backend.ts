@@ -70,6 +70,8 @@
 // is still open and drops it after the last, as `everything()` does — the
 // store reads that absence as "closed". `get_master_sheet` answers `seed.masterSheetViews[sheet]`,
 // else the bound sheet's headers with no rows: building the view is Rust's.
+// `get_entity_detail` likewise answers `seed.entityDetails['kind:id']`, else the
+// entity's bare title with no sections, and rejects an id the state lacks.
 //
 // The master FILE is `seed.masterFile`, and `seed.masterFilePick` is the
 // cleaned version `clean_master_file` answers in place of picker + cleaning —
@@ -594,6 +596,29 @@ interface FakeExportRequest {
   remember: boolean;
 }
 
+/** An entity's detail page as `trains::detail` builds it — hand-written. */
+export interface FakeEntityDetail {
+  kind: 'wagen' | 'radsatz' | 'partner';
+  id: string;
+  title: string;
+  subtitle?: string;
+  fields: {
+    label: string;
+    value: string;
+    link?: { kind: 'wagen' | 'radsatz' | 'partner'; id: string };
+  }[];
+  sections: {
+    title: string;
+    empty: string;
+    rows: {
+      title: string;
+      lines: string[];
+      link?: { kind: 'wagen' | 'radsatz' | 'partner'; id: string };
+      tone?: 'danger' | 'warning' | 'medium';
+    }[];
+  }[];
+}
+
 export interface FakeMasterSheetView {
   sheet: string;
   kind?: string;
@@ -637,6 +662,8 @@ export interface FakeSeed {
   masterStaging?: FakeStaging | null;
   /** What `get_master_sheet` answers per sheet name. */
   masterSheetViews?: Record<string, FakeMasterSheetView>;
+  /** What `get_entity_detail` answers per `kind:id`. */
+  entityDetails?: Record<string, FakeEntityDetail>;
   /** What the master export's dry run and write answer per sheet name. */
   masterExport?: Record<string, FakeExportSheetRun>;
   /** The master file's versions and its untaken pick. */
@@ -706,6 +733,7 @@ export function install(seed: FakeSeed): void {
     masterDefaults: FakeMasterSettings['bindings'];
     masterStaging: FakeStaging | null;
     masterSheetViews: Record<string, FakeMasterSheetView>;
+    entityDetails: Record<string, FakeEntityDetail>;
     masterExport: Record<string, FakeExportSheetRun>;
     masterFile: FakeMasterFile;
     masterFilePick: FakeMasterFileVersion | null;
@@ -743,6 +771,7 @@ export function install(seed: FakeSeed): void {
     masterDefaults: seed.masterDefaults ?? [],
     masterStaging: seed.masterStaging ?? null,
     masterSheetViews: seed.masterSheetViews ?? {},
+    entityDetails: seed.entityDetails ?? {},
     masterExport: seed.masterExport ?? {},
     masterFile: seed.masterFile ?? { versions: [] },
     masterFilePick: seed.masterFilePick ?? null,
@@ -1255,6 +1284,27 @@ export function install(seed: FakeSeed): void {
         importRun: run,
       };
       return masterView();
+    },
+
+    get_entity_detail: (args) => {
+      const kind = String(args['kind']) as FakeEntityDetail['kind'];
+      const id = String(args['id']);
+      const seeded = state.entityDetails[`${kind}:${id}`];
+      if (seeded) return { entityDetail: copy(seeded) };
+      const title =
+        kind === 'wagen'
+          ? state.wagen.find((entry) => entry.id === id)?.nummer
+          : kind === 'radsatz'
+            ? state.radsaetze.find((entry) => entry.id === id)?.nummer
+            : state.partners.find((entry) => entry.id === id)?.name;
+      if (title === undefined) {
+        return Promise.reject({
+          messages: ['Den Eintrag gibt es nicht mehr.'],
+        });
+      }
+      return {
+        entityDetail: { kind, id, title, fields: [], sections: [] },
+      };
     },
 
     get_master_sheet: (args) => {

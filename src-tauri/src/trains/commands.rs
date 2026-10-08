@@ -46,12 +46,12 @@ use crate::state::AppState;
 use crate::trains::db::TrainsDb;
 use crate::trains::dokument::{self, Cleaning, Filed};
 use crate::trains::model::{
-    CleanDecisions, EntityDecisions, ImportPlan, MasterExportRequest, MasterSettings, Partner,
-    Radsatz, StagingOrigin, TrainsData, TrainsSettings, Vorhanden, Wagen,
+    CleanDecisions, EntityDecisions, EntityRef, ImportPlan, MasterExportRequest, MasterSettings,
+    Partner, Radsatz, StagingOrigin, TrainsData, TrainsSettings, Vorhanden, Wagen,
 };
 use crate::trains::sheet::grid;
 use crate::trains::stage::{stage, HeldImport, StageInput};
-use crate::trains::{clean, commit, entities, export, master, recognise, scan, template};
+use crate::trains::{clean, commit, detail, entities, export, master, recognise, scan, template};
 
 fn everything(db: &TrainsDb) -> TrainsData {
     TrainsData::nothing()
@@ -589,6 +589,16 @@ pub fn save_master(settings: MasterSettings, state: State<'_, AppState>) -> AppR
 pub fn get_master_sheet(sheet: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
     let mut db = state.trains();
     Ok(TrainsData::nothing().master_sheet(master::sheet_view(&mut db, &sheet)))
+}
+
+#[tauri::command]
+pub fn get_entity_detail(
+    kind: EntityRef,
+    id: String,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    let db = state.trains();
+    Ok(TrainsData::nothing().entity_detail(detail::build(&db, kind, &id)?))
 }
 
 #[tauri::command(async)]

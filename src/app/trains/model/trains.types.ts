@@ -407,6 +407,43 @@ export interface Pruefung {
   source: Provenance;
 }
 
+export type EntityRef = 'wagen' | 'radsatz' | 'partner';
+
+export interface DetailLink {
+  kind: EntityRef;
+  id: string;
+}
+
+export type DetailTone = 'danger' | 'warning' | 'medium';
+
+export interface DetailField {
+  label: string;
+  value: string;
+  link?: DetailLink;
+}
+
+export interface DetailRow {
+  title: string;
+  lines: string[];
+  link?: DetailLink;
+  tone?: DetailTone;
+}
+
+export interface DetailSection {
+  title: string;
+  rows: DetailRow[];
+  empty: string;
+}
+
+export interface EntityDetail {
+  kind: EntityRef;
+  id: string;
+  title: string;
+  subtitle?: string;
+  fields: DetailField[];
+  sections: DetailSection[];
+}
+
 export interface WagenZustand {
   geraete: TelematikGeraet[];
   meldungen: TelematikMeldung[];
@@ -768,6 +805,7 @@ export interface TrainsData {
   settings?: TrainsSettings;
   master?: MasterView;
   masterSheet?: MasterSheetView;
+  entityDetail?: EntityDetail;
   masterImportRun?: MasterImportRun;
   masterExportStart?: MasterExportStart;
   masterExport?: MasterExportRun;

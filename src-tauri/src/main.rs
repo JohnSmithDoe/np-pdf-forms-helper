@@ -94,6 +94,7 @@ fn main() {
             trains::commands::preview_master_export,
             trains::commands::write_master_export,
             trains::commands::get_master_sheet,
+            trains::commands::get_entity_detail,
             trains::commands::reset_master_bindings,
             trains::commands::start_master_import,
             trains::commands::stage_master_sheet,

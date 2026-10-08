@@ -32,6 +32,7 @@ pub mod clock;
 pub mod commands;
 pub mod commit;
 pub mod db;
+pub mod detail;
 pub mod dokument;
 pub mod entities;
 pub mod export;

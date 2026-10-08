@@ -1,0 +1,86 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button [defaultHref]="backHref()" text="Zurück" />
+    </ion-buttons>
+    <ion-title data-testid="detail-title">{{ detail()?.title }}</ion-title>
+    @if (detail()) {
+      <ion-buttons slot="end">
+        <ion-button
+          color="danger"
+          (click)="onRemove()"
+          data-testid="detail-remove"
+        >
+          <ion-icon slot="start" name="trash-outline" aria-hidden="true" />
+          Entfernen
+        </ion-button>
+      </ion-buttons>
+    }
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  @if (detail(); as view) {
+    @if (view.subtitle) {
+      <ion-note data-testid="detail-subtitle">{{ view.subtitle }}</ion-note>
+    }
+
+    @if (view.fields.length) {
+      <ion-list lines="full" data-testid="detail-fields">
+        @for (field of view.fields; track field.label) {
+          <ion-item
+            [button]="!!field.link"
+            [detail]="!!field.link"
+            (click)="onOpen(field.link)"
+            data-testid="detail-field"
+          >
+            <ion-label class="ion-text-wrap">
+              <p>{{ field.label }}</p>
+              <h2>{{ field.value }}</h2>
+            </ion-label>
+          </ion-item>
+        }
+      </ion-list>
+    }
+
+    <div class="entity-detail__sections">
+      @for (section of view.sections; track section.title) {
+        <ion-list lines="full" data-testid="detail-section">
+          <ion-list-header>
+            {{ section.title }}
+            @if (section.rows.length) {
+              <ion-note>&nbsp;({{ section.rows.length }})</ion-note>
+            }
+          </ion-list-header>
+          @for (row of section.rows; track $index) {
+            <ion-item
+              [button]="!!row.link"
+              [detail]="!!row.link"
+              (click)="onOpen(row.link)"
+              data-testid="detail-row"
+            >
+              @if (row.tone; as tone) {
+                <ion-icon
+                  slot="start"
+                  [name]="toneIcons[tone]"
+                  [color]="tone"
+                  aria-hidden="true"
+                />
+              }
+              <ion-label class="ion-text-wrap">
+                <h2>{{ row.title }}</h2>
+                @if (row.lines.length) {
+                  <p>{{ row.lines.join(' · ') }}</p>
+                }
+              </ion-label>
+            </ion-item>
+          } @empty {
+            <ion-item>
+              <ion-note>{{ section.empty }}</ion-note>
+            </ion-item>
+          }
+        </ion-list>
+      }
+    </div>
+  }
+</ion-content>

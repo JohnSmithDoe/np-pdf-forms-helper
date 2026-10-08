@@ -954,3 +954,45 @@ nicht selbst beurteilen.
     kein Abzeichen.
   - Der Master-Spiegel liest diese Entitäten noch nicht aus dem Master selbst.
   - Die Blattansicht des Masters zeigt ihre Spalten leer.
+
+## Import nur ins Schattensystem, Master-Import leert (appended 2026-10-08)
+
+Entschieden mit Martin am 2026-10-08.
+
+- **„Importieren“ ist wieder da**, unter Dokumente und in der Zusammenfassung des Bereinigens, ohne
+  Schalter (`npdh.import` entfällt). Ein Import schreibt **nur ins Schattensystem**.
+- **„Master aktualisieren“ ist vorerst verborgen**, hinter `npdh.full` wie „Export erstellen“. Die App
+  schreibt die Master-Datei also gerade nicht. Der Assistent bleibt erhalten und getestet.
+- **Die Daten der Master-Blätter stellt weiter die App bereit**: der Master-Import und die
+  Blattansichten. Die Kachel heißt „Master-Import“, getrennt von „Master-Datei“, wo nur die Datei
+  übernommen wird. Sie ist ohne Schalter da (`npdh.master` entfällt).
+- **Ein Master-Import leert die aktuellen Daten.** Wagen, Radsätze, Einbauten, Instandhaltungen und
+  der Wagen-Zustand werden neu aus dem Master aufgebaut. Partner, Vorlagen und Dokumente bleiben,
+  und die Dokumente lassen sich danach erneut importieren (`clear_mirror`). Die Bestätigung nennt
+  den Wagen-Zustand ausdrücklich, weil der Master ihn heute noch nicht zurückbringt.
+- **Die Entitäten-Kacheln sind immer sichtbar**: Wagen, Radsätze, Instandhaltungen und die drei
+  Partnerrollen. Ohne `npdh.full` fehlen nur Vorlagen und Einstellungen.
+
+## Entitäten als Karten, Detailseite aus Rust (appended 2026-10-08)
+
+Entschieden mit Martin am 2026-10-08. Neben der Originalansicht der Master-Blätter (Tabelle) sind
+die Entitätenlisten der zweite Blick auf die Daten.
+
+- **Wagen, Radsätze und Partner werden als Karten gezeigt**, je Karte nur das Wichtigste:
+  - Wagen: Bauart, Halter, Standort und Funkstille, offene Schäden und Aufträge, nächste Prüfung,
+    Zahl der eingebauten Radsätze.
+  - Radsatz: wo und seit wann er eingebaut ist.
+  - Partner: Rollen und Schreibweisen.
+
+  Die Instandhaltungen bleiben eine Liste: Sie sind seitenweise geladen und zahlreich.
+- **Ein Klick öffnet die Detailseite** mit allem, was zur Entität gespeichert ist. Jede Zeile, die
+  eine andere Entität nennt, führt zu deren Seite.
+- **Gebaut wird die Detailseite in Rust** (`trains/detail/`, `get_entity_detail`), Backend for
+  Frontend. Es gibt eine allgemeine Form (Felder, Abschnitte, Zeilen mit Link und Ton) und eine Seite
+  für alle drei Arten. Angular entscheidet nichts über Inhalt oder Schreibweise. Die Karten bauen ihre
+  Zeilen weiter aus den Listen im Store; das ist die schon bestehende Verknüpfung, nur leicht
+  erweitert.
+- **„Entfernen“ wandert auf die Detailseite.** Eine Karte ist selbst die Schaltfläche, und eine
+  zweite Aktion darin wäre ein verschachteltes Bedienelement.
+- **Lange Listen eines Partners werden auf 50 Zeilen gekürzt**, mit einer Zeile, die den Rest nennt.
+  Eingebaute Radsätze stehen nach Position, die ohne Position zuletzt.

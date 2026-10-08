@@ -1,0 +1,28 @@
+<ion-card
+  class="entity-card"
+  [button]="true"
+  [attr.aria-label]="title()"
+  (click)="open.emit()"
+  data-testid="list-row"
+>
+  <ion-card-header>
+    <div class="entity-card__head">
+      @let name = icon();
+      @if (name) {
+        <ion-icon [name]="name" aria-hidden="true" />
+      }
+      <ion-card-title data-testid="list-row-title">{{
+        title()
+      }}</ion-card-title>
+    </div>
+    @let subtitle = note();
+    @if (subtitle) {
+      <ion-card-subtitle data-testid="list-row-note">{{
+        subtitle
+      }}</ion-card-subtitle>
+    }
+  </ion-card-header>
+  <ion-card-content class="entity-card__body">
+    <ng-content />
+  </ion-card-content>
+</ion-card>

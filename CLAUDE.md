@@ -217,8 +217,12 @@ row, `filled` per column), rows as display strings — built in Rust from the sa
 import runs. Angular decides nothing about rows or formatting; a column with `filled: false` is shown
 empty on purpose.
 
-**The Schattensystem is becoming the information hub for every imported document**: the Wagen list
-shows each Wagen's Zustand — where it is and how long it has been silent, open Schadensmeldungen and
+**The Schattensystem is becoming the information hub for every imported document.** The entity lists
+(Wagen, Radsätze, Partner) are CARDS (`@shared/ui/base-item/entity-card`, the list shell's
+`layout="cards"`) carrying the most important facts; a click opens the entity's detail page
+(`/trains/wagen/:id`, `/trains/radsaetze/:id`, `/trains/partner/:id`), built whole in Rust
+(`trains/detail/`), where every row naming another entity links to it and where removing an entity
+now lives. The Wagen card shows each Wagen's Zustand — where it is and how long it has been silent, open Schadensmeldungen and
 Aufträge, the next Prüfung — from typed records (`WagenZustand`), not by looking documents up. The
 customer's dashboard sheet „Alle Wagen Überblick“ is the model for what it has to show.
 
@@ -236,8 +240,11 @@ list is paged, so its loaded length would lie), and the three partner roles deri
 list, because nothing counts them server-side. The spokes therefore take `backHref="/trains"` on the
 list shell, which replaces the burger with a back button: a screen reached from a hub needs the way
 up, not the menu that no longer links to it. **The app is scaled back for now:** without the
-`npdh.full` switch (`SettingsService.fullEnabled`) the dashboard shows only Bereinigen and Dokumente,
-and „Export erstellen“ is hidden too — the other screens still exist and are reachable by URL.
+`npdh.full` switch (`SettingsService.fullEnabled`) the dashboard hides only Vorlagen and Einstellungen,
+and „Export erstellen“ and the document list's „Master aktualisieren“ are hidden too — the app does not
+write the master until the switch is on. The entity tiles and „Master-Import“ (`/trains/master`, which
+EMPTIES the current data, Wagen-Zustand included, and rebuilds it from the master's sheets) are always
+there.
 
 **Getting a file in is TWO walks, Bereinigen and Import, and the URLs say which.** See
 [docs/decisions.md](docs/decisions.md), "Bereinigen und Import getrennt".
@@ -251,7 +258,7 @@ and „Export erstellen“ is hidden too — the other screens still exist and a
   the template's readings learned — and the batch ends at `clean/summary`. An unknown file goes to
   `clean/template`, the mapper, whose only exit is a saved template; the hub then rescans that file.
   Nothing on this side writes an entity, and the header chip says „Bereinigen“.
-- **`/trains/documents` is the ledger** and the import's way in, beside the batch summary. Its „Importieren“ and bereinigt/importiert chip — and the batch summary's „Importieren“ / „Alle importieren“ — are hidden for now behind the `npdh.import` switch (`SettingsService.importEnabled`), like `npdh.master`.
+- **`/trains/documents` is the ledger** and the import's way in, beside the batch summary. „Importieren“ — there and on the batch summary — writes into the Schattensystem and nothing else.
 - **`/trains/import/*` walks ONE document by type** — `partners` → `wagons` → `wheelsets` →
   `entries` → `summary` → `result`, the chip saying „Import ins Schattensystem“. One decision per
   entity group (`entities::group` in Rust), a declined Wagen dropping its rows, nothing written until
@@ -484,6 +491,7 @@ the guarantee the copy used to buy now holds by construction. Do not reintroduce
 | `trains/db.rs`        | eight JSON stores under `data/trains/` (`wagen`, `partner`, `instandhaltungen`, `radsaetze`, `einbauten`, `templates`, `dokumente`, and `zustand.db` — the whole `WagenZustand` as ONE object), split so saving a partner does not rewrite the Instandhaltungen. `transaction` is the API, not a convention: an import is a handful of writes, not one per row, and a failed flush rolls memory back. Five indexes — Wagennummer, match key incl. aliases, dedupe key, Radsatznummer, original content hash. `reset` also removes the owned files. `clear_mirror` is the master import's narrow wipe — facts go, Partner, templates and Dokumente stay (Dokumente reopened) — and a write that CLEARS a store must `reindex` after it, or `event_exists` keeps stale keys |
 | `trains/commit.rs`    | the only module that writes ENTITIES. Re-checks EVERY gate server-side: the frontend's ticks are an input, never the authority. Confirming a partner learns the raw spelling as an alias, which is what makes the second file from a sender free. A staging from a document marks it imported in the same transaction and is refused if it already was. A `StagingOrigin::Master` staging commits without a document; on that path a Radsatz already open on the SAME Wagen under another date is corrected in place (`einbau_uebernehmen`) or left — never closed |
 | `trains/zustand.rs`   | the Wagen-Zustand half of a committed row — Telematik-Gerät and the LATEST Meldung per Wagen (time kept, an older one skipped and counted), Schadensmeldung, Werkstattauftrag (needs a Bestellnummer AND an order column), Prüfung (Art from a column, else `ImportPlan.pruefart`). Found by key and updated, an empty cell clears nothing; a Meldung is replaced whole. No walk step: it hangs off the row's Wagen. See decisions.md, „Der Wagen-Zustand ist typisiert“ |
+| `trains/detail/`      | one Wagen, Radsatz or Partner as its detail page shows it (`get_entity_detail`, backend for frontend): header fields and sections of rows, every string formatted here, a row's `link` naming the entity it opens — so the hub is navigable Wagen → Radsatz → its other Wagen → Werkstatt. One generic shape, one page (`feature/entity-detail`) for all three kinds. A Partner's lists are capped at 50 rows; an overdue, undone Prüfung is `danger` against today |
 | `trains/dokument.rs`  | the app OWNS what it cleans: `adopt` copies the original into `dokumente/<id>/` before it is read, the cleaned copy and a `protokoll.json` sidecar go beside it, `importable` refuses an imported document or a cleaned copy edited since. Identity is `hash::bytes` of the original |
 | `trains/entities.rs`  | a staging grouped per entity for the import walk — Partner by role + match key, Wagen by canonical number, Radsatz by number + the sender STAGING used (deliberately not the walk's Partner answer) — with each group's protocol lines; `expand` turns one answer per group back into the per-row decisions `commit` runs on. Missing answer = skip. `einbau_konflikte` finds the master's disputed Einbau dates against the STORE (keyed by Radsatz id); `expand` hands each answer to its rows |
 | `trains/template.rs`  | the two template writes outside an import: `learned` (what a FILED cleaning teaches, returned so it lands in the document's transaction) and `save` (the mapper's only exit; a name is required) |

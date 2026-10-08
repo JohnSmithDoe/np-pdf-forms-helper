@@ -61,6 +61,11 @@
 // `WagenZustand`, the shape of their one store. See decisions.md, „Der
 // Wagen-Zustand ist typisiert“.
 //
+// An `EntityDetail` is one Wagen, Radsatz or Partner as its detail page shows
+// it — backend for frontend: header fields and sections of rows, every string
+// already formatted, a row's `link` naming the entity it opens. Angular renders
+// it and decides nothing; `detail/` builds it.
+//
 // `TrainsData` follows `ClientData`'s presence rule — a list that is THERE is the
 // whole current one, and absent means the command could not have changed it —
 // with one deliberate exception. Instandhaltungen are served as an
@@ -630,6 +635,69 @@ pub struct Pruefung {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bestellnummer: Option<String>,
     pub source: Provenance,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EntityRef {
+    Wagen,
+    Radsatz,
+    Partner,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetailLink {
+    pub kind: EntityRef,
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DetailTone {
+    Danger,
+    Warning,
+    Medium,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetailField {
+    pub label: String,
+    pub value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<DetailLink>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetailRow {
+    pub title: String,
+    pub lines: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<DetailLink>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tone: Option<DetailTone>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetailSection {
+    pub title: String,
+    pub rows: Vec<DetailRow>,
+    pub empty: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityDetail {
+    pub kind: EntityRef,
+    pub id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subtitle: Option<String>,
+    pub fields: Vec<DetailField>,
+    pub sections: Vec<DetailSection>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1415,6 +1483,8 @@ pub struct TrainsData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub master_sheet: Option<MasterSheetView>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity_detail: Option<EntityDetail>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub master_import_run: Option<MasterImportRun>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub master_export_start: Option<MasterExportStart>,
@@ -1503,6 +1573,11 @@ impl TrainsData {
 
     pub fn master_import_run(mut self, run: Option<MasterImportRun>) -> Self {
         self.master_import_run = run.filter(MasterImportRun::is_open);
+        self
+    }
+
+    pub fn entity_detail(mut self, detail: EntityDetail) -> Self {
+        self.entity_detail = Some(detail);
         self
     }
 

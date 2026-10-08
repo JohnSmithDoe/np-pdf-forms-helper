@@ -42,6 +42,7 @@ export interface WagenRow extends BaseItem {
   digits: string;
   owner: string;
   kind: string;
+  summary: string;
   fitted: FittedRadsatz[];
   zustand: ZustandSummary;
 }
@@ -82,13 +83,17 @@ export class WagenListFacade implements ListPageFacade {
     }
     return wagen.map((wagen) => {
       const uic = formatUic(wagen.nummer, this.#store.settings().wagennummer);
+      const owner = wagen.halterId
+        ? (partners.get(wagen.halterId)?.name ?? '')
+        : '';
       return {
         id: wagen.id,
         name: uic,
         nummer: uic,
         digits: wagen.nummer,
-        owner: wagen.halterId ? (partners.get(wagen.halterId)?.name ?? '') : '',
+        owner,
         kind: wagen.bauart ?? '',
+        summary: [wagen.bauart, owner].filter(Boolean).join(' · '),
         fitted: [...(open.get(wagen.id) ?? [])]
           .sort(byPosition)
           .map((einbau) => ({

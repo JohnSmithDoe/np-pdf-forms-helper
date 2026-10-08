@@ -21,6 +21,7 @@ import {
 import type {
   CleanDecisions,
   EntityDecisions,
+  EntityRef,
   ImportPlan,
   MasterExportRequest,
   MasterSettings,
@@ -68,6 +69,7 @@ export type TrainsCommand =
       payload: { request: MasterExportRequest };
     }
   | { command: 'get_master_sheet'; payload: { sheet: string } }
+  | { command: 'get_entity_detail'; payload: { kind: EntityRef; id: string } }
   | { command: 'start_master_import'; payload: Record<string, never> }
   | { command: 'stage_master_sheet'; payload: { sheet: string } }
   | { command: 'get_master_file'; payload: Record<string, never> }
@@ -90,6 +92,10 @@ export type TrainsCommand =
 @Injectable({ providedIn: 'root' })
 export class TrainsBackend {
   readonly #backend = inject(BackendService);
+
+  getEntityDetail(kind: EntityRef, id: string): Promise<TrainsData> {
+    return this.#call({ command: 'get_entity_detail', payload: { kind, id } });
+  }
 
   getMasterSheet(sheet: string): Promise<TrainsData> {
     return this.#call({ command: 'get_master_sheet', payload: { sheet } });

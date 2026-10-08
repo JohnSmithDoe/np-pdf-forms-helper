@@ -164,7 +164,7 @@ test.describe('Zug-Import', () => {
     await expect(page.getByTestId('import-commit')).toHaveCount(0);
   });
 
-  test('ohne npdh.full zeigt das Dashboard nur Bereinigen, Dokumente und Wagen', async ({
+  test('ohne npdh.full zeigt das Dashboard die Entitäten, aber keine Vorlagen und Einstellungen', async ({
     page,
   }) => {
     await installFakeBackend(page);
@@ -174,13 +174,18 @@ test.describe('Zug-Import', () => {
     await expect(
       dashboard.getByRole('button', { name: 'Bereinigen', exact: true })
     ).toBeVisible();
-    await expect(dashboard.locator('ion-card')).toHaveCount(3);
+    await expect(dashboard.locator('ion-card')).toHaveCount(10);
     await expect(
       dashboard.getByRole('button', { name: 'Dokumente', exact: true })
     ).toBeVisible();
+    for (const name of ['Wagen', 'Radsätze', 'Master-Import']) {
+      await expect(
+        dashboard.getByRole('button', { name, exact: true })
+      ).toBeVisible();
+    }
     await expect(
-      dashboard.getByRole('button', { name: 'Wagen', exact: true })
-    ).toBeVisible();
+      dashboard.getByRole('button', { name: 'Vorlagen', exact: true })
+    ).toHaveCount(0);
     await expect(page.getByTestId('trains-export')).toHaveCount(0);
   });
 
@@ -441,7 +446,9 @@ test.describe('Radsätze', () => {
     await expect(page.getByText('eingebaut in 21 81 2471 217-3')).toBeVisible();
   });
 
-  test('ein Wagen zeigt seine eingebauten Radsätze, ohne Position zuletzt', async ({
+  // The order of the fitted Radsätze is Rust's (`trains::detail`); the card
+  // only counts them, and a click opens the Wagen's detail page.
+  test('eine Wagenkarte zählt die Radsätze und öffnet die Detailseite', async ({
     page,
   }) => {
     // A master radsatz sheet without positions adds a second open Einbau.
@@ -466,15 +473,59 @@ test.describe('Radsätze', () => {
     await expect(page.getByTestId('wagen-fitted-count')).toHaveText(
       '2 Radsätze eingebaut'
     );
-    await expect(page.getByTestId('wagen-fitted')).toHaveCount(0);
 
-    await page.getByTestId('list-row-title').click();
-    const fitted = page.getByTestId('wagen-fitted');
-    await expect(fitted).toHaveCount(2);
-    await expect(fitted.first()).toContainText('Position 1 · RS4711');
-    await expect(fitted.first()).toContainText('Tabelle1, Zeile 2');
-    await expect(fitted.last()).toContainText('ohne Position · RS0815');
-    await expect(fitted.last()).toContainText('Radsätze, Zeile 7');
+    await page.getByTestId('list-row').click();
+    await expect(page).toHaveURL(/#\/trains\/wagen\/w1$/);
+    await expect(
+      page.locator('app-page-entity-detail').getByTestId('detail-title')
+    ).toHaveText('218124712173');
+  });
+
+  // The detail page renders what Rust built and follows a row's link to the
+  // entity it names.
+  test('eine Detailseite führt über einen Link zum Radsatz', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      wagen,
+      radsaetze,
+      einbauten,
+      entityDetails: {
+        'wagen:w1': {
+          kind: 'wagen',
+          id: 'w1',
+          title: '218124712173',
+          fields: [{ label: 'Bauart', value: 'Tanoos' }],
+          sections: [
+            {
+              title: 'Eingebaute Radsätze',
+              empty: 'Kein Radsatz eingebaut.',
+              rows: [
+                {
+                  title: 'RS4711',
+                  lines: ['Position 1'],
+                  link: { kind: 'radsatz', id: 'r1' },
+                },
+              ],
+            },
+            {
+              title: 'Schadensmeldungen',
+              empty: 'Keine Schadensmeldung.',
+              rows: [],
+            },
+          ],
+        },
+      },
+    });
+    await page.goto('/#/trains/wagen/w1');
+    const wagenPage = page.locator('app-page-entity-detail').last();
+    await expect(wagenPage.getByText('Keine Schadensmeldung.')).toBeVisible();
+    await wagenPage.getByTestId('detail-row').first().click();
+
+    await expect(page).toHaveURL(/#\/trains\/radsaetze\/r1$/);
+    await expect(
+      page.locator('app-page-entity-detail').last().getByTestId('detail-title')
+    ).toHaveText('RS4711');
   });
 
   test('ein Radsatz ohne offenen Einbau gilt als ausgebaut', async ({

@@ -16,6 +16,10 @@
 // former is false while the list is still unknown; the latter is true, and shows
 // the empty state over data that has not arrived.
 //
+// `layout="cards"` draws the rows as a grid of cards instead of an `ion-list`:
+// an entity list whose rows open a detail page reads better as cards. The row
+// template decides what a card shows; the shell only lays them out.
+//
 // `backHref` REPLACES the burger rather than joining it, and that is the whole
 // meaning of the input: a list the menu links to directly is a top-level screen
 // and needs the menu, a list reached from a domain dashboard needs the way back
@@ -63,6 +67,7 @@ export interface ListRowContext {
 @Component({
   selector: 'app-list-page',
   templateUrl: 'list-page.component.html',
+  styleUrls: ['list-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     IonBackButton,
@@ -90,6 +95,7 @@ export class ListPageComponent {
   readonly emptyText = input('Noch keine Einträge vorhanden.');
   readonly createLabel = input<string>();
   readonly backHref = input<string>();
+  readonly layout = input<'list' | 'cards'>('list');
 
   protected readonly ionList = viewChild<IonList>('ionList');
 

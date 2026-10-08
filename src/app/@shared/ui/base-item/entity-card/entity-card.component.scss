@@ -1,0 +1,17 @@
+.entity-card {
+  height: 100%;
+  margin: 0;
+}
+
+.entity-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.entity-card__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}

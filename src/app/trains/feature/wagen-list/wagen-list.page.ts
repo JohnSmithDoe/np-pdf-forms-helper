@@ -2,63 +2,33 @@
 // A list page is a facade, a heading and an `ng-template` row. That is the whole
 // return on cloning np-commlink's pattern: five routes, one shell.
 //
-// It is the routed page, so it owns the overlays — the confirm before a delete
-// and the error presentation — exactly as `filler.page.ts` does. Both come from
-// the shared services: `OverlayService.confirm` owns the dismiss-role contract,
-// and the consequence rides in the QUESTION because an `ion-alert` announces its
-// header as the dialog's accessible name and its message after focus.
-//
-// The fitted radsaetze and the Zustand's lines open on tap, like the radsatz
-// list's history: the counts, the position and the badges are always on the
-// row, the lines only when asked for — eight lines on each of 400 wagen would
-// bury the list. A Wagen silent for more than seven days shows its position in
-// `danger`, the dashboard's red.
+// Each Wagen is a CARD with the facts a dispatcher scans for — where it is and
+// how long it has been silent (in `danger`, the dashboard's red, after seven
+// days), open Schäden and Aufträge, the next Prüfung, how many Radsätze are
+// fitted. Everything else is on its detail page (`/trains/wagen/:id`), which a
+// click opens and where removing it lives too.
 // ────────────────────────────────────────────────────────────────
 
-import {
-  ChangeDetectionStrategy,
-  Component,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { Router } from '@angular/router';
 import { IonBadge, IonNote } from '@ionic/angular/standalone';
-import { OverlayService } from '../../../@shared/data/overlays/overlay.service';
-import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { ListPageComponent } from '../../../@shared/feature/item-lists/list-page/list-page.component';
-import { ListItemComponent } from '../../../@shared/ui/base-item/list-item/list-item.component';
+import { EntityCardComponent } from '../../../@shared/ui/base-item/entity-card/entity-card.component';
 import { LIST_FACADE } from '../../../@shared/util/item-lists/list-page.facade';
-import { TrainsFacade, WagenListFacade, type WagenRow } from '../../data';
+import { WagenListFacade } from '../../data';
 
 @Component({
   selector: 'app-page-wagen-list',
   templateUrl: 'wagen-list.page.html',
   styleUrls: ['wagen-list.page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IonBadge, IonNote, ListItemComponent, ListPageComponent],
+  imports: [EntityCardComponent, IonBadge, IonNote, ListPageComponent],
   providers: [{ provide: LIST_FACADE, useExisting: WagenListFacade }],
 })
 export class WagenListPage {
-  readonly #trains = inject(TrainsFacade);
-  readonly #overlays = inject(OverlayService);
-  readonly #reports = inject(ReportPresenterService);
+  readonly #router = inject(Router);
 
-  protected readonly expanded = signal<string[]>([]);
-
-  protected isExpanded(id: string): boolean {
-    return this.expanded().includes(id);
-  }
-
-  protected toggle(id: string): void {
-    this.expanded.update((open) =>
-      open.includes(id) ? open.filter((entry) => entry !== id) : [...open, id]
-    );
-  }
-
-  protected async onRemove(row: WagenRow): Promise<void> {
-    const confirmed = await this.#overlays.confirm(
-      `Wagen ${row.nummer} wirklich entfernen? Alle Wartungen dieses Wagens werden mit entfernt.`
-    );
-    if (!confirmed) return;
-    await this.#reports.run(() => this.#trains.removeWagen(row.id));
+  protected onOpen(id: string): void {
+    void this.#router.navigate(['/trains/wagen', id]);
   }
 }
