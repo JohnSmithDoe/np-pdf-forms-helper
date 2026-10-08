@@ -107,6 +107,8 @@ const seed = (
 const step = (page: Page, name: string) => page.locator(`app-page-${name}`);
 
 async function open(page: Page): Promise<void> {
+  // „Master aktualisieren“ is behind the full-app toggle for now.
+  await page.addInitScript(() => localStorage.setItem('npdh.full', 'on'));
   await page.goto('/#/trains/documents');
   await step(page, 'document-list')
     .getByTestId('documents-export-master')

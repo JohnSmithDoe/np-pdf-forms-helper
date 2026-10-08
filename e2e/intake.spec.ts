@@ -319,9 +319,9 @@ test.describe('Bereinigen', () => {
     await expect(batch.getByTestId('batch-row')).toContainText(
       '„auftraege.xlsx“ wurde bereinigt'
     );
-    // „Importieren“ and „Alle importieren“ are behind `npdh.import`.
-    await expect(batch.getByTestId('batch-import')).toHaveCount(0);
-    await expect(batch.getByTestId('batch-import-all')).toHaveCount(0);
+    // The import is offered, never started by the cleaning.
+    await expect(batch.getByTestId('batch-import')).toHaveCount(1);
+    await expect(batch.getByTestId('batch-import-all')).toBeVisible();
     await expect(page.locator('ion-modal')).toHaveCount(0);
     const calls = (await recordedCalls(page)).map((call) => call.command);
     expect(calls).not.toContain('commit_document');
@@ -379,7 +379,6 @@ test.describe('Import ins Schattensystem', () => {
       document: STAGED_DOKUMENT,
     });
     // „Importieren“ is behind a feature switch for now.
-    await page.addInitScript(() => localStorage.setItem('npdh.import', 'on'));
     await page.goto('/#/trains/documents');
     await step(page, 'document-list').getByTestId('documents-import').click();
 
@@ -508,7 +507,6 @@ test.describe('Import ins Schattensystem', () => {
     await installFakeBackend(page, {
       dokumente: [{ ...DOKUMENT, importiertAm: '2026-10-03' }],
     });
-    await page.addInitScript(() => localStorage.setItem('npdh.import', 'on'));
     await page.goto('/#/trains/documents');
     const list = step(page, 'document-list');
     await expect(list.getByTestId('documents-row')).toContainText(
@@ -517,17 +515,19 @@ test.describe('Import ins Schattensystem', () => {
     await expect(list.getByTestId('documents-import')).toHaveCount(0);
   });
 
-  test('ohne Schalter zeigt die Liste weder Import noch Status', async ({
+  // „Importieren“ writes the Schattensystem only; „Master aktualisieren“ is
+  // hidden behind `npdh.full` for now.
+  test('ein bereinigtes Dokument bietet den Import an, aber kein Master-Update', async ({
     page,
   }) => {
     await installFakeBackend(page, { dokumente: [DOKUMENT] });
     await page.goto('/#/trains/documents');
     const list = step(page, 'document-list');
-    await expect(list.getByTestId('documents-row')).toHaveCount(1);
-    await expect(list.getByTestId('documents-import')).toHaveCount(0);
+    await expect(list.getByTestId('documents-import')).toBeVisible();
     await expect(
       list.getByTestId('documents-row').locator('ion-chip')
-    ).toHaveCount(0);
+    ).toHaveText('bereinigt');
+    await expect(list.getByTestId('documents-export-master')).toHaveCount(0);
   });
 
   test('ein kalter Direktaufruf eines Import-Schritts landet bei den Dokumenten', async ({

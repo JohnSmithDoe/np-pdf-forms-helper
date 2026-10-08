@@ -112,7 +112,7 @@
               >
                 Bereinigte Datei
               </ion-button>
-              @if (masterFile.current()) {
+              @if (fullEnabled && masterFile.current()) {
                 <ion-button
                   size="small"
                   fill="clear"
@@ -123,7 +123,7 @@
                   Master aktualisieren
                 </ion-button>
               }
-              @if (importEnabled && !dokument.importiertAm) {
+              @if (!dokument.importiertAm) {
                 <ion-button
                   size="small"
                   fill="clear"
@@ -136,14 +136,12 @@
               }
             </p>
           </ion-label>
-          @if (importEnabled) {
-            <ion-chip
-              slot="end"
-              [color]="dokument.importiertAm ? 'success' : 'primary'"
-            >
-              {{ dokument.importiertAm ? 'importiert' : 'bereinigt' }}
-            </ion-chip>
-          }
+          <ion-chip
+            slot="end"
+            [color]="dokument.importiertAm ? 'success' : 'primary'"
+          >
+            {{ dokument.importiertAm ? 'importiert' : 'bereinigt' }}
+          </ion-chip>
         </ion-item>
       }
     </ion-list>

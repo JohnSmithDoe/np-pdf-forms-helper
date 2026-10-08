@@ -287,7 +287,7 @@ export class TrainsMasterPage {
 
   protected async onImport(): Promise<void> {
     const confirmed = await this.#overlays.confirm(
-      'Master importieren? Wagen, Radsätze, Einbauten und Instandhaltungen im Schattensystem werden geleert und Blatt für Blatt aus der Master-Datei neu aufgebaut. Partner, Vorlagen und Dokumente bleiben.'
+      'Master importieren? Die aktuellen Daten im Schattensystem — Wagen, Radsätze, Einbauten, Instandhaltungen und der Wagen-Zustand — werden geleert und Blatt für Blatt aus der Master-Datei neu aufgebaut. Partner, Vorlagen und Dokumente bleiben.'
     );
     if (!confirmed) return;
     let sheets: string[] = [];

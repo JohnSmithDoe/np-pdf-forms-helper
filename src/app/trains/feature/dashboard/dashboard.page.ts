@@ -38,12 +38,13 @@
 // answers, so the dashboard learns it without opening the workbook. It links to
 // the master page rather than continuing here: that page owns the run.
 //
-// The master tile and that banner exist only while `masterEnabled` is on; the
-// master workbook is unfinished.
-// Without `fullEnabled` the page is scaled back to Bereinigen, Dokumente and
-// Wagen: every other tile and „Export erstellen“ are hidden, not removed.
-// „Master-Datei“ right after Dokumente is NOT that tile: it takes the customer's
-// workbook in as a file (`/trains/master-file`) and is always there.
+// The entity tiles — Wagen, Radsätze, Instandhaltungen and the three partner
+// roles — are always there: the Schattensystem is the information hub. So is
+// „Master-Import“ (`/trains/master`), which EMPTIES the current data and
+// rebuilds it from the master's sheets, and is named apart from „Master-Datei“
+// (`/trains/master-file`), which only takes the customer's workbook in as a file.
+// Without `fullEnabled` only Vorlagen, Einstellungen and „Export erstellen“ are
+// hidden, not removed.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -102,7 +103,7 @@ interface DashboardTile {
   subtitle?: string;
 }
 
-const SCALED_BACK = new Set(['/trains/documents', '/trains/wagen']);
+const FULL_ONLY = new Set(['/trains/templates', '/trains/settings']);
 
 @Component({
   selector: 'app-page-trains-dashboard',
@@ -134,7 +135,6 @@ export class TrainsDashboardPage {
   readonly #masterFile = inject(MasterFileFacade);
   readonly #router = inject(Router);
   readonly #reports = inject(ReportPresenterService);
-  readonly #masterEnabled = inject(SettingsService).masterEnabled;
   protected readonly fullEnabled = inject(SettingsService).fullEnabled;
 
   protected readonly importTile: DashboardTile = {
@@ -145,19 +145,10 @@ export class TrainsDashboardPage {
       'Einen Ordner oder Dateien einlesen, erkennen lassen und bereinigen. Ins Schattensystem kommt dabei noch nichts.',
   };
 
-  readonly #masterTile: DashboardTile = {
-    route: '/trains/master',
-    label: 'Master-Datei',
-    icon: 'grid-outline',
-    description:
-      'Die Master-Datei ins Schattensystem importieren, Blatt für Blatt ansehen und als Kopie mit Datum auffrischen.',
-    subtitle: 'Import, Ansicht, Kopie',
-  };
-
   protected readonly tiles = computed<DashboardTile[]>(() =>
     this.fullEnabled
       ? this.#allTiles()
-      : this.#allTiles().filter((tile) => SCALED_BACK.has(tile.route))
+      : this.#allTiles().filter((tile) => !FULL_ONLY.has(tile.route))
   );
 
   readonly #allTiles = computed<DashboardTile[]>(() => {
@@ -231,7 +222,14 @@ export class TrainsDashboardPage {
         description: 'Gespeicherte Spaltenzuordnungen, eine je Dateiform.',
         count: this.#facade.templates()?.length,
       },
-      ...(this.#masterEnabled ? [this.#masterTile] : []),
+      {
+        route: '/trains/master',
+        label: 'Master-Import',
+        icon: 'grid-outline',
+        description:
+          'Die Master-Datei ins Schattensystem importieren — die aktuellen Daten werden dabei geleert — und Blatt für Blatt ansehen.',
+        subtitle: 'Import und Ansicht',
+      },
       {
         route: '/trains/settings',
         label: 'Einstellungen',
@@ -243,7 +241,7 @@ export class TrainsDashboardPage {
   });
 
   protected readonly openSheets = computed(() => {
-    const run = this.#masterEnabled && this.#facade.masterImportRun();
+    const run = this.#facade.masterImportRun();
     return run ? run.sheets.filter((sheet) => !run.done.includes(sheet)) : [];
   });
 

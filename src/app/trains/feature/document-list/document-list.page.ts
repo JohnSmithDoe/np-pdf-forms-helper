@@ -8,7 +8,9 @@
 // has five (its folder, two copies to open, an import and a master export to start). A second
 // kind of row in the shell would be the shell growing a mode.
 //
-// „Master aktualisieren“ opens the master update wizard for one document:
+// „Master aktualisieren“ is hidden for now behind `fullEnabled` (`npdh.full`):
+// the master is not written from the app until that switch is on. It opens the
+// master update wizard for one document:
 // sheets, columns, a cell-by-cell preview to approve, then the summary. It is
 // offered for every document, imported or not — the master and the
 // Schattensystem are separate targets — and only while a client master has been
@@ -18,10 +20,10 @@
 // is only ever one, it is never imported by the walk nor exported into itself,
 // so its row offers its copies and the way to its versions and nothing else.
 //
-// An imported document offers no „Importieren“, and that is only the
-// explanation: `stage_document` and `commit_document` refuse it themselves.
-// „Importieren“ and the bereinigt/importiert chip are hidden for now behind
-// `importEnabled` (`npdh.import`); the walk itself is unchanged.
+// „Importieren“ writes into the Schattensystem and nowhere else — the master
+// is only ever written by „Master aktualisieren“. An imported document offers
+// no „Importieren“, and that is only the explanation: `stage_document` and
+// `commit_document` refuse it themselves.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -85,7 +87,7 @@ export class DocumentListPage {
   readonly #export = inject(MasterExportFacade);
   readonly #reports = inject(ReportPresenterService);
   readonly #router = inject(Router);
-  protected readonly importEnabled = inject(SettingsService).importEnabled;
+  protected readonly fullEnabled = inject(SettingsService).fullEnabled;
 
   protected readonly dokumente = computed(() =>
     [...(this.trains.dokumente() ?? [])].sort(

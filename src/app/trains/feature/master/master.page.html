@@ -3,7 +3,7 @@
     <ion-buttons slot="start">
       <ion-back-button defaultHref="/trains" text="Zurück" />
     </ion-buttons>
-    <ion-title>Master-Datei</ion-title>
+    <ion-title>Master-Import</ion-title>
     <ion-buttons slot="end">
       <ion-button
         [disabled]="!importReady()"
@@ -23,17 +23,16 @@
 
 <ion-content class="ion-padding">
   <p>
-    Die Blätter der Master-Datei, in die bisher Exporte von Hand eingefügt
-    werden, füllt das Programm aus den bereinigten Dokumenten: unter „Dokumente“
-    je Dokument mit „Master aktualisieren“ — Blätter wählen, Vorschau prüfen,
-    übernehmen. Jede Aktualisierung wird eine neue Fassung der Master-Datei. Die
-    Vorlage je Blatt ist die gemerkte Zuordnung, mit der die Aktualisierung
-    Blätter vorschlägt.
+    „Importieren“ liest jedes Blatt mit einem Inhalt ins Schattensystem. Die
+    aktuellen Daten werden dafür geleert — Wagen, Radsätze, Einbauten,
+    Instandhaltungen und der Wagen-Zustand (Telematik, Schadensmeldungen,
+    Werkstattaufträge, Prüfungen) — und aus der Master-Datei neu aufgebaut,
+    Blatt für Blatt. Partner, Vorlagen und Dokumente bleiben; die Dokumente
+    lassen sich danach erneut importieren.
   </p>
   <p>
-    „Importieren“ liest umgekehrt jedes Blatt mit einem Inhalt ins
-    Schattensystem: Wagen, Radsätze, Einbauten und Instandhaltungen werden dafür
-    geleert und aus der Master-Datei neu aufgebaut, Blatt für Blatt.
+    Jedes Blatt lässt sich hier auch ansehen: so, wie das Schattensystem es
+    füllen würde.
   </p>
   <p>
     Zugeordnet wird beim Übernehmen einer Fassung von selbst: jedes Blatt nach

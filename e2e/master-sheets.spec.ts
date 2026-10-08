@@ -248,8 +248,6 @@ test.describe('Master-Import auf dem Dashboard', () => {
         },
       },
     });
-    // The banner is behind the master feature toggle.
-    await page.addInitScript(() => localStorage.setItem('npdh.master', 'on'));
     await page.goto('/#/trains');
 
     await expect(
