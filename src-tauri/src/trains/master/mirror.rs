@@ -211,6 +211,7 @@ pub(super) fn plan_of_headers(headers: Vec<(u32, String)>) -> ImportPlan {
             .collect(),
         template_id: None,
         date1904: false,
+        pruefart: None,
     }
 }
 

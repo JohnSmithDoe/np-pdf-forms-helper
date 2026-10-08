@@ -37,6 +37,11 @@
 // would double every event in it. The key has to mean "this row", not "this row
 // as currently resolved".
 //
+// The Wagen-Zustand's own keys — Bestellnummer, a Schadensmeldung's date and
+// code, a Prüfung's Art and due date — join the key only when a row carries
+// one, so two orders for one Wagen in one file are two rows, and every key
+// stored before them still hashes alike.
+//
 // The radsatz and both fitting dates are IN the key. Without them a
 // wheelset-monitoring export — four fitted radsaetze per wagen, no Datum,
 // Leistung or Betrag — hashed all four rows of a wagen alike and flagged three
@@ -79,7 +84,7 @@ use super::model::{
     CellIssue, ColumnBinding, FieldKind, ImportPlan, Resolution, RowStatus, Severity, StagedCell,
     StagedImport, StagedRow, StagedSummary, StagingOrigin,
 };
-use super::reading::{read_column, Confirmed, Interpretation, Question};
+use super::reading::{read_column, reads_a_date, Confirmed, Interpretation, Question};
 use super::resolve;
 use super::sanitise::{date, format, number, text, Parsed, Value};
 use super::sheet::grid::Grid;
@@ -343,37 +348,41 @@ pub(super) fn parse_cell(
     let raw = cell.map(|cell| cell.text.as_str()).unwrap_or("");
     let stored_number = cell.and_then(|cell| cell.number);
 
-    match interpretation.binding.field {
+    let field = interpretation.binding.field;
+    match field {
         FieldKind::Wagennummer => super::sanitise::wagen::parse(raw),
-        FieldKind::Datum => match stored_number {
-            Some(serial) if is_serial(interpretation, serial) => {
-                date::from_serial(serial, plan.date1904)
-                    .map(|value| Parsed::plain(Value::Date(value)))
-            }
-            _ => date::parse_text(raw, interpretation.date_order.value),
-        },
         FieldKind::Betrag => match stored_number {
             Some(amount) => Ok(Parsed::plain(Value::Money((amount * 100.0).round() as i64))),
             None => number::parse_money(raw, interpretation.decimal.value),
         },
-        FieldKind::EingebautAm | FieldKind::AusgebautAm => match stored_number {
+        FieldKind::TelematikLaufleistung | FieldKind::TelematikEnergie => match stored_number {
+            Some(amount) => number::count(amount)
+                .map(|value| Parsed::plain(Value::Zahl(value)))
+                .ok_or_else(|| format!("Die Zahl „{raw}“ ist zu groß.")),
+            None => number::parse_count(raw, interpretation.decimal.value),
+        },
+        FieldKind::TelematikZeitpunkt => match stored_number {
+            Some(serial) if is_serial(interpretation, serial) => {
+                date::zeitpunkt_from_serial(serial, plan.date1904)
+                    .map(|value| Parsed::plain(Value::Zeitpunkt(value)))
+            }
+            _ => date::parse_zeitpunkt(raw, interpretation.date_order.value),
+        },
+        _ if reads_a_date(field) => match stored_number {
             Some(serial) if is_serial(interpretation, serial) => {
                 date::from_serial(serial, plan.date1904)
                     .map(|value| Parsed::plain(Value::Date(value)))
             }
             _ => date::parse_text(raw, interpretation.date_order.value),
         },
+        FieldKind::Ausgesetzt | FieldKind::Beladen => text::parse_flag(raw),
         FieldKind::Ignorieren => text::parse(""),
         _ => text::parse(raw),
     }
 }
 
 fn is_master_blank(field: FieldKind, cell: &super::sheet::grid::RawCell) -> bool {
-    let date = matches!(
-        field,
-        FieldKind::Datum | FieldKind::EingebautAm | FieldKind::AusgebautAm
-    );
-    date && cell.number == Some(0.0)
+    reads_a_date(field) && cell.number == Some(0.0)
 }
 
 fn is_serial(interpretation: &Interpretation, serial: f64) -> bool {
@@ -436,17 +445,31 @@ fn dedupe_key(
             .map(|(_, value)| format::value(value))
             .unwrap_or_default()
     };
-    hash::join(&[
-        nummer.as_deref().unwrap_or(""),
-        &find(FieldKind::Datum),
-        &resolve::partner::match_key(werkstatt.unwrap_or("")),
-        &find(FieldKind::Leistung),
-        &find(FieldKind::Betrag),
-        &resolve::radsatz::match_key(radsatz.unwrap_or("")),
-        &find(FieldKind::EingebautAm),
-        &find(FieldKind::AusgebautAm),
-    ])
+    let mut parts = vec![
+        nummer.as_deref().unwrap_or("").to_string(),
+        find(FieldKind::Datum),
+        resolve::partner::match_key(werkstatt.unwrap_or("")),
+        find(FieldKind::Leistung),
+        find(FieldKind::Betrag),
+        resolve::radsatz::match_key(radsatz.unwrap_or("")),
+        find(FieldKind::EingebautAm),
+        find(FieldKind::AusgebautAm),
+    ];
+    let zustand: Vec<String> = ZUSTAND_KEYS.iter().map(|field| find(*field)).collect();
+    if zustand.iter().any(|part| !part.is_empty()) {
+        parts.extend(zustand);
+    }
+    let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
+    hash::join(&parts)
 }
+
+const ZUSTAND_KEYS: [FieldKind; 5] = [
+    FieldKind::Bestellnummer,
+    FieldKind::SchadenGemeldetAm,
+    FieldKind::Schadcode,
+    FieldKind::Pruefart,
+    FieldKind::PruefungFaelligAm,
+];
 
 fn summarise(rows: &[StagedRow]) -> StagedSummary {
     let mut summary = StagedSummary {
@@ -526,6 +549,7 @@ mod tests {
                 .collect(),
             template_id: None,
             date1904: false,
+            pruefart: None,
         }
     }
 

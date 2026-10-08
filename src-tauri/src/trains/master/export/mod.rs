@@ -339,6 +339,7 @@ mod tests {
                 .collect(),
             template_id: Some("t-telematik".into()),
             date1904: false,
+            pruefart: None,
         }
     }
 

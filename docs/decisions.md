@@ -899,3 +899,58 @@ mit Absicht (jedes Dokument ist ein Inkrement) und vergleicht nicht, welche Seit
   Datumsformat ist kein Datum. Verglichen wird nach Kalendertag. Ein eigenes Feld `warnings` an
   `MasterExportSheetRun` (Vertrag doppelt: `model.rs` und `trains.types.ts`, dazu der Fake). In der
   Vorschau wird es dargestellt wie die Konflikte in Schritt 2.
+
+## Der Wagen-Zustand ist typisiert (appended 2026-10-07)
+
+Entschieden mit Martin am 2026-10-07. Das Schattensystem wird zum **Informations-Hub** für alle
+importierten Dokumente. Was das Blatt „Alle Wagen Überblick“ des Kunden heute über etwa 17 SVERWEISE,
+Handspalten und zwei Handfarben zeigt, wird nicht nachgebaut, indem man Dokumente zur Laufzeit
+nachschlägt. Stattdessen werden **typisierte Entitäten** gebaut, jede aus einer eigenen Absenderdatei
+importiert. Für Dateien, die es noch nicht gibt, wird angenommen, dass es sie geben wird. Verworfen
+wurde die Alternative „Spalte = Vorlage + Quellspalte, gelesen aus dem neuesten Dokument“: Die App
+wüsste dann einen Wert, aber nicht, was er bedeutet, und Fristen, Status und Funkstille könnte sie
+nicht selbst beurteilen.
+
+- **Fünf Entitäten, KISS:**
+  - `TelematikGeraet` (Schlüssel `kennung`, die Pointer-ID des Absenders) und `TelematikMeldung`, von
+    der **nur die neueste je Wagen** bleibt.
+  - `Schadensmeldung` (Schlüssel Wagen + gemeldet am + Schadcode).
+  - `Werkstattauftrag` (Wagen + Bestellnummer).
+  - `Pruefung` (Wagen + Art + fällig am). P8 ist die jährliche Inspektion, Revision G4.x die
+    Hauptuntersuchung, und beide sind dieselbe Entität.
+- **Kein neuer Schritt im Import.** Alles hängt am Wagen, den der Schritt „Wagen“ schon entschieden
+  hat. Ein abgelehnter Wagen lässt seine Zeilen fallen wie bisher. Jedes Attribut hat eine eigene
+  Spaltenart. Datum, Leistung, Betrag und Bemerkung werden absichtlich nicht wiederverwendet, sonst
+  würde eine Telematik- oder Auftragszeile zur Instandhaltung.
+- **Fortschreiben statt anhängen:** Ein gespeicherter Datensatz wird über seinen Schlüssel gefunden
+  und überschrieben, eine leere Zelle löscht dabei nichts. Die Telematik-Meldung ist die Ausnahme:
+  Sie ist eine Messung, und eine neuere ersetzt die alte ganz. Eine Position vom 05.10. neben einem
+  km-Stand vom 02.10. wäre eine Messung, die es nie gab.
+- **Die Telematik-Meldung behält ihre Uhrzeit.** Das ist die einzige Ausnahme von „Daten sind
+  Kalendertage“, denn zwei Exporte desselben Tages lassen sich nur über die Uhrzeit ordnen
+  (`sanitise::date::Zeitpunkt`). Die bereinigte Kopie schreibt `TT.MM.JJJJ hh:mm:ss`, sonst ginge die
+  Zeit dort verloren.
+- **Eine ältere Meldung wird übersprungen und im Bericht gezählt.** Damit kann der Rücksprung vom
+  05.10. (Export vom 02.10. über den Stand vom 05.10., siehe „Ein älteres Dokument wird gewarnt“) im
+  Schattensystem nicht mehr vorkommen. Für den Master-Paste gilt die dortige Entscheidung weiter.
+- **Die Prüfart kommt aus der Spalte oder fest von der Vorlage** (`ImportPlan.pruefart`). Die
+  P8-Liste hat keine Art-Spalte, weil die ganze Datei P8 ist. Die Zuordnung fragt nach der Art nur,
+  wenn eine Prüfungsspalte zugeordnet ist und keine Art-Spalte.
+- **Ein Werkstattauftrag braucht die Bestellnummer und noch eine Auftragsspalte.** Die P8-Liste
+  nennt die Bestellnummer einer Prüfung, und das allein darf keinen leeren Auftrag erzeugen.
+- **Die Auftragsliste ist keine Quelle für Instandhaltungen mehr.** `builtin:werkstattauftraege`
+  ordnet `werk_ausg_ist` jetzt dem Werkstattausgang zu und nicht mehr dem Datum. Damit fällt die
+  Notlösung aus „Workshop orders are a feed“ weg, bei der unfertige Aufträge von Hand abgehakt
+  werden mussten. `vers_datum` bleibt ohne Zuordnung: Es ist der Versand des WAGENS, nicht des
+  Auftrags.
+- **Ein Speicher, nicht fünf:** `zustand.db` hält einen `WagenZustand`. Jede Liste hat ein paar
+  hundert Zeilen je Flotte, und die Aufteilung, die die große Instandhaltungsdatei schützt, würde
+  hier nur fünfmal so viel Verdrahtung kosten.
+- **Berechnet, nicht gespeichert:** „Tage seit letztem Funk“ ergibt sich aus dem Zeitpunkt der
+  Meldung (`util/wagen-zustand`). Über 7 Tagen ist es rot wie im Dashboard. „Offen“ heißt bei einer
+  Schadensmeldung „kein erledigt am“ (die orange Zeile) und bei einem Auftrag „kein Ausgang“.
+- **Noch offen:**
+  - Keine Quelle füllt „Auftrag versendet am“ (die lila Zelle), deshalb zeigt die Liste dafür noch
+    kein Abzeichen.
+  - Der Master-Spiegel liest diese Entitäten noch nicht aus dem Master selbst.
+  - Die Blattansicht des Masters zeigt ihre Spalten leer.

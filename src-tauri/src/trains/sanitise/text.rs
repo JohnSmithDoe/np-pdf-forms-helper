@@ -15,6 +15,10 @@
 // `parse` is the free-text field, and it cannot fail: any run of characters is a
 // bemerkung. A blank cell becomes `Value::Empty` rather than an empty string,
 // so "nothing here" is one thing in the model and not two.
+//
+// `parse_flag` is a JA/NEIN column („AUSGESETZT JA/NEIN“). It accepts the
+// spellings a hand-kept sheet uses, `x` included, and refuses anything else
+// rather than reading an unknown word as no.
 // ────────────────────────────────────────────────────────────────
 
 use super::{Parse, Parsed, Value};
@@ -51,6 +55,23 @@ pub fn parse(raw: &str) -> Parse {
     }))
 }
 
+const YES: [&str; 7] = ["ja", "j", "x", "1", "wahr", "true", "yes"];
+const NO: [&str; 6] = ["nein", "n", "0", "falsch", "false", "no"];
+
+pub fn parse_flag(raw: &str) -> Parse {
+    let text = normalise(raw);
+    let lower = text.to_lowercase();
+    if lower.is_empty() || lower == "-" {
+        Ok(Parsed::plain(Value::Empty))
+    } else if YES.contains(&lower.as_str()) {
+        Ok(Parsed::plain(Value::Flag(true)))
+    } else if NO.contains(&lower.as_str()) {
+        Ok(Parsed::plain(Value::Flag(false)))
+    } else {
+        Err(format!("„{text}“ ist weder ja noch nein."))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,5 +101,14 @@ mod tests {
             parse(" Bremsprobe ").unwrap().value,
             Value::Text("Bremsprobe".into())
         );
+    }
+
+    #[test]
+    fn a_flag_reads_ja_nein_and_refuses_anything_else() {
+        assert_eq!(parse_flag(" JA ").unwrap().value, Value::Flag(true));
+        assert_eq!(parse_flag("x").unwrap().value, Value::Flag(true));
+        assert_eq!(parse_flag("Nein").unwrap().value, Value::Flag(false));
+        assert_eq!(parse_flag("").unwrap().value, Value::Empty);
+        assert!(parse_flag("vielleicht").is_err());
     }
 }

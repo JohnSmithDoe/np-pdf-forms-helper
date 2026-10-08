@@ -254,6 +254,37 @@ export type FieldKind =
   | 'einbauposition'
   | 'eingebautAm'
   | 'ausgebautAm'
+  | 'telematikGeraet'
+  | 'telematikAngebautAm'
+  | 'telematikZeitpunkt'
+  | 'telematikStadt'
+  | 'telematikLand'
+  | 'telematikStandort'
+  | 'telematikLaufleistung'
+  | 'telematikEnergie'
+  | 'telematikBewegung'
+  | 'schadenGemeldetAm'
+  | 'schadenGemeldetVon'
+  | 'schadcode'
+  | 'schadenNotiz'
+  | 'ausgesetzt'
+  | 'beladen'
+  | 'schadenAusfuehrender'
+  | 'schadenGeplantAm'
+  | 'schadenAktion'
+  | 'schadenErledigtAm'
+  | 'bestellnummer'
+  | 'auftragStatus'
+  | 'auftragErfasstAm'
+  | 'auftragEingangAm'
+  | 'auftragAusgangAm'
+  | 'auftragVersendetAm'
+  | 'auftragBemerkung'
+  | 'pruefart'
+  | 'pruefungFaelligAm'
+  | 'pruefungGeplantAm'
+  | 'pruefungDurchgefuehrtAm'
+  | 'pruefungStatus'
   | 'ignorieren';
 
 export interface Provenance {
@@ -312,6 +343,78 @@ export interface Einbau {
   source: Provenance;
 }
 
+export interface TelematikGeraet {
+  id: string;
+  kennung: string;
+  wagenId: string;
+  angebautAm?: string;
+  source: Provenance;
+}
+
+export interface TelematikMeldung {
+  id: string;
+  wagenId: string;
+  geraetId?: string;
+  zeitpunkt: string;
+  stadt?: string;
+  land?: string;
+  standort?: string;
+  laufleistungKm?: number;
+  energieProzent?: number;
+  bewegung?: string;
+  source: Provenance;
+}
+
+export interface Schadensmeldung {
+  id: string;
+  wagenId: string;
+  gemeldetAm?: string;
+  gemeldetVon?: string;
+  schadcode?: string;
+  notiz?: string;
+  ausgesetzt?: boolean;
+  beladen?: boolean;
+  ausfuehrender?: string;
+  geplantAm?: string;
+  aktion?: string;
+  erledigtAm?: string;
+  source: Provenance;
+}
+
+export interface Werkstattauftrag {
+  id: string;
+  wagenId: string;
+  bestellnummer: string;
+  werkstattId?: string;
+  status?: string;
+  erfasstAm?: string;
+  eingangAm?: string;
+  ausgangAm?: string;
+  versendetAm?: string;
+  bemerkung?: string;
+  source: Provenance;
+}
+
+export interface Pruefung {
+  id: string;
+  wagenId: string;
+  art?: string;
+  faelligAm?: string;
+  geplantAm?: string;
+  durchgefuehrtAm?: string;
+  status?: string;
+  bestellnummer?: string;
+  source: Provenance;
+}
+
+export interface WagenZustand {
+  geraete: TelematikGeraet[];
+  meldungen: TelematikMeldung[];
+  schaeden: Schadensmeldung[];
+  auftraege: Werkstattauftrag[];
+  pruefungen: Pruefung[];
+}
+
 export interface Instandhaltung {
   id: string;
   wagenId: string;
@@ -353,6 +456,7 @@ export interface ImportPlan {
   columns: ColumnBinding[];
   templateId?: string;
   date1904: boolean;
+  pruefart?: string;
 }
 
 export interface ImportTemplate {
@@ -653,6 +757,7 @@ export interface TrainsData {
   partners?: Partner[];
   radsaetze?: Radsatz[];
   einbauten?: Einbau[];
+  zustand?: WagenZustand;
   templates?: ImportTemplate[];
   counts?: TrainsCounts;
   staging?: StagedImport;

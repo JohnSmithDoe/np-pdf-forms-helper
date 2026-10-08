@@ -296,6 +296,70 @@ export interface FakeInstandhaltung {
   source: FakeProvenance;
 }
 
+/** The Wagen-Zustand, one object like Rust's `zustand.db`. Only the latest
+ *  Meldung per Wagen exists; its `zeitpunkt` is ISO WITH the time. */
+export interface FakeWagenZustand {
+  geraete: {
+    id: string;
+    kennung: string;
+    wagenId: string;
+    angebautAm?: string;
+    source: FakeProvenance;
+  }[];
+  meldungen: {
+    id: string;
+    wagenId: string;
+    geraetId?: string;
+    zeitpunkt: string;
+    stadt?: string;
+    land?: string;
+    standort?: string;
+    laufleistungKm?: number;
+    energieProzent?: number;
+    bewegung?: string;
+    source: FakeProvenance;
+  }[];
+  schaeden: {
+    id: string;
+    wagenId: string;
+    gemeldetAm?: string;
+    gemeldetVon?: string;
+    schadcode?: string;
+    notiz?: string;
+    ausgesetzt?: boolean;
+    beladen?: boolean;
+    ausfuehrender?: string;
+    geplantAm?: string;
+    aktion?: string;
+    erledigtAm?: string;
+    source: FakeProvenance;
+  }[];
+  auftraege: {
+    id: string;
+    wagenId: string;
+    bestellnummer: string;
+    werkstattId?: string;
+    status?: string;
+    erfasstAm?: string;
+    eingangAm?: string;
+    ausgangAm?: string;
+    versendetAm?: string;
+    bemerkung?: string;
+    source: FakeProvenance;
+  }[];
+  pruefungen: {
+    id: string;
+    wagenId: string;
+    art?: string;
+    faelligAm?: string;
+    geplantAm?: string;
+    durchgefuehrtAm?: string;
+    status?: string;
+    bestellnummer?: string;
+    source: FakeProvenance;
+  }[];
+}
+
 export interface FakeTemplate {
   id: string;
   name: string;
@@ -546,6 +610,7 @@ export interface FakeSeed {
   partners?: FakePartner[];
   radsaetze?: FakeRadsatz[];
   einbauten?: FakeEinbau[];
+  zustand?: Partial<FakeWagenZustand>;
   events?: FakeInstandhaltung[];
   templates?: FakeTemplate[];
   /** What `stage_import` and `stage_import_path` hand back. `null` = the picker was cancelled. */
@@ -626,6 +691,7 @@ export function install(seed: FakeSeed): void {
     partners: FakePartner[];
     radsaetze: FakeRadsatz[];
     einbauten: FakeEinbau[];
+    zustand: FakeWagenZustand;
     events: FakeInstandhaltung[];
     templates: FakeTemplate[];
     staging: FakeStaging | null;
@@ -656,6 +722,13 @@ export function install(seed: FakeSeed): void {
     partners: seed.partners ?? [],
     radsaetze: seed.radsaetze ?? [],
     einbauten: seed.einbauten ?? [],
+    zustand: {
+      geraete: seed.zustand?.geraete ?? [],
+      meldungen: seed.zustand?.meldungen ?? [],
+      schaeden: seed.zustand?.schaeden ?? [],
+      auftraege: seed.zustand?.auftraege ?? [],
+      pruefungen: seed.zustand?.pruefungen ?? [],
+    },
     events: seed.events ?? [],
     templates: seed.templates ?? [],
     staging: seed.staging ?? null,
@@ -708,6 +781,7 @@ export function install(seed: FakeSeed): void {
     partners: copy(state.partners),
     radsaetze: copy(state.radsaetze),
     einbauten: copy(state.einbauten),
+    zustand: copy(state.zustand),
     templates: copy(state.templates),
     dokumente: copy(state.dokumente),
     settings: copy(state.settings),
@@ -1041,6 +1115,15 @@ export function install(seed: FakeSeed): void {
     remove_waggon: (args) => {
       const id = String(args['id']);
       state.wagen = state.wagen.filter((entry) => entry.id !== id);
+      const kept = <T extends { wagenId: string }>(items: T[]): T[] =>
+        items.filter((item) => item.wagenId !== id);
+      state.zustand = {
+        geraete: kept(state.zustand.geraete),
+        meldungen: kept(state.zustand.meldungen),
+        schaeden: kept(state.zustand.schaeden),
+        auftraege: kept(state.zustand.auftraege),
+        pruefungen: kept(state.zustand.pruefungen),
+      };
       return {
         ...trainsLists(),
         message: report('Wagen wurde entfernt'),

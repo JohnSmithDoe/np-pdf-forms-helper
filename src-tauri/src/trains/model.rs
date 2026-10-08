@@ -49,6 +49,18 @@
 // `dedupe_key` is what stops a re-imported file doubling every row, and
 // `Provenance` is four fields that answer "where did this number come from".
 //
+// THE WAGEN-ZUSTAND — what a Wagen's dashboard row shows beyond its fittings —
+// is five record types hanging off a Wagen, all imported like everything else
+// and none asked about in the walk: a Telematik device (`kennung` = the
+// sender's pointer id) and the LATEST reading per Wagen, its `zeitpunkt` ISO
+// with the time; Schadensmeldungen („offen“ = no `erledigt_am`, the orange row
+// of the customer's dashboard); Werkstattaufträge keyed by `bestellnummer`
+// („noch nicht versendet“ = no `versendet_am`, the purple cell); and Prüfungen
+// — P8, the yearly inspection, and Revision G4.x — with an `art` from a column
+// or the template's fixed `ImportPlan.pruefart`. They travel together as one
+// `WagenZustand`, the shape of their one store. See decisions.md, „Der
+// Wagen-Zustand ist typisiert“.
+//
 // `TrainsData` follows `ClientData`'s presence rule — a list that is THERE is the
 // whole current one, and absent means the command could not have changed it —
 // with one deliberate exception. Instandhaltungen are served as an
@@ -515,6 +527,136 @@ impl Einbau {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TelematikGeraet {
+    pub id: String,
+    pub kennung: String,
+    pub wagen_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub angebaut_am: Option<String>,
+    pub source: Provenance,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TelematikMeldung {
+    pub id: String,
+    pub wagen_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub geraet_id: Option<String>,
+    pub zeitpunkt: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stadt: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub land: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standort: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub laufleistung_km: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub energie_prozent: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bewegung: Option<String>,
+    pub source: Provenance,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Schadensmeldung {
+    pub id: String,
+    pub wagen_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gemeldet_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gemeldet_von: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schadcode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notiz: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ausgesetzt: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub beladen: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ausfuehrender: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub geplant_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aktion: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub erledigt_am: Option<String>,
+    pub source: Provenance,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Werkstattauftrag {
+    pub id: String,
+    pub wagen_id: String,
+    pub bestellnummer: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub werkstatt_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub erfasst_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eingang_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ausgang_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub versendet_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bemerkung: Option<String>,
+    pub source: Provenance,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Pruefung {
+    pub id: String,
+    pub wagen_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub art: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub faellig_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub geplant_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub durchgefuehrt_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bestellnummer: Option<String>,
+    pub source: Provenance,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WagenZustand {
+    #[serde(default)]
+    pub geraete: Vec<TelematikGeraet>,
+    #[serde(default)]
+    pub meldungen: Vec<TelematikMeldung>,
+    #[serde(default)]
+    pub schaeden: Vec<Schadensmeldung>,
+    #[serde(default)]
+    pub auftraege: Vec<Werkstattauftrag>,
+    #[serde(default)]
+    pub pruefungen: Vec<Pruefung>,
+}
+
+impl WagenZustand {
+    pub fn without_wagen(&mut self, wagen_id: &str) {
+        self.geraete.retain(|item| item.wagen_id != wagen_id);
+        self.meldungen.retain(|item| item.wagen_id != wagen_id);
+        self.schaeden.retain(|item| item.wagen_id != wagen_id);
+        self.auftraege.retain(|item| item.wagen_id != wagen_id);
+        self.pruefungen.retain(|item| item.wagen_id != wagen_id);
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum FieldKind {
@@ -532,6 +674,37 @@ pub enum FieldKind {
     Einbauposition,
     EingebautAm,
     AusgebautAm,
+    TelematikGeraet,
+    TelematikAngebautAm,
+    TelematikZeitpunkt,
+    TelematikStadt,
+    TelematikLand,
+    TelematikStandort,
+    TelematikLaufleistung,
+    TelematikEnergie,
+    TelematikBewegung,
+    SchadenGemeldetAm,
+    SchadenGemeldetVon,
+    Schadcode,
+    SchadenNotiz,
+    Ausgesetzt,
+    Beladen,
+    SchadenAusfuehrender,
+    SchadenGeplantAm,
+    SchadenAktion,
+    SchadenErledigtAm,
+    Bestellnummer,
+    AuftragStatus,
+    AuftragErfasstAm,
+    AuftragEingangAm,
+    AuftragAusgangAm,
+    AuftragVersendetAm,
+    AuftragBemerkung,
+    Pruefart,
+    PruefungFaelligAm,
+    PruefungGeplantAm,
+    PruefungDurchgefuehrtAm,
+    PruefungStatus,
     Ignorieren,
 }
 
@@ -552,6 +725,37 @@ impl FieldKind {
             FieldKind::Einbauposition => "Einbauposition",
             FieldKind::EingebautAm => "Eingebaut am",
             FieldKind::AusgebautAm => "Ausgebaut am",
+            FieldKind::TelematikGeraet => "Telematik-Gerät",
+            FieldKind::TelematikAngebautAm => "Telematik angebaut am",
+            FieldKind::TelematikZeitpunkt => "Telematik-Zeitpunkt",
+            FieldKind::TelematikStadt => "Stadt",
+            FieldKind::TelematikLand => "Land",
+            FieldKind::TelematikStandort => "Standort",
+            FieldKind::TelematikLaufleistung => "Laufleistung (km)",
+            FieldKind::TelematikEnergie => "Energie-Reserve (%)",
+            FieldKind::TelematikBewegung => "Bewegung",
+            FieldKind::SchadenGemeldetAm => "Schaden gemeldet am",
+            FieldKind::SchadenGemeldetVon => "Schaden gemeldet von",
+            FieldKind::Schadcode => "Schadcode",
+            FieldKind::SchadenNotiz => "Schadensnotiz",
+            FieldKind::Ausgesetzt => "Ausgesetzt",
+            FieldKind::Beladen => "Beladen",
+            FieldKind::SchadenAusfuehrender => "Ausführende Werkstatt/EVU",
+            FieldKind::SchadenGeplantAm => "Schaden geplant am",
+            FieldKind::SchadenAktion => "Notwendige Aktion",
+            FieldKind::SchadenErledigtAm => "Schaden erledigt am",
+            FieldKind::Bestellnummer => "Bestellnummer",
+            FieldKind::AuftragStatus => "Auftragsstatus",
+            FieldKind::AuftragErfasstAm => "Auftrag erfasst am",
+            FieldKind::AuftragEingangAm => "Werkstatteingang",
+            FieldKind::AuftragAusgangAm => "Werkstattausgang",
+            FieldKind::AuftragVersendetAm => "Auftrag versendet am",
+            FieldKind::AuftragBemerkung => "Auftragsbemerkung",
+            FieldKind::Pruefart => "Prüfart",
+            FieldKind::PruefungFaelligAm => "Prüfung fällig am",
+            FieldKind::PruefungGeplantAm => "Prüfung geplant am",
+            FieldKind::PruefungDurchgefuehrtAm => "Prüfung durchgeführt am",
+            FieldKind::PruefungStatus => "Prüfungsstatus",
             FieldKind::Ignorieren => "Nicht importieren",
         }
     }
@@ -583,6 +787,8 @@ pub struct ImportPlan {
     pub template_id: Option<String>,
     #[serde(default)]
     pub date1904: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pruefart: Option<String>,
 }
 
 impl ImportPlan {
@@ -1189,6 +1395,8 @@ pub struct TrainsData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub templates: Option<Vec<ImportTemplate>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub zustand: Option<WagenZustand>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub counts: Option<TrainsCounts>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub staging: Option<StagedImport>,
@@ -1245,6 +1453,11 @@ impl TrainsData {
 
     pub fn templates(mut self, templates: Vec<ImportTemplate>) -> Self {
         self.templates = Some(templates);
+        self
+    }
+
+    pub fn zustand(mut self, zustand: WagenZustand) -> Self {
+        self.zustand = Some(zustand);
         self
     }
 
@@ -1454,6 +1667,7 @@ mod tests {
             }],
             template_id: None,
             date1904: false,
+            pruefart: None,
         };
         assert!(plan.missing_required().is_empty());
         assert!(plan.binding(FieldKind::Wagennummer).is_some());

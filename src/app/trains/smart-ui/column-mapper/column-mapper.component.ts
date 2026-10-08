@@ -28,6 +28,10 @@
 // it. A half-mapped plan stages fine; only review and commit need the required
 // fields.
 //
+// „Prüfart der Vorlage“ appears only while a Prüfung column is mapped and no
+// Prüfart column is: a P8 list has no Art column because the whole file is P8,
+// and the template has to say so once.
+//
 // The samples are collected in ONE pass over the staged rows, not one pass per
 // column. This recomputes on every single field, decimal and date-order pick —
 // each of which re-stages — and a per-column scan walked every cell of every row
@@ -47,6 +51,7 @@ import {
   IonCardContent,
   IonCardHeader,
   IonCardTitle,
+  IonInput,
   IonItem,
   IonLabel,
   IonList,
@@ -93,6 +98,7 @@ const SAMPLE_COUNT = 3;
     IonCardContent,
     IonCardHeader,
     IonCardTitle,
+    IonInput,
     IonItem,
     IonLabel,
     IonList,
@@ -109,6 +115,24 @@ export class ColumnMapperComponent {
 
   protected readonly groups = GROUP_LABELS;
   protected readonly catalogue = FIELD_CATALOGUE;
+
+  protected readonly asksPruefart = computed(() => {
+    const columns = this.facade.staging()?.plan.columns ?? [];
+    const fields = new Set(columns.map((column) => column.field));
+    return (
+      !fields.has('pruefart') &&
+      [...fields].some(
+        (field) =>
+          field !== 'pruefart' &&
+          FIELD_CATALOGUE.find((entry) => entry.field === field)?.group ===
+            'pruefung'
+      )
+    );
+  });
+
+  protected readonly pruefart = computed(
+    () => this.facade.staging()?.plan.pruefart ?? ''
+  );
 
   protected readonly missing = computed(() =>
     this.facade.missingRequired().map(labelOf)
@@ -158,6 +182,12 @@ export class ColumnMapperComponent {
   protected async onField(index: number, event: Event): Promise<void> {
     const field = (event as CustomEvent<{ value: FieldKind }>).detail.value;
     await this.#run(() => this.facade.setField(index, field));
+  }
+
+  protected async onPruefart(event: Event): Promise<void> {
+    const value = (event as CustomEvent<{ value?: string | null }>).detail
+      .value;
+    await this.#run(() => this.facade.setPruefart(value ?? ''));
   }
 
   protected async onDecimal(index: number, event: Event): Promise<void> {

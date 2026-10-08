@@ -23,12 +23,12 @@
 //   • a SECOND decimal separator means this is not a number in this style, and
 //     saying so beats inventing one of the two possible readings
 //
-// There is deliberately NO plain-number parser. Every number this app reads is
-// an amount, and `parse_money` rounds to cents exactly once so no `f64` reaches
-// the store or the workbook. A second entry point returning a float would be the
-// one somebody reaches for by accident. Its magnitude bound is not decoration: `as i64` on an
-// out-of-range float saturates SILENTLY, so a nonsense cell would otherwise land
-// in the store as a real amount.
+// There is deliberately NO float parser. `parse_money` rounds to cents exactly
+// once and `parse_count` to a whole number (a km reading, a battery percent), so
+// no `f64` reaches the store or the workbook. An entry point returning a float
+// would be the one somebody reaches for by accident. Both magnitude bounds are
+// not decoration: `as i64` on an out-of-range float saturates SILENTLY, so a
+// nonsense cell would otherwise land in the store as a real value.
 // ────────────────────────────────────────────────────────────────
 
 use super::text;
@@ -66,6 +66,20 @@ pub fn parse_money(raw: &str, style: DecimalStyle) -> Parse {
         ));
     }
     Ok(Parsed::plain(Value::Money(cents as i64)))
+}
+
+pub fn parse_count(raw: &str, style: DecimalStyle) -> Parse {
+    let Some(number) = to_f64(raw, style)? else {
+        return Ok(Parsed::plain(Value::Empty));
+    };
+    count(number)
+        .map(|value| Parsed::plain(Value::Zahl(value)))
+        .ok_or_else(|| format!("Die Zahl „{}“ ist zu groß.", text::normalise(raw)))
+}
+
+pub fn count(number: f64) -> Option<i64> {
+    let rounded = number.round();
+    (rounded.is_finite() && rounded.abs() <= 1e15).then_some(rounded as i64)
 }
 
 fn to_f64(raw: &str, style: DecimalStyle) -> Result<Option<f64>, String> {
@@ -241,6 +255,22 @@ mod tests {
         assert_eq!(cents("-19,99", German), -1999);
         // The case that makes f64 money visible in a workbook.
         assert_eq!(cents("1234,565", German), 123_457);
+    }
+
+    // A km reading as a real fleet export wrote it, and a battery percent.
+    #[test]
+    fn a_count_is_a_whole_number_in_the_column_style() {
+        assert_eq!(
+            parse_count("67\u{2032}543", German).unwrap().value,
+            Value::Zahl(67_543)
+        );
+        assert_eq!(
+            parse_count("227.734", German).unwrap().value,
+            Value::Zahl(227_734)
+        );
+        assert_eq!(parse_count("98,6", German).unwrap().value, Value::Zahl(99));
+        assert_eq!(parse_count("", German).unwrap().value, Value::Empty);
+        assert!(parse_count("1e400", German).is_err());
     }
 
     #[test]

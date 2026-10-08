@@ -19,6 +19,23 @@
   </ion-note>
 }
 
+@if (asksPruefart()) {
+  <ion-list>
+    <ion-item>
+      <ion-input
+        label="Prüfart der Vorlage"
+        labelPlacement="stacked"
+        placeholder="z. B. P8"
+        helperText="Gilt für jede Zeile, weil die Datei keine Spalte „Prüfart“ hat."
+        [value]="pruefart()"
+        [debounce]="400"
+        (ionChange)="onPruefart($event)"
+        data-testid="mapper-pruefart"
+      />
+    </ion-item>
+  </ion-list>
+}
+
 <ion-list lines="full">
   @for (row of rows(); track row.index) {
     <ion-item data-testid="mapper-row">

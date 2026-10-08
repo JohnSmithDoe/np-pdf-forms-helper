@@ -14,6 +14,8 @@
 //
 // A mapped cell that does not convert goes in as its text, never dropped. An
 // unmapped column is copied as stored: a number stays a number, text stays text.
+// A telematics `Zeitpunkt` stays text on purpose: the customer's sheet holds its
+// `Timestamp` as text and computes with it, and a date serial would lose the time.
 // ────────────────────────────────────────────────────────────────
 
 use std::path::PathBuf;
@@ -123,6 +125,7 @@ pub fn typed(field: FieldKind, cell: Option<&RawCell>, date1904: bool) -> Out {
             Ok(Value::Uic(uic)) => uic.as_str().parse::<f64>().ok().map(Out::Number),
             _ => None,
         },
+        FieldKind::TelematikZeitpunkt => None,
         field if reads_a_date(field) => match cell.number {
             Some(serial) => Some(Out::Number(serial)),
             None => {

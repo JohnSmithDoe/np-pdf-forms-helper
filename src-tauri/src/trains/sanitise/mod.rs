@@ -14,6 +14,10 @@
 // to keep in step with it. A parser cannot accidentally return a value marked
 // fatal, or an error marked harmless.
 //
+// `Zeitpunkt`, `Zahl` and `Flag` exist for the Wagen-Zustand (telematics,
+// Schadensmeldungen): a reading's moment, a whole number (km, percent) and a
+// JA/NEIN column. `Zahl` is whole on purpose, for the same reason as `Money`.
+//
 // `Value::Empty` is a VALUE, not a failure: a blank cell in an optional column
 // is the most ordinary thing in a spreadsheet. `Value::Money` is CENTS, never an
 // `f64` — `0.1 + 0.2` in a master workbook reads as `1234,5600000000001` to the
@@ -29,7 +33,7 @@ pub mod number;
 pub mod text;
 pub mod wagen;
 
-pub use date::Date;
+pub use date::{Date, Zeitpunkt};
 pub use wagen::Uic;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,6 +42,9 @@ pub enum Value {
     Text(String),
     Money(i64),
     Date(Date),
+    Zeitpunkt(Zeitpunkt),
+    Zahl(i64),
+    Flag(bool),
     Uic(Uic),
 }
 

@@ -46,6 +46,7 @@ import type {
   TrainsData,
   TrainsSettings,
   Wagen,
+  WagenZustand,
   Radsatz,
 } from '../model/trains.types';
 import type { MasterFile } from '../model/master-file';
@@ -56,6 +57,7 @@ type TrainsState = {
   templates: ImportTemplate[] | undefined;
   radsaetze: Radsatz[] | undefined;
   einbauten: Einbau[] | undefined;
+  zustand: WagenZustand;
   events: Instandhaltung[] | undefined;
   eventTotal: number;
   dokumente: Dokument[] | undefined;
@@ -73,6 +75,13 @@ const initial: TrainsState = {
   templates: undefined,
   radsaetze: undefined,
   einbauten: undefined,
+  zustand: {
+    geraete: [],
+    meldungen: [],
+    schaeden: [],
+    auftraege: [],
+    pruefungen: [],
+  },
   events: undefined,
   eventTotal: 0,
   dokumente: undefined,
@@ -122,6 +131,7 @@ export const TrainsStore = signalStore(
       if (data.templates) next.templates = data.templates;
       if (data.radsaetze) next.radsaetze = data.radsaetze;
       if (data.einbauten) next.einbauten = data.einbauten;
+      if (data.zustand) next.zustand = data.zustand;
       if (data.dokumente) next.dokumente = data.dokumente;
       if (data.settings) next.settings = data.settings;
       if (data.master) next.master = data.master;

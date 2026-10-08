@@ -77,6 +77,14 @@ front of a screen, or a piece of the migration that does not exist yet. Settled 
   template and re-import a second file from the same sender; commit; export a document into the
   master and confirm a hand-kept column travelled with its key; and corrupt one cell to confirm the row is reported
   rather than the run aborting.
+- **The Wagen-Zustand (2026-10-07) is proved by `cargo test` and Playwright only.** Telematik,
+  Schadensmeldung, Werkstattauftrag and Prüfung import, update by key and show on the Wagen list; the
+  real `durchsuchen_assets (33).xlsx` and `Echo_BestellungenSeitSeptember.XLSX` have not been
+  cleaned and imported through `tauri:dev` since their templates changed. Worth checking there: the
+  `Timestamp` keeps its time in the cleaned copy, a re-import reports the readings as unchanged, the
+  order list writes Aufträge and no Instandhaltungen. Schadensmeldung and the revision report have
+  no real file yet; nothing fills „Auftrag versendet am“, and the master mirror and sheet view do
+  not read or show the Zustand.
 - **The master write path has run against the real master ONCE, in `tauri:dev`.** The former one-click
   refresh pasted `Telematik`, `aktuelleNodepit` and `ECHO_Eingänge` of the real workbook straight from
   the three sender files (1.9 s, only those three sheets changed, every dashboard key still found), and

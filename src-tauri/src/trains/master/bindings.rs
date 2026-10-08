@@ -241,7 +241,7 @@ mod tests {
                     &[&["radsatzid", "radsatz", "einbau_am", "an_wagen", "halter"]],
                 ),
                 ("Schilder", &[&["", "Wagennummer", "Schild wurde entfernt"]]),
-                ("Telematik", &[&["Asset", "Anbaudatum"]]),
+                ("Telematik", &[crate::testing::TELEMATIK]),
                 ("Kontakte", &[&["Standort", "Ansprechpartner"]]),
             ],
         );
@@ -357,7 +357,7 @@ mod tests {
                         "Einbaudatum NACH letzter IS2/3",
                     ]],
                 ),
-                ("Telematik", &[&["Asset", "Anbaudatum"]]),
+                ("Telematik", &[crate::testing::TELEMATIK]),
             ],
         );
         let mut db = TrainsDb::load(&folder.config()).unwrap();

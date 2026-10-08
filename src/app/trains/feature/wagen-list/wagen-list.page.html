@@ -19,6 +19,41 @@
       @if (row.kind) {
         <span>{{ row.kind }}</span>
       }
+      @if (row.zustand.standort || row.zustand.funk) {
+        <ion-note
+          [color]="row.zustand.stumm ? 'danger' : 'medium'"
+          data-testid="wagen-standort"
+        >
+          {{ row.zustand.standort }}
+          @if (row.zustand.standort && row.zustand.funk) {
+            ·
+          }
+          {{ row.zustand.funk }}
+        </ion-note>
+      }
+      @if (row.zustand.offeneSchaeden) {
+        <ion-badge color="warning" data-testid="wagen-schaden">
+          {{
+            row.zustand.offeneSchaeden === 1
+              ? '1 Schaden offen'
+              : row.zustand.offeneSchaeden + ' Schäden offen'
+          }}
+        </ion-badge>
+      }
+      @if (row.zustand.offeneAuftraege) {
+        <ion-badge color="medium" data-testid="wagen-auftrag">
+          {{
+            row.zustand.offeneAuftraege === 1
+              ? '1 Auftrag offen'
+              : row.zustand.offeneAuftraege + ' Aufträge offen'
+          }}
+        </ion-badge>
+      }
+      @if (row.zustand.naechstePruefung) {
+        <ion-note data-testid="wagen-pruefung">{{
+          row.zustand.naechstePruefung
+        }}</ion-note>
+      }
       @if (row.fitted.length) {
         <ion-note data-testid="wagen-fitted-count">
           {{
@@ -29,6 +64,11 @@
         </ion-note>
       }
       @if (isExpanded(row.id)) {
+        @for (line of row.zustand.details; track $index) {
+          <ion-note class="wagen-list__fitted" data-testid="wagen-zustand">
+            {{ line }}
+          </ion-note>
+        }
         @for (entry of row.fitted; track $index) {
           <ion-note class="wagen-list__fitted" data-testid="wagen-fitted">
             {{

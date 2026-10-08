@@ -58,6 +58,7 @@ pub fn detected(grid: &Grid) -> AppResult<(ImportPlan, Vec<Candidate>)> {
             .collect(),
         template_id: None,
         date1904: false,
+        pruefart: None,
     };
     Ok((plan, candidates))
 }
@@ -132,6 +133,7 @@ pub fn rebind(template: &ImportTemplate, detected: &ImportPlan) -> ImportPlan {
         layout: detected.layout,
         columns,
         template_id: Some(template.id.clone()),
+        pruefart: template.plan.pruefart.clone(),
         date1904: detected.date1904,
     }
 }
@@ -172,6 +174,7 @@ mod tests {
                 last_data_row: None,
             },
             columns: bindings(columns),
+            pruefart: None,
             template_id: None,
             date1904: false,
         }

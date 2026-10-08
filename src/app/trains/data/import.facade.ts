@@ -106,6 +106,14 @@ export class ImportFacade {
     await this.#patchColumn(index, (column) => ({ ...column, dateOrder }));
   }
 
+  async setPruefart(art: string): Promise<void> {
+    const plan = this.plan();
+    if (!plan) return;
+    const pruefart = art.trim() || undefined;
+    if (pruefart === plan.pruefart) return;
+    await this.applyPlan({ ...plan, pruefart });
+  }
+
   async setHeaderRow(headerRow: number): Promise<void> {
     const plan = this.plan();
     if (!plan) return;

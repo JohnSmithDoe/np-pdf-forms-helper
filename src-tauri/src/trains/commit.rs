@@ -59,6 +59,11 @@
 // otherwise the stored fitting stands. The conflict is re-derived here from the
 // store, not read off the wire — the walk's answer is only the choice.
 //
+// The WAGEN-ZUSTAND (Telematik, Schadensmeldung, Werkstattauftrag, Prüfung) is
+// `zustand::write`'s, called once the row's Wagen and Werkstatt are settled; a
+// row that only updates it is imported, not skipped, and its counts are a
+// second report line.
+//
 // A wagen's `Likely` does NOT rewrite the stored number. The stored one is
 // presumed right and the incoming one is presumed to be the typo — the opposite
 // would let one bad file rewrite the fleet.
@@ -77,6 +82,7 @@ use super::model::{
 use super::resolve::partner::match_key;
 use super::sanitise::{format, Value};
 use super::stage::RowValues;
+use super::zustand::{self, Zustand, ZustandRow};
 use crate::error::{AppError, AppResult};
 use crate::model::ClientReport;
 
@@ -88,6 +94,7 @@ pub struct Committed {
     pub instandhaltungen: u32,
     pub radsaetze: u32,
     pub einbauten: u32,
+    pub zustand: Zustand,
     pub skipped: u32,
 }
 
@@ -155,6 +162,7 @@ pub fn commit(
         .as_deref()
         .and_then(|id| db.template(id))
         .and_then(|template| template.partner_id.clone());
+    let pruefart = staging.plan.pruefart.clone();
 
     let rows_by_number: HashMap<u32, &StagedRow> =
         staging.rows.iter().map(|row| (row.row, row)).collect();
@@ -182,15 +190,21 @@ pub fn commit(
                 sheet: &sheet,
                 stamp: &stamp,
                 template_sender: template_sender.as_deref(),
+                pruefart: pruefart.as_deref(),
                 master: staging.origin.is_master(),
             };
             match commit_row(tx, row, row_values, decision, &run) {
+                Ok(Some(created)) if !created.anything() => {
+                    committed.zustand.add(created.zustand);
+                    committed.skipped += 1;
+                }
                 Ok(Some(created)) => {
                     committed.wagen += u32::from(created.wagen);
                     committed.partner += created.partner;
                     committed.radsaetze += u32::from(created.radsatz);
                     committed.einbauten += u32::from(created.einbau);
                     committed.instandhaltungen += u32::from(created.instandhaltung);
+                    committed.zustand.add(created.zustand);
                 }
                 Ok(None) => committed.skipped += 1,
                 Err(message) => {
@@ -218,6 +232,9 @@ pub fn commit(
                 committed.skipped
             ),
         );
+        if let Some(line) = committed.zustand.line() {
+            committed.messages.insert(1, line);
+        }
         Ok(committed)
     })
 }
@@ -229,6 +246,7 @@ struct Run<'a> {
     sheet: &'a str,
     stamp: &'a str,
     template_sender: Option<&'a str>,
+    pruefart: Option<&'a str>,
     master: bool,
 }
 
@@ -246,11 +264,17 @@ struct Created {
     radsatz: bool,
     einbau: bool,
     instandhaltung: bool,
+    zustand: Zustand,
 }
 
 impl Created {
     fn anything(&self) -> bool {
-        self.wagen || self.partner > 0 || self.radsatz || self.einbau || self.instandhaltung
+        self.wagen
+            || self.partner > 0
+            || self.radsatz
+            || self.einbau
+            || self.instandhaltung
+            || self.zustand.anything()
     }
 }
 
@@ -272,6 +296,7 @@ fn commit_row(
         radsatz: false,
         einbau: false,
         instandhaltung: false,
+        zustand: Zustand::default(),
     };
 
     let uic = match values.value(FieldKind::Wagennummer) {
@@ -431,6 +456,17 @@ fn commit_row(
         }
     }
 
+    created.zustand = zustand::write(
+        tx,
+        &ZustandRow {
+            values,
+            wagen_id: &wagen_id,
+            werkstatt_id: werkstatt_id.as_deref(),
+            pruefart: run.pruefart,
+            source: provenance(file, sheet, row.row, stamp),
+        },
+    );
+
     let leistung = string_of(values, FieldKind::Leistung);
     let betrag_cent = match values.value(FieldKind::Betrag) {
         Some(Value::Money(cents)) => Some(*cents),
@@ -440,7 +476,7 @@ fn commit_row(
     let is_work =
         date.is_some() || !leistung.is_empty() || betrag_cent.is_some() || bemerkung.is_some();
     if !is_work || tx.db().event_exists(&values.dedupe_key) {
-        return Ok(created.anything().then_some(created));
+        return Ok(Some(created));
     }
 
     tx.put_instandhaltung(Instandhaltung {
@@ -693,6 +729,7 @@ pub(super) mod tests {
             .collect(),
             template_id: None,
             date1904: false,
+            pruefart: None,
         }
     }
 
@@ -1140,6 +1177,7 @@ mod radsatz_tests {
                 })
                 .collect(),
             template_id: None,
+            pruefart: None,
             date1904: false,
         }
     }

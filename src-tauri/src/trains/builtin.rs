@@ -21,9 +21,13 @@
 // shape would also match every file carrying positions and make it ambiguous.
 //
 // The mappings are the ones `docs/decisions.md` argued for each file: the order
-// feed is dated by the workshop exit, the wheelset snapshot is fittings plus the
-// sender's own wheelset id, and the telematics export contributes only the
-// Wagennummer until telematics has a model of its own.
+// feed is a list of Werkstattaufträge (no Instandhaltung any more — „Der
+// Wagen-Zustand ist typisiert“), the wheelset snapshot is fittings plus the
+// sender's own wheelset id, and the telematics export is a device and its
+// reading per Wagen. `vers_datum` in the order feed stays unmapped: it is when
+// the WAGEN was sent, not the order. The P8 list and the revision report
+// (`PowerBI` in the customer's master) are Prüfungen; the P8 list carries no Art
+// column, so its template carries the Art (`ImportPlan.pruefart`).
 //
 // `master_hint` is what a template knows about its sheet in the customer's
 // master — the SHAPE again, never a sheet name, which lives only in
@@ -46,10 +50,14 @@ pub fn all() -> Vec<ImportTemplate> {
             "werkstattauftraege",
             "Werkstattaufträge",
             &[
+                ("bestellnr", FieldKind::Bestellnummer),
                 ("wagen", FieldKind::Wagennummer),
+                ("best_datum", FieldKind::AuftragErfasstAm),
                 ("empfaenger", FieldKind::Werkstatt),
-                ("werk_ausg_ist", FieldKind::Datum),
-                ("bemerkung_intern", FieldKind::Bemerkung),
+                ("eingang_ist", FieldKind::AuftragEingangAm),
+                ("werk_ausg_ist", FieldKind::AuftragAusgangAm),
+                ("status", FieldKind::AuftragStatus),
+                ("bemerkung_intern", FieldKind::AuftragBemerkung),
             ],
         ),
         template(
@@ -65,7 +73,45 @@ pub fn all() -> Vec<ImportTemplate> {
         template(
             "telematik",
             "Telematikdaten",
-            &[("Asset", FieldKind::Wagennummer)],
+            &[
+                ("Asset", FieldKind::Wagennummer),
+                ("Anbaudatum", FieldKind::TelematikAngebautAm),
+                ("Timestamp", FieldKind::TelematikZeitpunkt),
+                ("Energie-Reserve", FieldKind::TelematikEnergie),
+                ("Pointer Name", FieldKind::TelematikGeraet),
+                ("Stadt", FieldKind::TelematikStadt),
+                ("Land", FieldKind::TelematikLand),
+                ("Summe Laufleistung", FieldKind::TelematikLaufleistung),
+                ("Standort", FieldKind::TelematikStandort),
+                ("AccStatus Text", FieldKind::TelematikBewegung),
+            ],
+        ),
+        pruefart(
+            template(
+                "p8",
+                "P8-Fälligkeiten",
+                &[
+                    ("TRANSPORTMITTELNR", FieldKind::Wagennummer),
+                    ("TERMIN", FieldKind::PruefungFaelligAm),
+                    ("BESTELLNUMMER", FieldKind::Bestellnummer),
+                    ("STATUS", FieldKind::PruefungStatus),
+                ],
+            ),
+            "P8",
+        ),
+        template(
+            "revision",
+            "Revisionen",
+            &[
+                ("Wagennummer", FieldKind::Wagennummer),
+                ("Prüfungsstatus", FieldKind::PruefungStatus),
+                ("Prüfungsart", FieldKind::Pruefart),
+                ("Bestellnummer", FieldKind::Bestellnummer),
+                ("Fälligkeitstermin", FieldKind::PruefungFaelligAm),
+                ("Plandatum", FieldKind::PruefungGeplantAm),
+                ("Eingang in Werkstatt", FieldKind::AuftragEingangAm),
+                ("Ausgang aus Werkstatt", FieldKind::PruefungDurchgefuehrtAm),
+            ],
         ),
     ]
 }
@@ -87,6 +133,11 @@ pub fn master_hint(id: &str) -> Option<MasterHint> {
 
 pub fn is_builtin(id: &str) -> bool {
     id.starts_with(PREFIX)
+}
+
+fn pruefart(mut template: ImportTemplate, art: &str) -> ImportTemplate {
+    template.plan.pruefart = Some(art.into());
+    template
 }
 
 fn template(slug: &str, name: &str, columns: &[(&str, FieldKind)]) -> ImportTemplate {
@@ -117,6 +168,7 @@ pub fn shaped(id: String, name: &str, columns: &[(&str, FieldKind)]) -> ImportTe
                 .collect(),
             template_id: None,
             date1904: false,
+            pruefart: None,
         },
         partner_id: None,
         origin: None,
@@ -173,10 +225,15 @@ mod tests {
             matched(&[
                 "bestellnr",
                 "sachb",
+                "nwb",
                 "wagen",
+                "tm_typ",
                 "eigentuemer",
                 "best_datum",
+                "versender",
+                "vers_datum",
                 "empfaenger",
+                "eingang_ist",
                 "werk_ausg_ist",
                 "status",
                 "bemerkung_intern",
@@ -204,9 +261,43 @@ mod tests {
     #[test]
     fn the_telematics_export_is_recognised() {
         assert_eq!(
-            matched(&["Asset", "Anbaudatum", "Timestamp", "Laufleistung"]),
+            matched(&[
+                "Asset",
+                "Anbaudatum",
+                "Timestamp",
+                "Energie-Reserve",
+                "Asset Typ",
+                "Pointer Name",
+                "Stadt",
+                "Land",
+                "Laufleistung",
+                "Summe Laufleistung",
+                "Standort",
+                "AccStatus Text",
+            ]),
             vec!["builtin:telematik"]
         );
+    }
+
+    // The P8 list has no Art column; the template supplies it.
+    #[test]
+    fn the_p8_list_is_recognised_and_carries_its_art() {
+        assert_eq!(
+            matched(&[
+                "TRANSPORTMITTELNR",
+                "TERMIN",
+                "BESTELLNUMMER",
+                "ERFASSUNGSDATUM",
+                "STATUS",
+                "Durchgeführt",
+            ]),
+            vec!["builtin:p8"]
+        );
+        let p8 = all()
+            .into_iter()
+            .find(|template| template.id == "builtin:p8")
+            .unwrap();
+        assert_eq!(p8.plan.pruefart.as_deref(), Some("P8"));
     }
 
     /// The snapshot's second sheet lists wagons, not wheelsets, and no shipped

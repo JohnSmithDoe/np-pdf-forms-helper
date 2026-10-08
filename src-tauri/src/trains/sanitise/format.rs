@@ -23,6 +23,10 @@
 // setting; `uic_display` stays the grouped form for the parsers' own messages,
 // which run before any setting is in reach. Both read back to the same digits.
 //
+// `zeitpunkt` renders `TT.MM.JJJJ hh:mm:ss`, which `parse_zeitpunkt` reads back
+// — the cleaned copy keeps the time that way. `Value::Zahl` has no grouping mark
+// for the same reason `money` has none.
+//
 // `money` is always two decimals, always a comma, and NEVER a grouping mark: a
 // grouping mark is for reading and this output is for re-importing. `uic` is the
 // grouping people read a wagen number in, derived every time and never stored;
@@ -33,11 +37,21 @@
 // as a word, because a blank cell should look blank.
 // ────────────────────────────────────────────────────────────────
 
-use super::{Date, Uic, Value};
+use super::{Date, Uic, Value, Zeitpunkt};
 use crate::trains::model::UicStyle;
 
 pub fn date(value: Date) -> String {
     format!("{:02}.{:02}.{:04}", value.day, value.month, value.year)
+}
+
+pub fn zeitpunkt(value: Zeitpunkt) -> String {
+    format!(
+        "{} {:02}:{:02}:{:02}",
+        date(value.date),
+        value.hour,
+        value.minute,
+        value.second
+    )
 }
 
 pub fn iso_date(iso: &str) -> String {
@@ -91,6 +105,10 @@ pub fn value(input: &Value) -> String {
         Value::Text(text) => text.clone(),
         Value::Money(cents) => money(*cents),
         Value::Date(date_value) => date(*date_value),
+        Value::Zeitpunkt(moment) => zeitpunkt(*moment),
+        Value::Zahl(number) => number.to_string(),
+        Value::Flag(true) => "ja".to_string(),
+        Value::Flag(false) => "nein".to_string(),
         Value::Uic(uic_value) => uic(uic_value),
     }
 }
@@ -169,6 +187,23 @@ mod tests {
                 number_parser::parse_money(&money(cents), DecimalStyle::German).expect("re-reads");
             assert_eq!(parsed.value, Value::Money(cents), "{cents}");
         }
+    }
+
+    // The cleaned copy writes this, and the import reads the copy — so the time
+    // survives only if the round trip holds.
+    #[test]
+    fn a_zeitpunkt_and_a_count_round_trip_through_the_parser() {
+        let moment = date_parser::parse_zeitpunkt("2026-10-02 13:37:01", DateOrder::DayFirst)
+            .expect("parses")
+            .value;
+        let written = value(&moment);
+        assert_eq!(written, "02.10.2026 13:37:01");
+        let reread = date_parser::parse_zeitpunkt(&written, DateOrder::DayFirst).expect("re-reads");
+        assert_eq!(reread.value, moment);
+
+        let count = number_parser::parse_count(&value(&Value::Zahl(227_734)), DecimalStyle::German)
+            .expect("re-reads");
+        assert_eq!(count.value, Value::Zahl(227_734));
     }
 
     #[test]

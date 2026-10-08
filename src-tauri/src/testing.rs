@@ -110,6 +110,33 @@ pub fn fixture_xlsx() -> PathBuf {
 /// A workbook written cell by cell, one `(sheet, rows)` per sheet, every value
 /// as text. A cell spelled `#<number>` is stored as an Excel NUMBER instead,
 /// because that is how a sender's dates and amounts usually arrive.
+/// The telematics export's header row, as far as `builtin:telematik` maps it,
+/// and one data row to go with it — a file the shipped template recognises.
+pub const TELEMATIK: &[&str] = &[
+    "Asset",
+    "Anbaudatum",
+    "Timestamp",
+    "Energie-Reserve",
+    "Pointer Name",
+    "Stadt",
+    "Land",
+    "Summe Laufleistung",
+    "Standort",
+    "AccStatus Text",
+];
+pub const TELEMATIK_ROW: &[&str] = &[
+    "x",
+    "15.03.2023",
+    "2026-10-02 13:37:01",
+    "98",
+    "P1",
+    "Neuhof",
+    "DE",
+    "227734",
+    "Neuhof (Kr Fulda)",
+    "BEWEGUNG",
+];
+
 pub fn workbook(folder: &TempDir, name: &str, sheets: &[(&str, &[&[&str]])]) -> PathBuf {
     let mut book = umya_spreadsheet::new_file();
     for (position, (sheet, rows)) in sheets.iter().enumerate() {

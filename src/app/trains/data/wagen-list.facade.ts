@@ -10,6 +10,10 @@
 // shown as they are, „ohne Position“ last, because hiding them would make the
 // mirror look cleaner than the customer's file. `source` names the sheet and
 // row each came from, which is what tells those cases apart.
+//
+// The Wagen-Zustand rides on the row as `zustand` — where it is, when it last
+// reported, what is open — built by `util/wagen-zustand` from the store's one
+// `WagenZustand`, so the list and its search read the same text.
 // ────────────────────────────────────────────────────────────────
 
 import { computed, inject, Injectable, signal } from '@angular/core';
@@ -26,6 +30,11 @@ import {
 } from '../../@shared/util/item-lists/list.selector';
 import type { Einbau } from '../model/trains.types';
 import { formatIsoDate, formatUic } from '../util/uic.util';
+import {
+  indexZustand,
+  summarise,
+  type ZustandSummary,
+} from '../util/wagen-zustand.util';
 import { TrainsStore } from './trains.store';
 
 export interface WagenRow extends BaseItem {
@@ -34,6 +43,7 @@ export interface WagenRow extends BaseItem {
   owner: string;
   kind: string;
   fitted: FittedRadsatz[];
+  zustand: ZustandSummary;
 }
 
 export interface FittedRadsatz {
@@ -63,6 +73,8 @@ export class WagenListFacade implements ListPageFacade {
     if (!wagen) return undefined;
     const partners = this.#store.partnerById();
     const radsaetze = this.#store.radsatzById();
+    const zustand = indexZustand(this.#store.zustand());
+    const now = new Date();
     const open = new Map<string, Einbau[]>();
     for (const einbau of this.#store.einbauten() ?? []) {
       if (einbau.ausgebautAm) continue;
@@ -85,6 +97,7 @@ export class WagenListFacade implements ListPageFacade {
             since: einbau.eingebautAm ? formatIsoDate(einbau.eingebautAm) : '',
             source: `${einbau.source.sheet}, Zeile ${einbau.source.row}`,
           })),
+        zustand: summarise(wagen.id, zustand, now),
       };
     });
   });
@@ -96,7 +109,7 @@ export class WagenListFacade implements ListPageFacade {
       // Both forms: people type `3180` and read `31 80 4740 123-4`, and a
       // search that only knows the grouped one misses every plain-digit query.
       (row) =>
-        `${row.nummer} ${row.digits} ${row.owner} ${row.kind} ${row.fitted
+        `${row.nummer} ${row.digits} ${row.owner} ${row.kind} ${row.zustand.standort} ${row.fitted
           .map((entry) => entry.radsatz)
           .join(' ')}`
     )

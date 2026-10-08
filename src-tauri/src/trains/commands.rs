@@ -59,6 +59,7 @@ fn everything(db: &TrainsDb) -> TrainsData {
         .partner(db.partner())
         .radsaetze(db.radsaetze())
         .einbauten(db.einbauten())
+        .zustand(db.zustand().clone())
         .templates(db.templates())
         .dokumente(db.dokumente())
         .settings(db.settings())
@@ -726,6 +727,7 @@ mod tests {
             .collect(),
             template_id: None,
             date1904: false,
+            pruefart: None,
         };
         let saved = template::save("Monatsliste", &plan).unwrap();
         let id = saved.id.clone();

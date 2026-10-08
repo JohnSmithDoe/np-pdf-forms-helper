@@ -307,6 +307,71 @@ test.describe('Zug-Listen', () => {
     await expect(page.getByTestId('list-row')).toHaveCount(1);
   });
 
+  // The Wagen-Zustand renders what the backend holds: where the Wagen is, that
+  // it has been silent too long, and what is open. Whether a reading is newer
+  // or older is Rust's and proved by `cargo test`.
+  test('ein Wagen zeigt Standort, Funkstille und offene Fälle', async ({
+    page,
+  }) => {
+    const source = {
+      file: 'zustand.xlsx',
+      sheet: 'Tabelle1',
+      row: 2,
+      importedAt: '2026-10-06',
+    };
+    await installFakeBackend(page, {
+      wagen,
+      partners,
+      zustand: {
+        meldungen: [
+          {
+            id: 'm1',
+            wagenId: 'w1',
+            zeitpunkt: '2020-01-01T08:00:00',
+            standort: 'Neuhof (Kr Fulda)',
+            land: 'DE',
+            source,
+          },
+        ],
+        schaeden: [
+          { id: 's1', wagenId: 'w1', schadcode: '3.3.4', source },
+          {
+            id: 's2',
+            wagenId: 'w1',
+            schadcode: '1.2.1',
+            erledigtAm: '2026-08-20',
+            source,
+          },
+        ],
+        pruefungen: [
+          {
+            id: 'p8',
+            wagenId: 'w1',
+            art: 'P8',
+            faelligAm: '2027-03-31',
+            source,
+          },
+        ],
+      },
+    });
+    await page.goto('/#/trains/wagen');
+
+    const row = page.getByTestId('list-row').first();
+    await expect(row.getByTestId('wagen-standort')).toContainText(
+      'Neuhof (Kr Fulda), DE'
+    );
+    await expect(row.getByTestId('wagen-standort')).toHaveAttribute(
+      'color',
+      'danger'
+    );
+    await expect(row.getByTestId('wagen-schaden')).toHaveText(
+      '1 Schaden offen'
+    );
+    await expect(row.getByTestId('wagen-pruefung')).toHaveText(
+      'P8 fällig 31.03.2027'
+    );
+  });
+
   test('eine leere Liste sagt, woher Einträge kommen', async ({ page }) => {
     await installFakeBackend(page, { wagen: [], partners: [] });
     await page.goto('/#/trains/wagen');

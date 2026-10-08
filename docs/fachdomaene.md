@@ -131,6 +131,11 @@ Das ist kein Beiwerk — es ist die Begründung für fast jede Entwurfsentscheid
 | Einbau (eines Radsatzes in einen Wagen) | `Einbau` | `radsatzId`, `wagenId`, `position`, `eingebautAm`, `ausgebautAm` |
 | Instandhaltung | `Instandhaltung` | `wagenId`, `werkstattId`, `radsatzId`, `datum`, `leistung`, `betragCent`, `bemerkung` |
 | Partner (Halter, Eigentümer, Werkstatt) | `Partner` | `rollen`, `name`, `bemerkung` |
+| Telematik-Gerät | `TelematikGeraet` | `kennung` (Pointer-ID des Absenders), `wagenId`, `angebautAm` |
+| Telematik-Meldung (nur die neueste je Wagen) | `TelematikMeldung` | `wagenId`, `geraetId`, `zeitpunkt` (mit Uhrzeit), `stadt`, `land`, `standort`, `laufleistungKm`, `energieProzent`, `bewegung` |
+| Schadensmeldung | `Schadensmeldung` | `wagenId`, `gemeldetAm`, `gemeldetVon`, `schadcode`, `notiz`, `ausgesetzt`, `beladen`, `ausfuehrender`, `geplantAm`, `aktion`, `erledigtAm` |
+| Werkstattauftrag (Bestellung) | `Werkstattauftrag` | `wagenId`, `bestellnummer`, `werkstattId`, `status`, `erfasstAm`, `eingangAm`, `ausgangAm`, `versendetAm`, `bemerkung` |
+| Prüfung (P8, Revision G4.x, …) | `Pruefung` | `wagenId`, `art`, `faelligAm`, `geplantAm`, `durchgefuehrtAm`, `status`, `bestellnummer` |
 
 ### Rollen
 
@@ -158,6 +163,15 @@ Das ist kein Beiwerk — es ist die Begründung für fast jede Entwurfsentscheid
 | Einbauposition | `einbauposition` |
 | Eingebaut am | `eingebautAm` |
 | Ausgebaut am | `ausgebautAm` |
+| Telematik-Gerät, … angebaut am, … Zeitpunkt | `telematikGeraet`, `telematikAngebautAm`, `telematikZeitpunkt` |
+| Stadt, Land, Standort | `telematikStadt`, `telematikLand`, `telematikStandort` |
+| Laufleistung (km), Energie-Reserve (%), Bewegung | `telematikLaufleistung`, `telematikEnergie`, `telematikBewegung` |
+| Schaden gemeldet am / von, Schadcode, Schadensnotiz | `schadenGemeldetAm`, `schadenGemeldetVon`, `schadcode`, `schadenNotiz` |
+| Ausgesetzt, Beladen (ja/nein) | `ausgesetzt`, `beladen` |
+| Ausführende Werkstatt/EVU, Schaden geplant am, Notwendige Aktion, Schaden erledigt am | `schadenAusfuehrender`, `schadenGeplantAm`, `schadenAktion`, `schadenErledigtAm` |
+| Bestellnummer | `bestellnummer` |
+| Auftragsstatus, Auftrag erfasst am, Werkstatteingang, Werkstattausgang, Auftrag versendet am, Auftragsbemerkung | `auftragStatus`, `auftragErfasstAm`, `auftragEingangAm`, `auftragAusgangAm`, `auftragVersendetAm`, `auftragBemerkung` |
+| Prüfart, Prüfung fällig / geplant / durchgeführt am, Prüfungsstatus | `pruefart`, `pruefungFaelligAm`, `pruefungGeplantAm`, `pruefungDurchgefuehrtAm`, `pruefungStatus` |
 | Nicht importieren | `ignorieren` |
 
 **Bewusst englisch geblieben**, weil Mechanik und kein Fachbegriff: `id`, `createdAt`, `source`,
@@ -331,7 +345,7 @@ und prüft und korrigiert die Rechnungen. Die Master-Datei nennt dafür diese wi
 | Begriff | Bedeutung | Bezug |
 | --- | --- | --- |
 | **Revision G4.x** | Hauptuntersuchung des Wagens; Zyklus in der Datei 72 Monate (`ZYKLUS_REV`), nächste Stufe z. B. „G 4.0“ | Wagen |
-| **P8** | Jährlich zu disponierende Arbeit je Wagen mit festem Leistungsumfang und vereinbarten Preisen; erste P8 ein Jahr nach der Revision. Wofür die Abkürzung steht, ist offen | Wagen |
+| **P8** | **Jährliche Inspektion** je Wagen (Martin, 2026-10-07), mit festem Leistungsumfang und vereinbarten Preisen; erste P8 ein Jahr nach der Revision. Im Modell eine `Pruefung` mit `art` „P8“ | Wagen |
 | **KP-P** | Kesselprüfung; in der Rechnungsaufteilung zusammen mit P8 abgerechnet | Wagen |
 | **RID-Frist** | Prüffrist für Gefahrgutwagen (RID); im Bestand des ersten Kunden leer, das Modell muss sie trotzdem tragen | Wagen |
 | **AL-RS 2 Jahre** | Ein Radsatz mit „AL“-Nummer braucht innerhalb von zwei Jahren nach Einbau eine IS2/3 | Radsatz |
@@ -341,6 +355,11 @@ und prüft und korrigiert die Rechnungen. Die Master-Datei nennt dafür diese wi
 Die Kette, über die Bestellnummer verbunden: Frist (G) → Bestellung (A) → Werkstatteingang → Rechnung.
 Fälligkeiten werden gespiegelt, **nicht berechnet** — die Zyklusregeln je Fristart gehören erst dem
 Schattensystem als führendem System (v3).
+
+**Seit 2026-10-07 ist jede dieser Fristen eine `Pruefung`** (KISS: eine Entität für alle Arten),
+importiert aus einer Datei wie jede andere. Die Art steht in einer Spalte oder, wenn die ganze Datei
+eine Art ist wie die P8-Liste, fest an der Vorlage (`ImportPlan.pruefart`). Die Radsatz-Fristen
+(AL-RS, IS 13) gehören nicht dazu — sie hängen am Radsatz, nicht am Wagen.
 
 ---
 
@@ -380,13 +399,14 @@ in Phasen gespiegelt — die Punkte unten sagen, welche.
   letzte Ultraschallprüfung. Erfordert Einheiten, Plausibilitätsbereiche und Spalten, die Absender
   selten einheitlich füllen. *Geplant aus dem Master (Phase 5): LKD, Laufleistung, Restlauftage je
   Radsatz mit Stichtag.*
-- **Fristen und Instandhaltungsstufen** — Revisionsfristen, Laufleistungen, fällige Prüfungen.
-  *Geplant aus dem Master (Phase 4) als `Frist`, angezeigt wie genannt, nicht berechnet.*
+- **Fristen und Instandhaltungsstufen** — *seit 2026-10-07 als `Pruefung` modelliert* (P8,
+  Revision G4.x, …), gespiegelt und nicht berechnet; siehe §8. Die Zyklusregeln bleiben draußen.
 - **Miet- und Vertragsdaten** — wer welchen Wagen wie lange gemietet hat.
 - **Schadensregulierung nach AVV** — Schadensursache, Kostenzuordnung, Haftung.
 - **ECM-Nachweisführung** — das Modul verwaltet Daten, es ist kein zertifiziertes
   Instandhaltungssystem.
-- **Werkstattaufträge (Bestellungen)** — Bestellnummer, Status (`erfasst → zugestellt →
+- **Werkstattaufträge (Bestellungen)** — *seit 2026-10-07 als `Werkstattauftrag` modelliert*,
+  Schlüssel Wagen + Bestellnummer; der Rest dieses Punkts ist die Vorgeschichte. Bestellnummer, Status (`erfasst → zugestellt →
   ausgeführt`), Eingang und Ausgang. Ein Auftrag ändert sich, eine Instandhaltung nicht. Bis auf
   Weiteres wird eine Auftragsliste nur als Quelle **abgeschlossener** Instandhaltungen gelesen
   (Datum = Werkstattausgang); ein eigenes `Auftrag` mit der Bestellnummer als Schlüssel ist
@@ -399,6 +419,9 @@ Der Master-Spiegel nach Phasen, entlang der drei Aufgaben des Kunden:
 - **Phase 1, umgesetzt:** Wagen, Halter, Radsätze und Einbauten (mit und ohne Position).
 - **Phase 2 — wo ist der Wagen, wie ist sein Zustand:** Wagenmeldung (die Handspalten und
   Handfarben des Dashboards, Meldelisten, Checklisten), Telematik-Gerät, Werkstatteingang.
+  *Modelliert 2026-10-07 als Wagen-Zustand* (`TelematikGeraet`, `TelematikMeldung`,
+  `Schadensmeldung`, `Werkstattauftrag`, `Pruefung`), importiert aus Absenderdateien — noch nicht
+  aus dem Master selbst.
 - **Phase 3 — stimmt die Rechnung:** Werkstattauftrag, Rechnungsaufteilung (je Blatt ein
   Reparaturfall), Leistungskatalog mit Sollpreisen, Rechnungsrücksendungen.
 - **Phase 4 — wer muss wann in die Werkstatt:** Frist, Werkstattbedarf, Flottenbedarf, Standorte

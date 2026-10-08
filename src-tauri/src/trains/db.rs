@@ -1,5 +1,5 @@
 // ─── why ────────────────────────────────────────────────────────
-// Seven JSON files under `data/trains/`, following `crate::filler::db` — same
+// Eight JSON files under `data/trains/`, following `crate::filler::db` — same
 // `IndexMap`, same atomic temp-and-rename, same "a file the user can open in
 // Notepad is part of the support story".
 //
@@ -55,6 +55,14 @@
 // become importable again. A kept alias only survives with what it points at,
 // which is why Partner is kept rather than its aliases extracted.
 //
+// The EIGHTH, `zustand.db`, is the Wagen-Zustand — Telematik, Schadensmeldungen,
+// Werkstattaufträge, Prüfungen — as ONE `WagenZustand`, not five stores: each
+// list is a few hundred rows per fleet, so the split that protects the big
+// events file would only buy five times the plumbing. It is a fact like a Wagen,
+// so `clear_mirror` and `reset` empty it and `remove_wagen` cascades into it.
+// Its lookups are linear for the same reason; an index is the change to make
+// if a fleet ever outgrows that.
+//
 // `einstellungen.json` is not a store of items but ONE settings object, read
 // with defaults (a missing file or key is the default, so an old data folder
 // loads) and written alone, atomically. It sits outside `transaction` because
@@ -88,13 +96,14 @@ use crate::config::AppConfig;
 use crate::error::{AppError, AppResult};
 use crate::trains::model::{
     Dokument, Einbau, ImportTemplate, Instandhaltung, MasterFile, MasterSettings, Partner,
-    PartnerRolle, Radsatz, RadsatzAlias, TrainsCounts, TrainsSettings, Wagen,
+    PartnerRolle, Radsatz, RadsatzAlias, TrainsCounts, TrainsSettings, Wagen, WagenZustand,
 };
 
 const VERSION: u32 = 1;
 const SETTINGS: &str = "einstellungen.json";
 const MASTER: &str = "master.json";
 const MASTER_FILE: &str = "masterdatei.json";
+const ZUSTAND: &str = "zustand.db";
 
 pub fn remove_folder(folder: &Path) -> AppResult<()> {
     match std::fs::remove_dir_all(folder) {
@@ -136,6 +145,7 @@ pub struct TrainsDb {
     radsaetze: IndexMap<String, Radsatz>,
     einbauten: IndexMap<String, Einbau>,
     dokumente: IndexMap<String, Dokument>,
+    zustand: WagenZustand,
     settings: TrainsSettings,
     master: MasterSettings,
     master_file: MasterFile,
@@ -155,6 +165,7 @@ struct Rollback {
     radsaetze: Option<IndexMap<String, Radsatz>>,
     einbauten: Option<IndexMap<String, Einbau>>,
     dokumente: Option<IndexMap<String, Dokument>>,
+    zustand: Option<WagenZustand>,
 }
 
 pub struct Tx<'a> {
@@ -175,6 +186,7 @@ impl TrainsDb {
             radsaetze: read(&folder.join("radsaetze.db"))?,
             einbauten: read(&folder.join("einbauten.db"))?,
             dokumente: read(&folder.join("dokumente.db"))?,
+            zustand: read_or_default(&folder.join(ZUSTAND))?,
             settings: read_or_default(&folder.join(SETTINGS))?,
             master: read_or_default(&folder.join(MASTER))?,
             master_file: read_or_default(&folder.join(MASTER_FILE))?,
@@ -238,6 +250,10 @@ impl TrainsDb {
 
     pub fn radsaetze(&self) -> Vec<Radsatz> {
         self.radsaetze.values().cloned().collect()
+    }
+
+    pub fn zustand(&self) -> &WagenZustand {
+        &self.zustand
     }
 
     pub fn einbauten(&self) -> Vec<Einbau> {
@@ -501,6 +517,9 @@ impl TrainsDb {
                 if let Some(items) = rollback.dokumente {
                     self.dokumente = items;
                 }
+                if let Some(zustand) = rollback.zustand {
+                    self.zustand = zustand;
+                }
                 self.reindex();
                 Err(error)
             }
@@ -516,6 +535,7 @@ impl TrainsDb {
             tx.radsaetze_mut().clear();
             tx.einbauten_mut().clear();
             tx.dokumente_mut().clear();
+            *tx.zustand_mut() = WagenZustand::default();
             Ok(())
         })?;
         self.reindex();
@@ -533,6 +553,7 @@ impl TrainsDb {
             tx.instandhaltungen_mut().clear();
             tx.radsaetze_mut().clear();
             tx.einbauten_mut().clear();
+            *tx.zustand_mut() = WagenZustand::default();
             for dokument in tx.dokumente_mut().values_mut() {
                 dokument.importiert_am = None;
             }
@@ -596,6 +617,12 @@ impl Tx<'_> {
         &mut db.dokumente
     }
 
+    pub fn zustand_mut(&mut self) -> &mut WagenZustand {
+        let Tx { db, rollback } = self;
+        rollback.zustand.get_or_insert_with(|| db.zustand.clone());
+        &mut db.zustand
+    }
+
     pub fn put_dokument(&mut self, dokument: Dokument) {
         self.db
             .by_hash
@@ -624,6 +651,14 @@ impl Tx<'_> {
             .retain(|_, event| event.wagen_id != id);
         self.einbauten_mut()
             .retain(|_, einbau| einbau.wagen_id != id);
+        if self.db.zustand.meldungen.iter().any(|m| m.wagen_id == id)
+            || self.db.zustand.geraete.iter().any(|g| g.wagen_id == id)
+            || self.db.zustand.schaeden.iter().any(|s| s.wagen_id == id)
+            || self.db.zustand.auftraege.iter().any(|a| a.wagen_id == id)
+            || self.db.zustand.pruefungen.iter().any(|p| p.wagen_id == id)
+        {
+            self.zustand_mut().without_wagen(id);
+        }
     }
 
     pub fn put_partner(&mut self, partner: Partner) {
@@ -649,6 +684,19 @@ impl Tx<'_> {
         for event in self.instandhaltungen_mut().values_mut() {
             if event.werkstatt_id.as_deref() == Some(id) {
                 event.werkstatt_id = None;
+            }
+        }
+        if self
+            .db
+            .zustand
+            .auftraege
+            .iter()
+            .any(|auftrag| auftrag.werkstatt_id.as_deref() == Some(id))
+        {
+            for auftrag in &mut self.zustand_mut().auftraege {
+                if auftrag.werkstatt_id.as_deref() == Some(id) {
+                    auftrag.werkstatt_id = None;
+                }
             }
         }
     }
@@ -827,6 +875,9 @@ impl Tx<'_> {
         }
         if self.rollback.dokumente.is_some() {
             write(&folder.join("dokumente.db"), &self.db.dokumente)?;
+        }
+        if self.rollback.zustand.is_some() {
+            write_whole(&folder.join(ZUSTAND), &self.db.zustand)?;
         }
         Ok(())
     }

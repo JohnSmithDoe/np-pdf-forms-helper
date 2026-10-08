@@ -174,7 +174,7 @@ fn file(path: &Path, templates: &[ImportTemplate]) -> ScanFile {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::{workbook, TempDir};
+    use crate::testing::{workbook, TempDir, TELEMATIK, TELEMATIK_ROW};
     use crate::trains::builtin;
 
     fn names(files: &[ScanFile]) -> Vec<&str> {
@@ -184,13 +184,21 @@ mod tests {
     #[test]
     fn a_folder_is_read_one_level_deep_and_in_order() {
         let folder = TempDir::new("scan-folder");
-        workbook(&folder, "b.xlsx", &[("Tabelle1", &[&["Asset"], &["x"]])]);
-        workbook(&folder, "a.xlsx", &[("Tabelle1", &[&["Asset"], &["x"]])]);
+        workbook(
+            &folder,
+            "b.xlsx",
+            &[("Tabelle1", &[TELEMATIK, TELEMATIK_ROW])],
+        );
+        workbook(
+            &folder,
+            "a.xlsx",
+            &[("Tabelle1", &[TELEMATIK, TELEMATIK_ROW])],
+        );
         std::fs::create_dir(folder.join("2026")).unwrap();
         workbook(
             &folder,
             "2026/c.xlsx",
-            &[("Tabelle1", &[&["Asset"], &["x"]])],
+            &[("Tabelle1", &[TELEMATIK, TELEMATIK_ROW])],
         );
 
         let scanned = scan(&[folder.path().to_path_buf()], &builtin::all(), &|_| None);
@@ -206,7 +214,7 @@ mod tests {
         workbook(
             &folder,
             "Liste.xlsx",
-            &[("Tabelle1", &[&["Asset"], &["x"]])],
+            &[("Tabelle1", &[TELEMATIK, TELEMATIK_ROW])],
         );
 
         let scanned = scan(&[folder.path().to_path_buf()], &builtin::all(), &|_| None);
@@ -217,7 +225,11 @@ mod tests {
     #[test]
     fn a_file_named_twice_is_listed_once() {
         let folder = TempDir::new("scan-twice");
-        let file = workbook(&folder, "a.xlsx", &[("Tabelle1", &[&["Asset"], &["x"]])]);
+        let file = workbook(
+            &folder,
+            "a.xlsx",
+            &[("Tabelle1", &[TELEMATIK, TELEMATIK_ROW])],
+        );
         let scanned = scan(
             &[folder.path().to_path_buf(), file],
             &builtin::all(),
@@ -232,7 +244,7 @@ mod tests {
         workbook(
             &folder,
             "1-telematik.xlsx",
-            &[("Sheet1", &[&["Asset", "Laufleistung"], &["x", "1"]])],
+            &[("Sheet1", &[TELEMATIK, TELEMATIK_ROW])],
         );
         workbook(
             &folder,
@@ -266,7 +278,7 @@ mod tests {
             "monitoring.xlsx",
             &[
                 ("Übersicht", &[&["Wagentyp", "Achsen"], &["a", "4"]]),
-                ("Telematik", &[&["Asset", "Stadt"], &["x", "y"]]),
+                ("Telematik", &[TELEMATIK, TELEMATIK_ROW]),
             ],
         );
         let scanned = scan(&[file], &builtin::all(), &|_| None);
@@ -285,13 +297,16 @@ mod tests {
                 "Tabelle1",
                 &[
                     &[
-                        "Asset",
-                        "Wagennr.",
-                        "RadsatzID",
-                        "Radsatznummer",
-                        "Einbaudatum NACH letzter IS2/3",
-                    ],
-                    &["x", "y", "z", "w", "v"],
+                        TELEMATIK,
+                        &[
+                            "Wagennr.",
+                            "RadsatzID",
+                            "Radsatznummer",
+                            "Einbaudatum NACH letzter IS2/3",
+                        ],
+                    ]
+                    .concat(),
+                    &[TELEMATIK_ROW, &["y", "z", "w", "v"]].concat(),
                 ],
             )],
         );
@@ -303,7 +318,11 @@ mod tests {
     #[test]
     fn a_file_the_app_already_owns_is_vorhanden_with_its_dates() {
         let folder = TempDir::new("scan-owned");
-        let file = workbook(&folder, "a.xlsx", &[("Tabelle1", &[&["Asset"], &["x"]])]);
+        let file = workbook(
+            &folder,
+            "a.xlsx",
+            &[("Tabelle1", &[TELEMATIK, TELEMATIK_ROW])],
+        );
         let hash = crate::trains::dokument::hash_of(&file).unwrap();
         let owned = |seen: &str| {
             (seen == hash).then(|| Vorhanden {
@@ -327,7 +346,11 @@ mod tests {
     #[test]
     fn the_same_bytes_twice_in_one_drop_are_cleaned_once() {
         let folder = TempDir::new("scan-copy");
-        let file = workbook(&folder, "a.xlsx", &[("Tabelle1", &[&["Asset"], &["x"]])]);
+        let file = workbook(
+            &folder,
+            "a.xlsx",
+            &[("Tabelle1", &[TELEMATIK, TELEMATIK_ROW])],
+        );
         std::fs::copy(&file, folder.join("a - Kopie.xlsx")).unwrap();
 
         let scanned = scan(&[folder.path().to_path_buf()], &builtin::all(), &|_| None);

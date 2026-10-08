@@ -37,6 +37,11 @@
 // The staging is matched by its ORIGIN against the walk's source, so a staging
 // left over from the mapper or another walk is never answered by this one.
 //
+// A row's `writes` name the Wagen-Zustand records it updates too — Telematik,
+// Schadensmeldung, Werkstattauftrag, Prüfung — which no step asks about: they
+// hang off the row's Wagen. A Bestellnummer alone writes no order (a P8 list
+// names one), so it does not count.
+//
 // The master's EINBAU conflicts — a Radsatz already fitted on the same Wagen
 // under another date — default to keeping the stored date, so they never block
 // a step: keeping is the answer that writes nothing.
@@ -44,6 +49,11 @@
 
 import { computed, inject, Injectable } from '@angular/core';
 import { BackendService } from '../../@shared/data/backend/backend.service';
+import {
+  FIELD_CATALOGUE,
+  GROUP_LABELS,
+  type EntityGroup as FieldGroup,
+} from '../model/field-catalogue';
 import type { WalkSource } from '../model/import-walk';
 import type {
   EinbauKonflikt,
@@ -93,6 +103,15 @@ export interface PlanCount {
 
 const WORK = new Set(['datum', 'leistung', 'betrag', 'bemerkung']);
 const FITTING = new Set(['eingebautAm', 'ausgebautAm']);
+const ZUSTAND: readonly FieldGroup[] = [
+  'telematik',
+  'schaden',
+  'auftrag',
+  'pruefung',
+];
+const GROUP_OF = new Map(
+  FIELD_CATALOGUE.map((entry) => [entry.field, entry.group])
+);
 
 const LABELS: Record<EntityKind, string> = {
   partner: 'Partner',
@@ -126,6 +145,13 @@ function writesOf(row: StagedRow): string[] {
   }
   if (filled.some((cell) => WORK.has(cell.field))) {
     writes.push('Instandhaltung');
+  }
+  for (const group of ZUSTAND) {
+    const writesGroup = filled.some(
+      (cell) =>
+        GROUP_OF.get(cell.field) === group && cell.field !== 'bestellnummer'
+    );
+    if (writesGroup) writes.push(GROUP_LABELS[group]);
   }
   return writes;
 }

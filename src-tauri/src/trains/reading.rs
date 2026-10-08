@@ -5,8 +5,8 @@
 // learned to doubt a saved reading the file contradicts, staging silently let it
 // win — so the same file read two ways depending on the button pressed.
 //
-// The decimal style is consulted only for a Betrag and the date order only for
-// a date; any other column carries a certain default, so it can never raise a
+// The decimal style is consulted only for a number (a Betrag, a km reading, a
+// percent) and the date order only for a date or a Zeitpunkt; any other column carries a certain default, so it can never raise a
 // question nobody asked.
 //
 // A reading has three sources, in this order: what the user CONFIRMED for this
@@ -70,7 +70,28 @@ pub struct Confirmed {
 pub fn reads_a_date(field: FieldKind) -> bool {
     matches!(
         field,
-        FieldKind::Datum | FieldKind::EingebautAm | FieldKind::AusgebautAm
+        FieldKind::Datum
+            | FieldKind::EingebautAm
+            | FieldKind::AusgebautAm
+            | FieldKind::TelematikAngebautAm
+            | FieldKind::TelematikZeitpunkt
+            | FieldKind::SchadenGemeldetAm
+            | FieldKind::SchadenGeplantAm
+            | FieldKind::SchadenErledigtAm
+            | FieldKind::AuftragErfasstAm
+            | FieldKind::AuftragEingangAm
+            | FieldKind::AuftragAusgangAm
+            | FieldKind::AuftragVersendetAm
+            | FieldKind::PruefungFaelligAm
+            | FieldKind::PruefungGeplantAm
+            | FieldKind::PruefungDurchgefuehrtAm
+    )
+}
+
+pub fn reads_a_number(field: FieldKind) -> bool {
+    matches!(
+        field,
+        FieldKind::Betrag | FieldKind::TelematikLaufleistung | FieldKind::TelematikEnergie
     )
 }
 
@@ -85,7 +106,7 @@ pub fn read_column(
     let mut date_order = DateOrder::DayFirst;
     let mut question = None;
 
-    if binding.field == FieldKind::Betrag {
+    if reads_a_number(binding.field) {
         let (chosen, reason) = settle(
             binding.decimal,
             column::infer_decimal(&evidence),

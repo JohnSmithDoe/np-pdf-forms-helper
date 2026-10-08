@@ -16,7 +16,13 @@
 // than one epoch and a fudge — 1899-12-30 at or above serial 61, 1899-12-31 at
 // or below 59, and 60 itself an error. The Macintosh system starts at 1904-01-01
 // and never had the bug, so it is one clean addition. A time of day is dropped
-// rather than rounded: this model has no time.
+// rather than rounded: a `Date` has no time.
+//
+// The ONE exception is `Zeitpunkt`, a telematics reading's moment: only the
+// latest reading per Wagen is kept, and two exports on the same day can only be
+// ordered by their time. It is still civil — no zone, no clock — and a cell
+// without a time reads as midnight rather than as an error. A serial's fraction
+// is rounded to the second there, since that is all Excel stored.
 //
 // `PLAUSIBLE_SERIALS` is 1990-01-01 to 2100-01-01, for the one case where a
 // number sits in a column with no other evidence that it is a date at all — a
@@ -31,7 +37,8 @@
 //   • a trailing time of day (`2026-10-02 18:48:42`, `02.10.2026 18:48`, ISO's
 //     `T`) is dropped, exactly as a serial's fraction is — telematics and ERP
 //     exports stamp every date with one. Only a tail made of digits, `:` and `.`
-//     WITH a `:` counts, so `17. Juli 2023` keeps its year
+//     WITH a `:` counts, so `17. Juli 2023` keeps its year. `parse_zeitpunkt`
+//     splits the same tail off and keeps it
 //   • a month NAME (`17. Juli 2023`, `09. Sept. 2024`) is day-first too, and
 //     only in German, Austrian spellings included. The senders write German; an
 //     English table would put `Mai` and `May` side by side to buy nothing. It is
@@ -53,6 +60,26 @@ pub struct Date {
     pub year: i32,
     pub month: u8,
     pub day: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Zeitpunkt {
+    pub date: Date,
+    pub hour: u8,
+    pub minute: u8,
+    pub second: u8,
+}
+
+impl Zeitpunkt {
+    pub fn to_iso(self) -> String {
+        format!(
+            "{}T{:02}:{:02}:{:02}",
+            self.date.to_iso(),
+            self.hour,
+            self.minute,
+            self.second
+        )
+    }
 }
 
 pub const PLAUSIBLE_SERIALS: std::ops::RangeInclusive<i64> = 32874..=73050;
@@ -135,6 +162,60 @@ pub fn from_serial(serial: f64, date_1904: bool) -> Result<Date, String> {
     }
 }
 
+pub fn zeitpunkt_from_serial(serial: f64, date_1904: bool) -> Result<Zeitpunkt, String> {
+    let date = from_serial(serial, date_1904)?;
+    let seconds = (((serial - serial.floor()) * 86_400.0).round() as u32).min(86_399);
+    Ok(Zeitpunkt {
+        date,
+        hour: (seconds / 3600) as u8,
+        minute: (seconds / 60 % 60) as u8,
+        second: (seconds % 60) as u8,
+    })
+}
+
+pub fn parse_zeitpunkt(raw: &str, order: DateOrder) -> Parse {
+    let trimmed = text::normalise(raw);
+    if trimmed.is_empty() {
+        return Ok(Parsed::plain(Value::Empty));
+    }
+    let (date_part, time_part) = split_time(&trimmed);
+    let parsed = parse_text(date_part, order).map_err(|_| invalid_zeitpunkt(&trimmed))?;
+    let Value::Date(date) = parsed.value else {
+        return Err(invalid_zeitpunkt(&trimmed));
+    };
+    let (hour, minute, second) = match time_part {
+        Some(time) => clock(time).ok_or_else(|| invalid_zeitpunkt(&trimmed))?,
+        None => (0, 0, 0),
+    };
+    Ok(Parsed {
+        value: Value::Zeitpunkt(Zeitpunkt {
+            date,
+            hour,
+            minute,
+            second,
+        }),
+        warning: parsed.warning,
+    })
+}
+
+fn clock(raw: &str) -> Option<(u8, u8, u8)> {
+    let mut parts = raw.split(':');
+    let hour: u8 = parts.next()?.parse().ok()?;
+    let minute: u8 = parts.next()?.parse().ok()?;
+    let second: u8 = match parts.next() {
+        Some(seconds) => seconds.split('.').next()?.parse().ok()?,
+        None => 0,
+    };
+    if parts.next().is_some() || hour > 23 || minute > 59 || second > 59 {
+        return None;
+    }
+    Some((hour, minute, second))
+}
+
+fn invalid_zeitpunkt(raw: &str) -> String {
+    format!("„{raw}“ ist kein Zeitpunkt. Erwartet wird z. B. 31.12.2025 14:30.")
+}
+
 const SEPARATORS: [char; 3] = ['.', '-', '/'];
 
 pub fn parse_text(raw: &str, order: DateOrder) -> Parse {
@@ -168,6 +249,10 @@ pub fn parse_text(raw: &str, order: DateOrder) -> Parse {
 }
 
 fn without_time(raw: &str) -> &str {
+    split_time(raw).0
+}
+
+fn split_time(raw: &str) -> (&str, Option<&str>) {
     let is_time = |tail: &str| {
         tail.contains(':')
             && tail
@@ -175,8 +260,8 @@ fn without_time(raw: &str) -> &str {
                 .all(|c| c.is_ascii_digit() || c == ':' || c == '.')
     };
     match raw.rsplit_once(' ').or_else(|| raw.split_once('T')) {
-        Some((date, time)) if is_time(time) => date.trim_end(),
-        _ => raw,
+        Some((date, time)) if is_time(time) => (date.trim_end(), Some(time)),
+        _ => (raw, None),
     }
 }
 
@@ -500,6 +585,43 @@ mod tests {
     #[test]
     fn a_blank_cell_is_empty_rather_than_an_error() {
         assert_eq!(parse_text("  ", DayFirst).unwrap().value, Value::Empty);
+    }
+
+    fn zeitpunkt(raw: &str) -> String {
+        match parse_zeitpunkt(raw, DayFirst).expect("parses").value {
+            Value::Zeitpunkt(value) => value.to_iso(),
+            other => panic!("expected a Zeitpunkt, got {other:?}"),
+        }
+    }
+
+    // The telematics `Timestamp` exactly as the real export writes it — the time
+    // is what orders two readings of the same day.
+    #[test]
+    fn a_zeitpunkt_keeps_its_time() {
+        assert_eq!(zeitpunkt("2026-10-02 13:37:01"), "2026-10-02T13:37:01");
+        assert_eq!(zeitpunkt("2026-10-02T13:37:01"), "2026-10-02T13:37:01");
+        assert_eq!(zeitpunkt("02.10.2026 13:37"), "2026-10-02T13:37:00");
+        assert_eq!(zeitpunkt("02.10.2026 13:37:01.250"), "2026-10-02T13:37:01");
+    }
+
+    #[test]
+    fn a_zeitpunkt_without_a_time_is_midnight() {
+        assert_eq!(zeitpunkt("02.10.2026"), "2026-10-02T00:00:00");
+    }
+
+    #[test]
+    fn a_zeitpunkt_refuses_an_impossible_time_and_quotes_the_cell() {
+        let error = parse_zeitpunkt("02.10.2026 25:00", DayFirst).unwrap_err();
+        assert!(error.contains("25:00"), "{error}");
+        assert!(parse_zeitpunkt("gestern", DayFirst).is_err());
+    }
+
+    #[test]
+    fn a_serial_zeitpunkt_keeps_its_fraction_to_the_second() {
+        let value = zeitpunkt_from_serial(45000.5 + 1.0 / 86_400.0, false).unwrap();
+        assert_eq!(value.to_iso(), "2023-03-15T12:00:01");
+        let late = zeitpunkt_from_serial(45_000.999_999_9, false).unwrap();
+        assert_eq!(late.to_iso(), "2023-03-15T23:59:59");
     }
 
     #[test]

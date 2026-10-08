@@ -401,6 +401,8 @@ fn clean_cell(
 fn format_rule(field: FieldKind, stored_number: bool) -> &'static str {
     match field {
         FieldKind::Wagennummer => "Wagennummer einheitlich geschrieben",
+        FieldKind::TelematikZeitpunkt if stored_number => "Excel-Zeitpunkt als Text geschrieben",
+        FieldKind::TelematikZeitpunkt => "Zeitpunkt einheitlich geschrieben (TT.MM.JJJJ hh:mm:ss)",
         _ if reads_a_date(field) && stored_number => "Excel-Datum als Text geschrieben",
         _ if reads_a_date(field) => "Datum einheitlich geschrieben (TT.MM.JJJJ)",
         FieldKind::Betrag if stored_number => "Zahl als Betrag geschrieben",
@@ -522,6 +524,35 @@ mod tests {
             ],
         );
         (grid, plan)
+    }
+
+    // The import stages the CLEANED copy, so a time the copy drops is gone for
+    // good — the telematics `Timestamp` must come out with its time.
+    #[test]
+    fn a_telematics_timestamp_keeps_its_time_in_the_cleaned_copy() {
+        let grid = Grid::from_text(
+            "Tabelle1",
+            &[
+                &["Asset", "Timestamp"],
+                &["33 85 0659 002-9", "2026-10-02 13:37:01"],
+            ],
+        );
+        let plan = plan_for(
+            &grid,
+            &[
+                ("Asset", FieldKind::Wagennummer),
+                ("Timestamp", FieldKind::TelematikZeitpunkt),
+            ],
+        );
+        let result = cleaned(&grid, &plan, &none());
+        let change = result
+            .changes
+            .iter()
+            .find(|change| change.header == "Timestamp")
+            .unwrap();
+        assert_eq!(change.clean, "02.10.2026 13:37:01");
+        assert!(result.report.cards.is_empty());
+        assert!(ready(&result.report).is_ok());
     }
 
     /// Four hundred reformatted Wagennummern are one line, not four hundred.

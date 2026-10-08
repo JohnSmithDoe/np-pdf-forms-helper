@@ -389,6 +389,7 @@ mod tests {
                 .collect(),
             template_id: None,
             date1904: false,
+            pruefart: None,
         }
     }
 

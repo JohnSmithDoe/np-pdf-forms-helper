@@ -63,6 +63,12 @@
 // handful of changed cells; „Radsätze aktuell“, ticked by hand, shows a sheet
 // that cannot be written. Hand-written for the same reason as the views.
 //
+// THE WAGEN-ZUSTAND gives most Wagen a Telematik reading — one of them silent
+// for twelve days, so the dashboard's red shows — plus an open and a closed
+// Schadensmeldung, an open Werkstattauftrag and a P8 beside a revision. The
+// readings are dated relative to NOW (`vorTagen`), or „funkte vor N Tagen“
+// would grow every day the seed is not touched.
+//
 // THE MASTER FILE starts with one taken-over version, and a pick answers a
 // second one as pending — with a cut tail, a retyped Wagennummer, a text date,
 // a note and a formula tail, every kind of line its report renders.
@@ -84,6 +90,7 @@ import type {
   FakeSeed,
   FakeStaging,
   FakeTemplate,
+  FakeWagenZustand,
   FakeWaggon,
 } from '../e2e/fake-backend';
 
@@ -248,6 +255,135 @@ const wagen: FakeWaggon[] = [
   },
   { id: 'wg-5', nummer: '318133445565', createdAt: '2026-04-17' },
 ];
+
+function vorTagen(tage: number, stunde: number): string {
+  const moment = new Date();
+  moment.setDate(moment.getDate() - tage);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${moment.getFullYear()}-${pad(moment.getMonth() + 1)}-${pad(moment.getDate())}T${pad(stunde)}:15:00`;
+}
+
+const quelle = (file: string, row: number) => ({
+  file,
+  sheet: 'Tabelle1',
+  row,
+  importedAt: '2026-10-06',
+});
+
+const zustand: FakeWagenZustand = {
+  geraete: [
+    {
+      id: 'tg-1',
+      kennung: 'PI1703372',
+      wagenId: 'wg-1',
+      angebautAm: '2024-04-15',
+      source: quelle('Telematik.xlsx', 2),
+    },
+    {
+      id: 'tg-2',
+      kennung: '1102914295',
+      wagenId: 'wg-2',
+      angebautAm: '2024-09-05',
+      source: quelle('Telematik.xlsx', 3),
+    },
+  ],
+  meldungen: [
+    {
+      id: 'tm-1',
+      wagenId: 'wg-1',
+      geraetId: 'tg-1',
+      zeitpunkt: vorTagen(1, 8),
+      stadt: 'Neuhof',
+      land: 'DE',
+      standort: 'Neuhof (Kr Fulda)',
+      laufleistungKm: 227_734,
+      energieProzent: 98,
+      bewegung: 'BEWEGUNG',
+      source: quelle('Telematik.xlsx', 2),
+    },
+    {
+      id: 'tm-2',
+      wagenId: 'wg-2',
+      geraetId: 'tg-2',
+      zeitpunkt: vorTagen(12, 17),
+      stadt: 'Bad Hersfeld',
+      land: 'DE',
+      standort: 'BAD HERSFELD-EICHHOF',
+      laufleistungKm: 168_973,
+      energieProzent: 41,
+      bewegung: 'STILLSTAND',
+      source: quelle('Telematik.xlsx', 3),
+    },
+    {
+      id: 'tm-3',
+      wagenId: 'wg-3',
+      zeitpunkt: vorTagen(0, 6),
+      stadt: 'Altenburg',
+      land: 'DE',
+      source: quelle('Telematik.xlsx', 4),
+    },
+  ],
+  schaeden: [
+    {
+      id: 'sm-1',
+      wagenId: 'wg-1',
+      gemeldetAm: '2026-09-29',
+      gemeldetVon: 'Disposition',
+      schadcode: '3.3.4',
+      notiz: 'Bremsklotz fehlt',
+      ausgesetzt: true,
+      aktion: 'Werkstatt beauftragen',
+      source: quelle('Schadensmeldungen.xlsx', 2),
+    },
+    {
+      id: 'sm-2',
+      wagenId: 'wg-2',
+      gemeldetAm: '2026-08-11',
+      schadcode: '1.2.1',
+      notiz: 'Griffstange verbogen',
+      erledigtAm: '2026-08-20',
+      source: quelle('Schadensmeldungen.xlsx', 3),
+    },
+  ],
+  auftraege: [
+    {
+      id: 'wa-1',
+      wagenId: 'wg-1',
+      bestellnummer: '24094-26/01',
+      werkstattId: 'p-werk-schienenbein',
+      status: 'BS_FREIGABE',
+      erfasstAm: '2026-09-30',
+      source: quelle('Bestellungen.xlsx', 2),
+    },
+  ],
+  pruefungen: [
+    {
+      id: 'pr-1',
+      wagenId: 'wg-1',
+      art: 'P8',
+      faelligAm: '2027-03-31',
+      status: 'G',
+      source: quelle('P8.xlsx', 2),
+    },
+    {
+      id: 'pr-2',
+      wagenId: 'wg-1',
+      art: 'G4.2',
+      faelligAm: '2030-06-30',
+      status: 'Abgeschlossen',
+      source: quelle('Revisionen.xlsx', 2),
+    },
+    {
+      id: 'pr-3',
+      wagenId: 'wg-3',
+      art: 'P8',
+      faelligAm: '2026-11-15',
+      status: 'A',
+      bestellnummer: '27642-26',
+      source: quelle('P8.xlsx', 3),
+    },
+  ],
+};
 
 const radsaetze: FakeRadsatz[] = [
   {
@@ -1401,6 +1537,7 @@ export const DEMO_SEED: FakeSeed = {
   partners,
   radsaetze,
   einbauten,
+  zustand,
   events,
   templates,
   master,

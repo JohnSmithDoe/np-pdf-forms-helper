@@ -8,9 +8,11 @@
 // and the consequence rides in the QUESTION because an `ion-alert` announces its
 // header as the dialog's accessible name and its message after focus.
 //
-// The fitted radsaetze open on tap, like the radsatz list's history: the count
-// is always on the row, the lines only when asked for — eight lines on each of
-// 400 wagen would bury the list.
+// The fitted radsaetze and the Zustand's lines open on tap, like the radsatz
+// list's history: the counts, the position and the badges are always on the
+// row, the lines only when asked for — eight lines on each of 400 wagen would
+// bury the list. A Wagen silent for more than seven days shows its position in
+// `danger`, the dashboard's red.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -19,7 +21,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { IonNote } from '@ionic/angular/standalone';
+import { IonBadge, IonNote } from '@ionic/angular/standalone';
 import { OverlayService } from '../../../@shared/data/overlays/overlay.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { ListPageComponent } from '../../../@shared/feature/item-lists/list-page/list-page.component';
@@ -32,7 +34,7 @@ import { TrainsFacade, WagenListFacade, type WagenRow } from '../../data';
   templateUrl: 'wagen-list.page.html',
   styleUrls: ['wagen-list.page.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IonNote, ListItemComponent, ListPageComponent],
+  imports: [IonBadge, IonNote, ListItemComponent, ListPageComponent],
   providers: [{ provide: LIST_FACADE, useExisting: WagenListFacade }],
 })
 export class WagenListPage {

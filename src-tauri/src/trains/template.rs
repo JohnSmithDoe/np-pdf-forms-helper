@@ -135,6 +135,7 @@ mod tests {
             .collect(),
             template_id: None,
             date1904: false,
+            pruefart: None,
         }
     }
 
@@ -158,7 +159,7 @@ mod tests {
         let (_f, mut db) = fresh("learn-builtin");
         let mut confirmed = plan();
         confirmed.columns[0].header = "werk_ausg_ist".into();
-        confirmed.columns[0].field = FieldKind::Datum;
+        confirmed.columns[0].field = FieldKind::AuftragAusgangAm;
         confirmed.columns[0].date_order = Some(DateOrder::MonthFirst);
 
         let (copy, said) = learned(&db, "builtin:werkstattauftraege", &confirmed).unwrap();
