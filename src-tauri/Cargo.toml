@@ -22,6 +22,9 @@ indexmap = { version = "2", features = ["serde"] }
 thiserror = "2"
 uuid = { version = "1", features = ["v4"] }
 umya-spreadsheet = "3.1.0"
+# The patch writer copies untouched entries of a customer's workbook as raw
+# compressed bytes; same version and features as umya's own, so one build.
+zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 lopdf = { version = "0.36.0", default-features = false }
 
 # umya unoptimised parses the master's fill-down sheets far too slowly for

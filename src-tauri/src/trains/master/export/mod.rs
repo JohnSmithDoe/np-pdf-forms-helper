@@ -50,6 +50,8 @@ use std::path::Path;
 
 use umya_spreadsheet::Workbook;
 
+use crate::doc::xlsx::patch::{self, SheetEdits};
+
 use super::source::Table;
 use super::{book, paste, view};
 use crate::error::{AppError, AppResult};
@@ -63,7 +65,18 @@ use crate::trains::sheet::grid;
 pub use suggest::start;
 
 pub fn preview(db: &TrainsDb, request: &MasterExportRequest) -> AppResult<MasterExportRun> {
-    apply(db, request).map(|(run, _)| run)
+    let (mut run, edits) = apply(db, request)?;
+    if let Err(error) = patch::check(Path::new(&request.base), &edits) {
+        let problem = error.into_messages().join(" ");
+        for sheet in run
+            .sheets
+            .iter_mut()
+            .filter(|sheet| sheet.problem.is_none())
+        {
+            sheet.problem = Some(problem.clone());
+        }
+    }
+    Ok(run)
 }
 
 pub fn write(
@@ -71,7 +84,7 @@ pub fn write(
     request: &MasterExportRequest,
     stamp: &str,
 ) -> AppResult<MasterExportRun> {
-    let (mut run, book) = apply(db, request)?;
+    let (mut run, edits) = apply(db, request)?;
     if run.sheets.iter().all(|sheet| sheet.problem.is_some()) {
         return Err(AppError::Report(
             run.sheets
@@ -85,8 +98,7 @@ pub fn write(
         (dokument.template_id.clone(), dokument.name.clone())
     };
     let written =
-        crate::trains::master_file::write_in_place(&book, Path::new(&request.base), stamp)?;
-    drop(book);
+        crate::trains::master_file::write_in_place(Path::new(&request.base), stamp, &edits)?;
 
     if request.remember {
         let mut settings = db.master().clone();
@@ -132,7 +144,10 @@ pub(super) fn original(settings: &MasterSettings) -> AppResult<&Path> {
     }
 }
 
-fn apply(db: &TrainsDb, request: &MasterExportRequest) -> AppResult<(MasterExportRun, Workbook)> {
+fn apply(
+    db: &TrainsDb,
+    request: &MasterExportRequest,
+) -> AppResult<(MasterExportRun, Vec<SheetEdits>)> {
     let dokument = dokument(db, &request.dokument_id)?;
     if request.sheets.is_empty() {
         return Err(AppError::Report(vec!["Es ist kein Blatt gewählt.".into()]));
@@ -165,19 +180,19 @@ fn apply(db: &TrainsDb, request: &MasterExportRequest) -> AppResult<(MasterExpor
     let table = super::source::load(dokument)?;
     let mut book = book::open(base)?;
     let names = book::names(&book);
-    let sheets = request
-        .sheets
-        .iter()
-        .map(|choice| {
-            let binding = settings
-                .bindings
-                .iter()
-                .find(|binding| binding.sheet == choice.sheet)
-                .cloned()
-                .unwrap_or_else(|| unbound(&choice.sheet));
-            sheet(&mut book, &names, base, binding, choice, &table)
-        })
-        .collect();
+    let mut sheets = Vec::new();
+    let mut edits = Vec::new();
+    for choice in &request.sheets {
+        let binding = settings
+            .bindings
+            .iter()
+            .find(|binding| binding.sheet == choice.sheet)
+            .cloned()
+            .unwrap_or_else(|| unbound(&choice.sheet));
+        let (run, changed) = sheet(&mut book, &names, base, binding, choice, &table);
+        sheets.push(run);
+        edits.extend(changed);
+    }
     Ok((
         MasterExportRun {
             dokument_id: dokument.id.clone(),
@@ -185,7 +200,7 @@ fn apply(db: &TrainsDb, request: &MasterExportRequest) -> AppResult<(MasterExpor
             sheets,
             ..MasterExportRun::default()
         },
-        book,
+        edits,
     ))
 }
 
@@ -196,7 +211,8 @@ fn sheet(
     mut binding: MasterBinding,
     choice: &MasterExportChoice,
     table: &Table,
-) -> MasterExportSheetRun {
+) -> (MasterExportSheetRun, Option<SheetEdits>) {
+    let mut edits = None;
     let mut out = MasterExportSheetRun {
         sheet: choice.sheet.clone(),
         append: choice.append,
@@ -275,9 +291,14 @@ fn sheet(
             .collect();
         out.targets = structure.hand;
 
+        let snapshot = worksheet.clone();
         let before = grid::from_worksheet(worksheet)?;
         let outcome = paste::write(worksheet, &binding, table, choice.append, choice.remove)?;
         let after = grid::from_worksheet(worksheet)?;
+        edits = Some(SheetEdits {
+            sheet: choice.sheet.clone(),
+            edits: super::edits::between(&snapshot, worksheet)?,
+        });
         let removed: Vec<u32> = outcome.removed.iter().map(|(row, _)| *row).collect();
         let diff = diff::rows(&before, &after, &outcome.columns, outcome.key, &removed);
         out.changed = diff.cells;
@@ -294,7 +315,8 @@ fn sheet(
     out.key = binding.key;
     out.aliases = binding.aliases;
     out.ignored = binding.ignored;
-    out
+    let edits = edits.filter(|_| out.problem.is_none());
+    (out, edits)
 }
 
 fn unbound(sheet: &str) -> MasterBinding {
@@ -869,5 +891,83 @@ mod tests {
             "{:?}",
             sheet.rows
         );
+    }
+
+    #[test]
+    #[ignore]
+    fn rehearsal_on_the_real_master() {
+        let base = PathBuf::from(std::env::var("NPDH_REHEARSAL").unwrap());
+        let config = crate::config::AppConfig {
+            data_path: base.join("data"),
+            cache_path: base.join("data/cache"),
+            output_path: base.join("data/out"),
+            db_file: base.join("data/data.db"),
+            profile_file: base.join("data/profiles.db"),
+        };
+        let mut db = TrainsDb::load(&config).unwrap();
+        assert!(
+            db.master()
+                .file
+                .clone()
+                .unwrap_or_default()
+                .contains("rehearsal")
+                || {
+                    super::super::bindings::sync(&mut db, false).unwrap();
+                    db.master().file.clone().unwrap().contains("rehearsal")
+                }
+        );
+        for id in [
+            "3c47aac1-845b-4b83-8422-f9057c077591",
+            "b241d219-3d54-4e53-be1b-aa890aad338e",
+            "165817f3-1d37-40ca-b94e-a807efce7e9c",
+        ] {
+            let start = start(&mut db, id).unwrap();
+            let file = db.master().file.clone().unwrap();
+            assert!(file.contains("rehearsal"), "{file}");
+            let sheets: Vec<MasterExportChoice> = start
+                .sheets
+                .iter()
+                .filter(|sheet| sheet.suggested)
+                .map(|sheet| MasterExportChoice {
+                    sheet: sheet.sheet.clone(),
+                    key: sheet.key.clone(),
+                    aliases: sheet.aliases.clone(),
+                    ignored: sheet.ignored.clone(),
+                    append: sheet.append,
+                    remove: sheet.remove,
+                })
+                .collect();
+            println!(
+                "== {} -> {:?}",
+                start.dokument,
+                sheets.iter().map(|s| &s.sheet).collect::<Vec<_>>()
+            );
+            let request = MasterExportRequest {
+                dokument_id: id.into(),
+                base: file,
+                sheets,
+                remember: false,
+            };
+            let preview = preview(&db, &request).unwrap();
+            for sheet in &preview.sheets {
+                println!(
+                    "   preview {}: problem={:?} rows={} line={}",
+                    sheet.sheet,
+                    sheet.problem,
+                    sheet.rows.len(),
+                    sheet.line
+                );
+            }
+            match write(&mut db, &request, &format!("2026-10-10 1{}", &id[..5])) {
+                Ok(run) => println!(
+                    "   written; {:?}",
+                    run.sheets
+                        .iter()
+                        .map(|s| (&s.sheet, &s.problem))
+                        .collect::<Vec<_>>()
+                ),
+                Err(error) => println!("   REFUSED: {:?}", error.into_messages()),
+            }
+        }
     }
 }

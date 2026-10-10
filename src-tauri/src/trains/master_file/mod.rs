@@ -31,9 +31,12 @@
 // any version; the versions and the cleaning stay for the ERP's older path.
 // `write_in_place` never writes without a backup: it first opens the file for
 // writing — Excel's lock on Windows fails HERE, before anything is copied — then
-// copies it into `Sicherungen/` beside it, and only then replaces it through
-// `write_book`'s temp + rename. A failed copy writes nothing. See
-// `docs/decisions.md`, „MVP: In die Kunden-Master schreiben“.
+// copies it into `Sicherungen/` beside it, and only then PATCHES it
+// (`doc::xlsx::patch`): the edited cells into the original package, verified,
+// then temp + rename. umya never writes the customer's file — its writer broke
+// the style table of the real master. A failed copy writes nothing. See
+// `docs/decisions.md`, „MVP: In die Kunden-Master schreiben“ and „Die
+// Master-Datei wird gepatcht“.
 // ────────────────────────────────────────────────────────────────
 
 mod clean;
@@ -236,9 +239,9 @@ pub struct Written {
 }
 
 pub fn write_in_place(
-    book: &umya_spreadsheet::Workbook,
     target: &Path,
     stamp: &str,
+    sheets: &[crate::doc::xlsx::patch::SheetEdits],
 ) -> AppResult<Written> {
     let name = crate::doc::file_name(target);
     std::fs::OpenOptions::new()
@@ -253,11 +256,7 @@ pub fn write_in_place(
             )
         })?;
     let sicherung = backup(target, stamp)?;
-    crate::doc::write_book(
-        book,
-        target,
-        format!("Die Master-Datei {name} konnte nicht geschrieben werden."),
-    )?;
+    crate::doc::xlsx::patch::write(target, sheets)?;
     Ok(Written {
         target: target.to_path_buf(),
         sicherung,
@@ -425,18 +424,25 @@ mod tests {
         assert!(set_target(&mut db, &folder.join("fehlt.xlsx")).is_err());
     }
 
+    fn dortmund() -> crate::doc::xlsx::patch::SheetEdits {
+        crate::doc::xlsx::patch::SheetEdits {
+            sheet: "Liste".into(),
+            edits: vec![crate::doc::xlsx::patch::CellEdit {
+                col: 2,
+                row: 2,
+                content: crate::doc::xlsx::patch::Content::Text("Dortmund".into()),
+            }],
+        }
+    }
+
     #[test]
     fn writing_in_place_backs_the_old_file_up_first() {
         let folder = TempDir::new("masterfile-in-place");
         let original = master(&folder, "Master.xlsx");
         let before = std::fs::read(&original).unwrap();
-        let mut book = umya_spreadsheet::reader::xlsx::read(&original).unwrap();
-        book.sheet_by_name_mut("Liste")
-            .unwrap()
-            .cell_mut("B2")
-            .set_value("Dortmund");
+        let edits = [dortmund()];
 
-        let written = write_in_place(&book, &original, "2026-10-10 120000").unwrap();
+        let written = write_in_place(&original, "2026-10-10 120000", &edits).unwrap();
         assert_eq!(
             written.sicherung,
             folder
@@ -451,7 +457,7 @@ mod tests {
         );
 
         // A second write the same second does not overwrite the first backup.
-        let again = write_in_place(&book, &original, "2026-10-10 120000").unwrap();
+        let again = write_in_place(&original, "2026-10-10 120000", &edits).unwrap();
         assert_ne!(again.sicherung, written.sicherung);
         assert_eq!(std::fs::read(&written.sicherung).unwrap(), before);
     }
@@ -463,8 +469,7 @@ mod tests {
         let before = std::fs::read(&original).unwrap();
         // A FILE where the backup folder should go makes the backup fail.
         folder.write("Sicherungen", "kein Ordner");
-        let book = umya_spreadsheet::reader::xlsx::read(&original).unwrap();
-        let error = write_in_place(&book, &original, "x").unwrap_err();
+        let error = write_in_place(&original, "x", &[dortmund()]).unwrap_err();
         assert!(error.into_messages()[0].contains("nichts geschrieben"));
         assert_eq!(std::fs::read(&original).unwrap(), before);
     }

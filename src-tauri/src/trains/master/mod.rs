@@ -34,6 +34,7 @@
 
 pub mod bindings;
 mod book;
+mod edits;
 pub mod export;
 pub mod import_all;
 pub mod kinds;

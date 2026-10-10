@@ -1199,3 +1199,31 @@ Anlass: `Echo_BestellungenSeitSeptember.XLSX` (Vorlage „Werkstattaufträge“)
   abgelehnt worden.
 - Die Bindungen mit `auto` werden bei jedem `sync` neu abgeleitet; eine bestehende Installation bekommt
   die Bindung also ohne Klick.
+
+## Die Master-Datei wird gepatcht (appended 2026-10-10)
+
+Anlass: umyas Writer hat an der echten Master Verluste gemacht — fünf eigene Zellformatvorlagen bekamen
+`builtinId="0"` (sechs „Normal“, Excel zeigt den Reparaturdialog), alle Rahmenfarben wurden `auto`,
+Zahlenformate in bedingten Formaten und Filterbereiche gingen verloren. Mit „In die Kunden-Master
+schreiben“ träfe das bei jedem Übertragen die echte Datei. Hebt in „MVP: In die Kunden-Master
+schreiben“ den Punkt „Erst dann wird über `write_book` ersetzt“ und „Was umya beim Schreiben verliert
+… erträglich durch die Sicherung“ auf.
+
+- **umya liest und rechnet, `doc::xlsx::patch` schreibt.** Der Abgleich läuft weiter auf umyas Modell,
+  die Vorschau bleibt dessen Diff. Gespeichert wird nur, was sich geändert hat: `master::edits::between`
+  vergleicht das Blatt vor und nach dem Einfügen und liefert Zelländerungen.
+- **Alles andere bleibt bitgleich.** Die xlsx ist ein ZIP; jeder nicht betroffene Eintrag wird
+  komprimiert kopiert (`raw_copy_file`), Stile, Theme, Shared Strings und alle anderen Blätter
+  eingeschlossen. Im Blatt werden nur die betroffenen Zellen neu geschrieben, Text als Inline-String,
+  kein Stil wird nachgeschlagen: eine neue Zelle nimmt den Stil derselben Spalte in Zeile 2.
+  `calcChain.xml` entfällt, `fullCalcOnLoad` wird gesetzt.
+- **Lieber ablehnen als raten.** Eine teilweise bearbeitete Shared-Formula-Gruppe, eine Array-Formel,
+  Zellen ohne `r` oder außer der Reihe: Fehler, nichts wird geschrieben.
+- **Vor dem Umbenennen geprüft.** Gleiche Einträge in gleicher Reihenfolge (bis auf die Calc-Chain),
+  gleiche CRC für alles Unveränderte, jeder Stilindex innerhalb von `cellXfs`, und umya liest die
+  geschriebenen Werte zurück. Erst dann Temp-Datei → Umbenennen. `patch::check` ist dieselbe Prüfung im
+  Speicher; die Vorschau zeigt ihr Scheitern als `problem`, damit sie nichts verspricht, was das
+  Schreiben ablehnt.
+- **Erprobt an einer Kopie der echten Master** (2026-10-10, Martin): `rehearsal_on_the_real_master`,
+  `#[ignore]`, über `NPDH_REHEARSAL`.
+- `write_book` bleibt für Dateien, die der App gehören (bereinigte Kopien, „Export erstellen“).

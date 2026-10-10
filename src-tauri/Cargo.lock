@@ -2454,6 +2454,7 @@ dependencies = [
  "thiserror 2.0.20",
  "umya-spreadsheet",
  "uuid",
+ "zip",
 ]
 
 [[package]]

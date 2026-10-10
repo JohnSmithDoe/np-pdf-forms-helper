@@ -1019,7 +1019,7 @@ mod tests {
 
         // The same bytes dropped again are still `Vorhanden` — and say why
         // the user will not find them in the list.
-        let scan = scanned(&[file.clone()], &state).scan.unwrap();
+        let scan = scanned(std::slice::from_ref(&file), &state).scan.unwrap();
         assert_eq!(scan[0].status, ScanStatus::Vorhanden);
         assert!(scan[0]
             .message
