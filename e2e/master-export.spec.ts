@@ -65,18 +65,8 @@ const TELEMATIK: FakeExportSheetRun = {
       key: '338506591522',
       status: 'geaendert',
       cells: [
-        { text: '338506591522', changed: false },
-        { text: 'Neuhof', changed: true },
-      ],
-      changes: [
-        {
-          cell: 'B2',
-          row: 2,
-          column: 'Stadt',
-          key: '338506591522',
-          before: 'Altstadt',
-          after: 'Neuhof',
-        },
+        { text: '338506591522', before: '338506591522', changed: false },
+        { text: 'Neuhof', before: 'Altstadt', changed: true },
       ],
     },
     {
@@ -84,26 +74,8 @@ const TELEMATIK: FakeExportSheetRun = {
       key: '338506590011',
       status: 'geleert',
       cells: [
-        { text: '338506590011', changed: true },
-        { text: 'Fulda', changed: true },
-      ],
-      changes: [
-        {
-          cell: 'A3',
-          row: 3,
-          column: 'Asset',
-          key: '338506590011',
-          before: '338506590011',
-          after: '',
-        },
-        {
-          cell: 'B3',
-          row: 3,
-          column: 'Stadt',
-          key: '338506590011',
-          before: 'Fulda',
-          after: '',
-        },
+        { text: '338506590011', before: '338506590011', changed: true },
+        { text: 'Fulda', before: 'Fulda', changed: true },
       ],
     },
   ],
@@ -189,7 +161,8 @@ test.describe('Master aktualisieren', () => {
 
     const preview = step(page, 'export-preview');
     // One line per row, laid out like the sheet; only the changed cell is
-    // marked, and its before/after shows only once the row is opened.
+    // marked. Opening the row lays the OLD row under it, column for column,
+    // so the old value sits right under the new one wherever it is.
     const changed = preview.getByTestId('row-change');
     await expect(changed).toHaveCount(1);
     await expect(changed.first()).toContainText('geändert');
@@ -198,13 +171,15 @@ test.describe('Master aktualisieren', () => {
     await expect(changed.first().locator('td[data-changed]')).toHaveText(
       'Neuhof'
     );
-    await expect(preview.getByTestId('row-change-detail')).toHaveCount(0);
+    const before = preview.getByTestId('row-change-before');
+    await expect(before).toHaveCount(0);
     await changed.first().click();
-    await expect(preview.getByTestId('row-change-cell')).toContainText(
-      'Stadt: Altstadt → Neuhof'
-    );
+    await expect(before).toContainText('vorher');
+    // Same column index in both rows: the old value is directly underneath.
+    await expect(before.locator('td').nth(1)).toHaveText('Altstadt');
+    await expect(changed.first().locator('td').nth(1)).toHaveText('Neuhof');
     await changed.first().click();
-    await expect(preview.getByTestId('row-change-detail')).toHaveCount(0);
+    await expect(before).toHaveCount(0);
     await preview
       .getByRole('button', { name: 'In Master-Datei schreiben' })
       .click();
@@ -294,10 +269,9 @@ test.describe('Master aktualisieren', () => {
       key: String(338506590000 + index),
       status: 'neu' as const,
       cells: [
-        { text: String(338506590000 + index), changed: true },
-        { text: 'Fulda', changed: true },
+        { text: String(338506590000 + index), before: '', changed: true },
+        { text: 'Fulda', before: '', changed: true },
       ],
-      changes: [],
     }));
     await installFakeBackend(page, seed({ ...TELEMATIK, rows: many }));
     await open(page);

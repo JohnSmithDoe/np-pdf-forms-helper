@@ -392,6 +392,7 @@ mod tests {
             summary: CleanSummary::default(),
             bereinigt_am: "2026-10-01".into(),
             importiert_am: None,
+            archiviert_am: None,
         };
         db.transaction(|tx| {
             tx.put_dokument(dokument);
@@ -465,6 +466,41 @@ mod tests {
 
     const HEADERS: [&str; 3] = ["Asset", "Anbaudatum", "Stadt"];
 
+    #[derive(Debug)]
+    struct Changed {
+        cell: String,
+        column: String,
+        key: String,
+        before: String,
+        after: String,
+    }
+
+    // The changed cells of a run, read back off its rows the way the preview
+    // lays them out: the new row over the old one, column for column.
+    fn changed(sheet: &MasterExportSheetRun) -> Vec<Changed> {
+        sheet
+            .rows
+            .iter()
+            .flat_map(|row| {
+                row.cells
+                    .iter()
+                    .zip(&sheet.columns)
+                    .filter(|(cell, _)| cell.changed)
+                    .map(|(cell, column)| Changed {
+                        cell: format!("{}{}", letter(column.index), row.row),
+                        column: column.header.clone(),
+                        key: row.key.clone(),
+                        before: cell.before.clone(),
+                        after: cell.text.clone(),
+                    })
+            })
+            .collect()
+    }
+
+    fn letter(index: u32) -> char {
+        char::from(b'A' + (index - 1) as u8)
+    }
+
     // Only the template's own sheet is pre-ticked, and it takes new rows. A
     // sheet that merely shares a column is offered unticked — the client
     // updates one sheet per document — but its Wagen column is still linked to
@@ -525,12 +561,7 @@ mod tests {
             sheet.open.is_empty(),
             "the other document columns just stay out"
         );
-        let city = sheet
-            .rows
-            .iter()
-            .flat_map(|row| &row.changes)
-            .find(|c| c.cell == "B2")
-            .unwrap();
+        let city = changed(sheet).into_iter().find(|c| c.cell == "B2").unwrap();
         assert_eq!(
             (city.before.as_str(), city.after.as_str()),
             ("Altstadt", "Neuhof")
@@ -550,20 +581,13 @@ mod tests {
         assert!(sheet.open.is_empty() && sheet.conflicts.is_empty());
         // Incremental: the date and the city of the known Wagen change, the
         // other Wagen's row is not touched.
-        let cells: Vec<&str> = sheet
-            .rows
-            .iter()
-            .flat_map(|row| &row.changes)
-            .map(|c| c.cell.as_str())
-            .collect();
-        assert!(cells.contains(&"C2") && cells.contains(&"D2"), "{cells:?}");
+        let cells: Vec<String> = changed(sheet).into_iter().map(|c| c.cell).collect();
+        assert!(
+            cells.iter().any(|c| c == "C2") && cells.iter().any(|c| c == "D2"),
+            "{cells:?}"
+        );
         assert!(!cells.iter().any(|cell| cell.ends_with('3')), "{cells:?}");
-        let city = sheet
-            .rows
-            .iter()
-            .flat_map(|row| &row.changes)
-            .find(|c| c.cell == "D2")
-            .unwrap();
+        let city = changed(sheet).into_iter().find(|c| c.cell == "D2").unwrap();
         assert_eq!(
             (city.before.as_str(), city.after.as_str()),
             ("Altstadt", "Neuhof")
@@ -702,10 +726,8 @@ mod tests {
         });
         let run = preview(&db, &request(&db, aliased)).unwrap();
         assert!(run.sheets[0].open.is_empty());
-        assert!(run.sheets[0]
-            .rows
-            .iter()
-            .flat_map(|row| &row.changes)
+        assert!(changed(&run.sheets[0])
+            .into_iter()
             .any(|c| c.after == "Neuhof"));
 
         let mut ignoring = telematik();
@@ -816,10 +838,8 @@ mod tests {
         assert_eq!(sheet.conflicts.len(), 1, "{:?}", sheet.conflicts);
         assert!(sheet.conflicts[0].contains("„Stadt“ ist schon „Projekt“ zugeordnet"));
         assert!(
-            sheet
-                .rows
-                .iter()
-                .flat_map(|row| &row.changes)
+            changed(sheet)
+                .into_iter()
                 .any(|change| change.column == "Projekt" && change.after == "Neuhof"),
             "{:?}",
             sheet.rows

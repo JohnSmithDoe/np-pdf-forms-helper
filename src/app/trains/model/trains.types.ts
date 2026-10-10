@@ -200,15 +200,6 @@ export interface MasterExportStart {
   sheets: MasterExportSheet[];
 }
 
-export interface CellChange {
-  cell: string;
-  row: number;
-  column: string;
-  key: string;
-  before: string;
-  after: string;
-}
-
 export interface ChangeColumn {
   index: number;
   header: string;
@@ -218,6 +209,7 @@ export type RowChangeStatus = 'geaendert' | 'neu' | 'geleert';
 
 export interface RowCell {
   text: string;
+  before: string;
   changed: boolean;
 }
 
@@ -226,7 +218,6 @@ export interface RowChange {
   key: string;
   status: RowChangeStatus;
   cells: RowCell[];
-  changes: CellChange[];
 }
 
 export interface MasterExportSheetRun {
@@ -701,6 +692,7 @@ export interface TrainsCounts {
   events: number;
   radsaetze: number;
   dokumente: number;
+  archiviert: number;
 }
 
 export interface InstandhaltungPage {
@@ -721,6 +713,7 @@ export interface Vorhanden {
   dokumentId: string;
   bereinigtAm: string;
   importiertAm?: string;
+  archiviertAm?: string;
 }
 
 export interface ScanMatch {
@@ -839,6 +832,7 @@ export interface Dokument {
   summary: CleanSummary;
   bereinigtAm: string;
   importiertAm?: string;
+  archiviertAm?: string;
 }
 
 export interface TrainsData {
@@ -854,6 +848,7 @@ export interface TrainsData {
   scan?: ScanFile[];
   cleaning?: CleanReport;
   dokumente?: Dokument[];
+  archiv?: Dokument[];
   settings?: TrainsSettings;
   master?: MasterView;
   masterSheet?: MasterSheetView;

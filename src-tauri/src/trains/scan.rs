@@ -23,7 +23,9 @@
 // cleaned and, if so, imported — identity is the content hash, not the name, so
 // a renamed copy is found and an edited one is not. The same bytes twice in one
 // drop are `Vorhanden` too, pointing at the first: cleaning both would file one
-// document twice.
+// document twice. An ARCHIVED document is still `Vorhanden` — archiving hides
+// a record, it does not give its bytes back — and the line says so, or the user
+// would look for it in a list that no longer shows it.
 //
 // Excel's owner files are skipped silently. Windows writes `~$Name.xlsx` beside
 // every workbook somebody has open, and listing it as an unreadable workbook
@@ -87,13 +89,17 @@ fn mark_owned(
     first_of: &mut HashMap<String, String>,
 ) {
     if let Some(vorhanden) = owned(hash) {
-        scanned.message = Some(match &vorhanden.importiert_am {
+        let mut message = match &vorhanden.importiert_am {
             Some(when) => format!(
                 "Bereits bereinigt am {} und importiert am {when}.",
                 vorhanden.bereinigt_am
             ),
             None => format!("Bereits bereinigt am {}.", vorhanden.bereinigt_am),
-        });
+        };
+        if let Some(when) = &vorhanden.archiviert_am {
+            message.push_str(&format!(" Archiviert am {when}."));
+        }
+        scanned.message = Some(message);
         scanned.status = ScanStatus::Vorhanden;
         scanned.vorhanden = Some(vorhanden);
         return;
@@ -329,6 +335,7 @@ mod tests {
                 dokument_id: "d1".into(),
                 bereinigt_am: "2026-10-01".into(),
                 importiert_am: Some("2026-10-02".into()),
+                archiviert_am: None,
             })
         };
 

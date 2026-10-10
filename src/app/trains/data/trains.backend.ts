@@ -55,6 +55,10 @@ export type TrainsCommand =
   | { command: 'save_partner'; payload: { partner: Partner } }
   | { command: 'remove_partner'; payload: { id: string } }
   | { command: 'remove_template'; payload: { id: string } }
+  | { command: 'get_dokument_archiv'; payload: Record<string, never> }
+  | { command: 'archive_dokument'; payload: { id: string } }
+  | { command: 'archive_all_dokumente'; payload: Record<string, never> }
+  | { command: 'restore_dokument'; payload: { id: string } }
   | { command: 'save_trains_settings'; payload: { settings: TrainsSettings } }
   | { command: 'reset_trains'; payload: Record<string, never> }
   | { command: 'create_trains_export'; payload: Record<string, never> }
@@ -263,6 +267,31 @@ export class TrainsBackend {
 
   reset(): Promise<TrainsData> {
     return this.#call({ command: 'reset_trains', payload: {} });
+  }
+
+  loadArchiv(): Promise<TrainsData> {
+    return this.#call({ command: 'get_dokument_archiv', payload: {} });
+  }
+
+  archiveDokument(id: string, options?: CallOptions): Promise<TrainsData> {
+    return this.#call(
+      { command: 'archive_dokument', payload: { id } },
+      options
+    );
+  }
+
+  archiveAllDokumente(options?: CallOptions): Promise<TrainsData> {
+    return this.#call(
+      { command: 'archive_all_dokumente', payload: {} },
+      options
+    );
+  }
+
+  restoreDokument(id: string, options?: CallOptions): Promise<TrainsData> {
+    return this.#call(
+      { command: 'restore_dokument', payload: { id } },
+      options
+    );
   }
 
   createExport(options?: CallOptions): Promise<TrainsData> {

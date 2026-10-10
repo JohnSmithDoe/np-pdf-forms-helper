@@ -18,22 +18,24 @@
       </thead>
       <tbody>
         @for (row of visible(); track row.row) {
-          @let isOpen = open().has(row.row);
+          @let opens = row.status === 'geaendert';
+          @let isOpen = opens && open().has(row.row);
           <tr
             class="row-changes__row"
+            [class.row-changes__row--opens]="opens"
             data-testid="row-change"
             [attr.data-status]="row.status"
-            tabindex="0"
-            role="button"
-            [attr.aria-expanded]="isOpen"
-            (click)="toggle(row.row)"
-            (keydown.enter)="toggle(row.row)"
-            (keydown.space)="toggle(row.row); $event.preventDefault()"
+            [attr.tabindex]="opens ? 0 : null"
+            [attr.role]="opens ? 'button' : null"
+            [attr.aria-expanded]="opens ? isOpen : null"
+            (click)="opens && toggle(row.row)"
+            (keydown.enter)="opens && toggle(row.row)"
+            (keydown.space)="opens && toggle(row.row); $event.preventDefault()"
           >
             <th scope="row">
               {{ row.row }}
               <ion-note [color]="status[row.status].color">{{
-                status[row.status].label
+                isOpen ? 'nachher' : status[row.status].label
               }}</ion-note>
             </th>
             @for (cell of row.cells; track $index) {
@@ -46,29 +48,26 @@
             }
           </tr>
           @if (isOpen) {
-            <tr data-testid="row-change-detail">
-              <td></td>
-              <td [attr.colspan]="columns().length">
-                <ul class="row-changes__detail">
-                  @for (change of row.changes; track change.cell) {
-                    <li data-testid="row-change-cell">
-                      <ion-note>{{ change.cell }}</ion-note>
-                      {{ change.column }}:
-                      @if (change.before) {
-                        {{ change.before }}
-                      } @else {
-                        <ion-note>leer</ion-note>
-                      }
-                      →
-                      @if (change.after) {
-                        {{ change.after }}
-                      } @else {
-                        <ion-note>leer</ion-note>
-                      }
-                    </li>
+            <tr
+              class="row-changes__before"
+              data-testid="row-change-before"
+              (click)="toggle(row.row)"
+            >
+              <th scope="row">
+                <ion-note>vorher</ion-note>
+              </th>
+              @for (cell of row.cells; track $index) {
+                <td
+                  [class]="mark(row, cell.changed)"
+                  [attr.data-changed]="cell.changed || null"
+                >
+                  @if (cell.changed && !cell.before) {
+                    <ion-note>leer</ion-note>
+                  } @else {
+                    {{ cell.before }}
                   }
-                </ul>
-              </td>
+                </td>
+              }
             </tr>
           }
         }

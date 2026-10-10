@@ -24,12 +24,28 @@
   white-space: pre-line;
 }
 
+.row-changes th[scope='row'],
+.row-changes thead th:first-child {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+  background: var(
+    --ion-card-background,
+    var(--ion-item-background, var(--ion-background-color))
+  );
+}
+
 .row-changes__row {
-  cursor: pointer;
   border-top: 1px solid var(--ion-color-step-150);
 }
 
-.row-changes__row th ion-note {
+.row-changes__row--opens,
+.row-changes__before {
+  cursor: pointer;
+}
+
+.row-changes__row th ion-note,
+.row-changes__before th ion-note {
   display: block;
 }
 
@@ -39,10 +55,4 @@
 
 .row-changes__gone {
   text-decoration: line-through;
-}
-
-.row-changes__detail {
-  margin: 0 0 0.5rem;
-  padding-inline-start: 1rem;
-  white-space: normal;
 }

@@ -7,9 +7,14 @@
 // Every row arrives whole and display-ready from Rust (`export/diff.rs`), in
 // every column of the sheet under its letter and header, so it compares by
 // eye with the open workbook; nothing here formats or decides. A changed cell
-// is marked, a new row and an emptied row are marked whole. A click on a row
-// opens its changes cell by cell underneath — the open rows are this
-// component's own view state, which is why a `ui` component holds a signal.
+// is marked, a new row and an emptied row are marked whole. A click on a
+// changed row opens its OLD values as a second row directly underneath,
+// column for column — never as a list beside the row, which meant scrolling
+// back to the start to read what a cell far right used to hold. The row
+// labels stick to the left edge for the same reason. Only a changed row
+// opens: a new row had nothing before, an emptied one already shows its old
+// values. The open rows are this component's own view state, which is why a
+// `ui` component holds a signal.
 //
 // The marks are Ionic colour ROLES (`ion-color-*` classes, read as
 // `--ion-color-base` in the stylesheet), as `entity-card` does it: the

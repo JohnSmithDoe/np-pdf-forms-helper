@@ -353,17 +353,6 @@ pub struct MasterExportStart {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CellChange {
-    pub cell: String,
-    pub row: u32,
-    pub column: String,
-    pub key: String,
-    pub before: String,
-    pub after: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ChangeColumn {
     pub index: u32,
     pub header: String,
@@ -381,6 +370,7 @@ pub enum RowChangeStatus {
 #[serde(rename_all = "camelCase")]
 pub struct RowCell {
     pub text: String,
+    pub before: String,
     pub changed: bool,
 }
 
@@ -391,7 +381,6 @@ pub struct RowChange {
     pub key: String,
     pub status: RowChangeStatus,
     pub cells: Vec<RowCell>,
-    pub changes: Vec<CellChange>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -1290,6 +1279,8 @@ pub struct Dokument {
     pub bereinigt_am: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub importiert_am: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archiviert_am: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -1299,6 +1290,8 @@ pub struct Vorhanden {
     pub bereinigt_am: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub importiert_am: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archiviert_am: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -1470,6 +1463,7 @@ pub struct TrainsCounts {
     pub instandhaltungen: u32,
     pub radsaetze: u32,
     pub dokumente: u32,
+    pub archiviert: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -1601,6 +1595,8 @@ pub struct TrainsData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dokumente: Option<Vec<Dokument>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub archiv: Option<Vec<Dokument>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<TrainsSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub master: Option<MasterView>,
@@ -1694,6 +1690,11 @@ impl TrainsData {
         self
     }
 
+    pub fn archiv(mut self, archiv: Vec<Dokument>) -> Self {
+        self.archiv = Some(archiv);
+        self
+    }
+
     pub fn scan(mut self, scan: Vec<ScanFile>) -> Self {
         self.scan = Some(scan);
         self
@@ -1762,7 +1763,14 @@ mod tests {
         assert!(value.get("partners").is_some(), "{value}");
         assert_eq!(
             value["counts"],
-            json!({ "wagen": 0, "partners": 0, "events": 0, "radsaetze": 0, "dokumente": 0 })
+            json!({
+                "wagen": 0,
+                "partners": 0,
+                "events": 0,
+                "radsaetze": 0,
+                "dokumente": 0,
+                "archiviert": 0
+            })
         );
     }
 
@@ -1794,6 +1802,7 @@ mod tests {
             summary: CleanSummary::default(),
             bereinigt_am: "2026-10-03".into(),
             importiert_am: None,
+            archiviert_am: None,
         };
         let value = serde_json::to_value(&dokument).unwrap();
         for key in ["templateId", "originalHash", "cleanedHash", "bereinigtAm"] {

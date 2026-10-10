@@ -815,6 +815,7 @@ pub(super) mod tests {
             summary: Default::default(),
             bereinigt_am: "2026-10-01".into(),
             importiert_am: None,
+            archiviert_am: None,
         };
         db.transaction(|tx| {
             tx.put_dokument(record);

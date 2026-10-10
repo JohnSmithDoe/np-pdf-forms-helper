@@ -63,6 +63,7 @@ type TrainsState = {
   events: Instandhaltung[] | undefined;
   eventTotal: number;
   dokumente: Dokument[] | undefined;
+  archiv: Dokument[] | undefined;
   settings: TrainsSettings;
   master: MasterView | undefined;
   masterImportRun: MasterImportRun | undefined;
@@ -91,11 +92,19 @@ const initial: TrainsState = {
   events: undefined,
   eventTotal: 0,
   dokumente: undefined,
+  archiv: undefined,
   settings: { wagennummer: 'compact' },
   master: undefined,
   masterImportRun: undefined,
   masterFile: undefined,
-  counts: { wagen: 0, partners: 0, events: 0, radsaetze: 0, dokumente: 0 },
+  counts: {
+    wagen: 0,
+    partners: 0,
+    events: 0,
+    radsaetze: 0,
+    dokumente: 0,
+    archiviert: 0,
+  },
   staging: undefined,
 };
 
@@ -140,6 +149,7 @@ export const TrainsStore = signalStore(
       if (data.zustand) next.zustand = data.zustand;
       if (data.markierungen) next.markierungen = data.markierungen;
       if (data.dokumente) next.dokumente = data.dokumente;
+      if (data.archiv) next.archiv = data.archiv;
       if (data.settings) next.settings = data.settings;
       if (data.master) next.master = data.master;
       if (data.masterFile) next.masterFile = data.masterFile;

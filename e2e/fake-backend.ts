@@ -42,6 +42,11 @@
 // imported. An imported document is refused exactly as Rust refuses it, since
 // that is a rule the UI is built around, not a property of bytes.
 //
+// The archive splits `state.dokumente` the way `TrainsDb::dokumente`/`archiv`
+// do: `dokumente` and `counts.dokumente` leave the archived out, `archiv` and
+// `counts.archiviert` hold them. The scan's `vorhanden` is seeded, so whether an
+// archived document still counts as owned is `cargo test`'s.
+//
 // The master workbook is `seed.masterSheets` — its sheet names and header rows,
 // which is all `get_master` reads of it. Its file is never picked: like
 // `bindings::follow`, `follow()` points `master.file` at the customer's own
@@ -240,6 +245,7 @@ export interface FakeDokument {
   };
   bereinigtAm: string;
   importiertAm?: string;
+  archiviertAm?: string;
 }
 
 export interface FakeWaggon {
@@ -412,6 +418,7 @@ export interface FakeScanFile {
     dokumentId: string;
     bereinigtAm: string;
     importiertAm?: string;
+    archiviertAm?: string;
   };
 }
 
@@ -602,15 +609,7 @@ export interface FakeExportSheetRun {
     row: number;
     key: string;
     status: 'geaendert' | 'neu' | 'geleert';
-    cells: { text: string; changed: boolean }[];
-    changes: {
-      cell: string;
-      row: number;
-      column: string;
-      key: string;
-      before: string;
-      after: string;
-    }[];
+    cells: { text: string; before: string; changed: boolean }[];
   }[];
 }
 
@@ -864,7 +863,17 @@ export function install(seed: FakeSeed): void {
     partners: state.partners.length,
     events: state.events.length,
     radsaetze: state.radsaetze.length,
-    dokumente: state.dokumente.length,
+    dokumente: listed().length,
+    archiviert: archived().length,
+  });
+
+  const listed = () => state.dokumente.filter((entry) => !entry.archiviertAm);
+  const archived = () => state.dokumente.filter((entry) => entry.archiviertAm);
+
+  const dokumentLists = () => ({
+    dokumente: copy(listed()),
+    archiv: copy(archived()),
+    counts: counts(),
   });
 
   const trainsLists = () => ({
@@ -875,7 +884,7 @@ export function install(seed: FakeSeed): void {
     zustand: copy(state.zustand),
     markierungen: copy(state.markierungen),
     templates: copy(state.templates),
-    dokumente: copy(state.dokumente),
+    dokumente: copy(listed()),
     settings: copy(state.settings),
     counts: counts(),
     masterImportRun: openRun(),
@@ -1323,7 +1332,7 @@ export function install(seed: FakeSeed): void {
       });
       state.cleaning = null;
       return {
-        dokumente: copy(state.dokumente),
+        dokumente: copy(listed()),
         templates: copy(state.templates),
         counts: counts(),
         message: report(`„${name}“ wurde bereinigt`, [
@@ -1335,6 +1344,50 @@ export function install(seed: FakeSeed): void {
     discard_clean: () => {
       state.cleaning = null;
       return {};
+    },
+
+    get_dokument_archiv: () => dokumentLists(),
+
+    archive_dokument: (args) => {
+      const id = String(args['id']);
+      const dokument = state.dokumente.find((entry) => entry.id === id);
+      if (!dokument) {
+        return Promise.reject({
+          messages: ['Das Dokument gibt es nicht mehr.'],
+        });
+      }
+      dokument.archiviertAm ??= '2026-10-10';
+      return {
+        ...dokumentLists(),
+        message: report(`„${dokument.name}“ wurde archiviert`),
+      };
+    },
+
+    archive_all_dokumente: () => {
+      const open = listed();
+      for (const entry of open) entry.archiviertAm = '2026-10-10';
+      const headline =
+        open.length === 0
+          ? 'Keine Dokumente zum Archivieren'
+          : open.length === 1
+            ? '1 Dokument wurde archiviert'
+            : `${open.length} Dokumente wurden archiviert`;
+      return { ...dokumentLists(), message: report(headline) };
+    },
+
+    restore_dokument: (args) => {
+      const id = String(args['id']);
+      const dokument = state.dokumente.find((entry) => entry.id === id);
+      if (!dokument) {
+        return Promise.reject({
+          messages: ['Das Dokument gibt es nicht mehr.'],
+        });
+      }
+      delete dokument.archiviertAm;
+      return {
+        ...dokumentLists(),
+        message: report(`„${dokument.name}“ wurde wiederhergestellt`),
+      };
     },
 
     get_master: () => {

@@ -1152,3 +1152,25 @@ nie nach Zellen; die Zellliste (Zelle | Schlüssel | Spalte | Vorher | Nachher) 
   freigegeben. Angular zeigt nur an und klappt auf; gerendert werden 100 Zeilen, weitere beim Scrollen
   (`ion-infinite-scroll` aus dem Speicher, kein virtuelles Scrollen — gezeigte Zeilen bleiben im DOM). Vorschau und Ergebnis nutzen dieselbe Komponente
   (`trains/master/ui/row-changes`).
+
+## Dokumente archivieren (appended 2026-10-10)
+
+Entschieden mit Martin am 2026-10-10. Die Dokumentliste (`/trains/documents`) wächst mit jeder
+bereinigten Datei; was erledigt ist, soll aus dem Blick, ohne verloren zu gehen.
+
+- **Archivieren blendet aus, es löscht nichts.** `Dokument.archiviertAm` ist ein Datum am Datensatz;
+  Ordner `dokumente/<id>/`, Original, bereinigte Kopie und Import-Stand bleiben, wie sie sind. Ein
+  Datensatz ohne das Feld (alles vor heute) gilt als nicht archiviert.
+- **Rust entscheidet, was die Liste enthält.** `dokumente` und `counts.dokumente` lassen das Archiv
+  weg, `archiv` und `counts.archiviert` enthalten nur es. Angular filtert nichts.
+- **„Archivierte zeigen“ holt das Archiv** (`get_dokument_archiv`); jede archivierte Zeile bietet
+  „Wiederherstellen“ und die Dateien, aber weder Import noch Master-Übertragung — dafür wird sie erst
+  zurückgeholt.
+- **„Alle archivieren“ nimmt alles, was die Liste zeigt**, importiert oder nicht, **ohne Rückfrage**:
+  es ist mit „Wiederherstellen“ umkehrbar, und eine Rückfrage vor etwas Umkehrbarem ist ein Klick
+  ohne Wert.
+- **Ein archiviertes Dokument bleibt „vorhanden“.** Seine Bytes gehören der App weiter; dieselbe Datei
+  noch einmal zu bereinigen würde ein Dokument doppelt ablegen. Die Zeile im Bereinigen sagt
+  „Archiviert am …“, sonst sucht der Nutzer es in einer Liste, die es nicht mehr zeigt.
+- **Der Master-Import lässt das Archiv stehen.** `clear_mirror` öffnet jedes Dokument wieder für den
+  Import, das Archiv ist ein eigenes Feld und bleibt.

@@ -113,6 +113,10 @@ fn main() {
             trains::commands::reclean_file,
             trains::commands::write_clean,
             trains::commands::discard_clean,
+            trains::commands::get_dokument_archiv,
+            trains::commands::archive_dokument,
+            trains::commands::archive_all_dokumente,
+            trains::commands::restore_dokument,
         ])
         .run(tauri::generate_context!())
         .expect("Tauri konnte nicht gestartet werden");

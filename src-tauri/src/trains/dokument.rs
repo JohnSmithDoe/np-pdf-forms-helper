@@ -119,6 +119,7 @@ pub fn record(adopted: &Adopted, filed: Filed<'_>) -> AppResult<Dokument> {
         summary: filed.summary,
         bereinigt_am: filed.stamp.to_string(),
         importiert_am: None,
+        archiviert_am: None,
     })
 }
 
@@ -220,6 +221,7 @@ mod tests {
             summary: CleanSummary::default(),
             bereinigt_am: "2026-10-03".into(),
             importiert_am: None,
+            archiviert_am: None,
         }
     }
 

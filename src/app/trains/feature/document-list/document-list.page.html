@@ -5,6 +5,15 @@
     </ion-buttons>
     <ion-title>Dokumente</ion-title>
     <ion-buttons slot="end">
+      @if (dokumente().length) {
+        <ion-button
+          color="medium"
+          (click)="onArchiveAll()"
+          data-testid="documents-archive-all"
+        >
+          Alle archivieren
+        </ion-button>
+      }
       <ion-button (click)="onClean()" data-testid="documents-clean">
         Bereinigen
       </ion-button>
@@ -101,6 +110,15 @@
                   Importieren
                 </ion-button>
               }
+              <ion-button
+                size="small"
+                fill="clear"
+                color="medium"
+                (click)="onArchive(dokument.id)"
+                data-testid="documents-archive"
+              >
+                Archivieren
+              </ion-button>
             </p>
           </ion-label>
           <ion-chip
@@ -112,10 +130,82 @@
         </ion-item>
       }
     </ion-list>
+  } @else if (archiviert()) {
+    <ion-note data-testid="documents-empty">
+      Alle Dokumente sind archiviert.
+    </ion-note>
   } @else {
     <ion-note data-testid="documents-empty">
       Noch keine Dokumente. Dateien kommen über „Bereinigen“ herein.
     </ion-note>
+  }
+
+  @if (archiviert()) {
+    <ion-list lines="none" data-testid="documents-archive-toggle">
+      <ion-item>
+        <ion-toggle
+          justify="space-between"
+          [checked]="showArchiv()"
+          (ionChange)="onShowArchiv($event)"
+        >
+          Archivierte zeigen ({{ archiviert() }})
+        </ion-toggle>
+      </ion-item>
+    </ion-list>
+  }
+
+  @if (showArchiv() && archiv().length) {
+    <ion-list lines="full" data-testid="documents-archive-list">
+      <ion-list-header>Archiv</ion-list-header>
+      @for (dokument of archiv(); track dokument.id) {
+        <ion-item data-testid="documents-archived-row">
+          <ion-label class="ion-text-wrap">
+            <h2>{{ dokument.name }}</h2>
+            <p>
+              Vorlage „{{ dokument.templateName }}“ · bereinigt am
+              {{ dokument.bereinigtAm }}
+              @if (dokument.importiertAm) {
+                · importiert am {{ dokument.importiertAm }}
+              }
+              · archiviert am {{ dokument.archiviertAm }}
+            </p>
+            <p>
+              <ion-button
+                size="small"
+                fill="clear"
+                (click)="onOpenFolder(dokument.folder)"
+              >
+                Ordner öffnen
+              </ion-button>
+              <ion-button
+                size="small"
+                fill="clear"
+                (click)="onOpen(dokument.original)"
+              >
+                Original
+              </ion-button>
+              <ion-button
+                size="small"
+                fill="clear"
+                (click)="onOpen(dokument.cleaned)"
+              >
+                Bereinigte Datei
+              </ion-button>
+              <ion-button
+                size="small"
+                fill="clear"
+                color="success"
+                (click)="onRestore(dokument.id)"
+                data-testid="documents-restore"
+              >
+                Wiederherstellen
+              </ion-button>
+            </p>
+          </ion-label>
+          <ion-chip slot="end" color="medium">archiviert</ion-chip>
+        </ion-item>
+      }
+    </ion-list>
   }
 </ion-content>
 

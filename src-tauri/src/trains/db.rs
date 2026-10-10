@@ -42,6 +42,9 @@
 // what makes "the same bytes dropped twice" one document. The files themselves
 // live under `dokumente/<id>/` beside the stores; `reset` removes them too, or a
 // reset would leave records' files behind with no record pointing at them.
+// An ARCHIVED Dokument (`archiviert_am`) only moves from `dokumente()` to
+// `archiv()`, and from one count to the other: record, folder, import state
+// and hash stay, so its bytes are still `Vorhanden` and cannot be filed twice.
 //
 // A WRITE THAT CLEARS a store must `reindex` after it. The `put_*` calls keep
 // the indexes current, but a `clear()` inside a transaction does not, and a
@@ -343,12 +346,18 @@ impl TrainsDb {
     }
 
     pub fn counts(&self) -> TrainsCounts {
+        let archiviert = self
+            .dokumente
+            .values()
+            .filter(|dokument| dokument.archiviert_am.is_some())
+            .count() as u32;
         TrainsCounts {
             wagen: self.wagen.len() as u32,
             partner: self.partner.len() as u32,
             instandhaltungen: self.instandhaltungen.len() as u32,
             radsaetze: self.radsaetze.len() as u32,
-            dokumente: self.dokumente.len() as u32,
+            dokumente: self.dokumente.len() as u32 - archiviert,
+            archiviert,
         }
     }
 
@@ -397,7 +406,19 @@ impl TrainsDb {
     }
 
     pub fn dokumente(&self) -> Vec<Dokument> {
-        self.dokumente.values().cloned().collect()
+        self.dokumente
+            .values()
+            .filter(|dokument| dokument.archiviert_am.is_none())
+            .cloned()
+            .collect()
+    }
+
+    pub fn archiv(&self) -> Vec<Dokument> {
+        self.dokumente
+            .values()
+            .filter(|dokument| dokument.archiviert_am.is_some())
+            .cloned()
+            .collect()
     }
 
     pub fn dokument(&self, id: &str) -> Option<&Dokument> {
@@ -658,6 +679,26 @@ impl Tx<'_> {
         if let Some(dokument) = self.dokumente_mut().get_mut(id) {
             dokument.importiert_am = Some(stamp.to_string());
         }
+    }
+
+    pub fn archive(&mut self, ids: &[String], stamp: &str) -> u32 {
+        let mut archived = 0;
+        for id in ids {
+            if let Some(dokument) = self.dokumente_mut().get_mut(id) {
+                if dokument.archiviert_am.is_none() {
+                    dokument.archiviert_am = Some(stamp.to_string());
+                    archived += 1;
+                }
+            }
+        }
+        archived
+    }
+
+    pub fn restore(&mut self, id: &str) -> bool {
+        self.dokumente_mut()
+            .get_mut(id)
+            .and_then(|dokument| dokument.archiviert_am.take())
+            .is_some()
     }
 
     pub fn put_wagen(&mut self, wagen: Wagen) {
@@ -1049,6 +1090,125 @@ mod tests {
             "the wipe was written, not only held"
         );
         assert_eq!(reloaded.partner().len(), 1);
+    }
+
+    fn dokument(id: &str, hash: &str) -> Dokument {
+        Dokument {
+            id: id.into(),
+            name: format!("{id}.xlsx"),
+            sheet: "Tabelle1".into(),
+            template_id: "t".into(),
+            template_name: "Monatsliste".into(),
+            plan: crate::trains::builtin::all()[0].plan.clone(),
+            original_hash: hash.into(),
+            cleaned_hash: format!("{hash}-c"),
+            folder: format!("dokumente/{id}"),
+            original: format!("dokumente/{id}/original.xlsx"),
+            cleaned: format!("dokumente/{id}/bereinigt.xlsx"),
+            summary: Default::default(),
+            bereinigt_am: "2026-10-01".into(),
+            importiert_am: None,
+            archiviert_am: None,
+        }
+    }
+
+    fn ids(dokumente: &[Dokument]) -> Vec<&str> {
+        dokumente
+            .iter()
+            .map(|dokument| dokument.id.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn archiving_hides_a_dokument_without_forgetting_it() {
+        let folder = TempDir::new("trains-archive");
+        let mut store = db(&folder);
+        store
+            .transaction(|tx| {
+                tx.put_dokument(dokument("d1", "h1"));
+                tx.put_dokument(dokument("d2", "h2"));
+                tx.mark_imported("d1", "2026-10-02");
+                Ok(())
+            })
+            .unwrap();
+
+        let archived = store
+            .transaction(|tx| Ok(tx.archive(&["d1".into()], "2026-10-10")))
+            .unwrap();
+        assert_eq!(archived, 1);
+
+        assert_eq!(ids(&store.dokumente()), ["d2"]);
+        assert_eq!(ids(&store.archiv()), ["d1"]);
+        assert_eq!(store.counts().dokumente, 1, "the count is the list's");
+        assert_eq!(store.counts().archiviert, 1);
+        // Hidden, not gone: the record, its import state and its hash stay.
+        let kept = store.dokument("d1").unwrap();
+        assert_eq!(kept.importiert_am.as_deref(), Some("2026-10-02"));
+        assert_eq!(kept.archiviert_am.as_deref(), Some("2026-10-10"));
+        assert_eq!(store.dokument_by_hash("h1").unwrap().id, "d1");
+
+        // d2 was written without `archiviertAm`, as every pre-archive store was.
+        let reloaded = db(&folder);
+        assert_eq!(ids(&reloaded.archiv()), ["d1"], "written, not only held");
+        assert_eq!(ids(&reloaded.dokumente()), ["d2"]);
+    }
+
+    #[test]
+    fn archiving_all_counts_only_what_was_still_listed_and_restore_undoes_it() {
+        let folder = TempDir::new("trains-archive-all");
+        let mut store = db(&folder);
+        store
+            .transaction(|tx| {
+                tx.put_dokument(dokument("d1", "h1"));
+                tx.put_dokument(dokument("d2", "h2"));
+                tx.archive(&["d1".into()], "2026-10-09");
+                Ok(())
+            })
+            .unwrap();
+
+        let all: Vec<String> = ids(&store.archiv())
+            .into_iter()
+            .chain(ids(&store.dokumente()))
+            .map(String::from)
+            .collect();
+        let archived = store
+            .transaction(|tx| Ok(tx.archive(&all, "2026-10-10")))
+            .unwrap();
+        assert_eq!(archived, 1, "an archived Dokument is not archived again");
+        assert!(store.dokumente().is_empty());
+        assert_eq!(
+            store.dokument("d1").unwrap().archiviert_am.as_deref(),
+            Some("2026-10-09"),
+            "its first date stays"
+        );
+
+        assert!(store.transaction(|tx| Ok(tx.restore("d2"))).unwrap());
+        assert!(!store.transaction(|tx| Ok(tx.restore("d2"))).unwrap());
+        assert_eq!(ids(&store.dokumente()), ["d2"]);
+        assert_eq!(ids(&store.archiv()), ["d1"]);
+    }
+
+    #[test]
+    fn the_archive_survives_the_master_import_wipe() {
+        let folder = TempDir::new("trains-archive-mirror");
+        let mut store = db(&folder);
+        store
+            .transaction(|tx| {
+                tx.put_dokument(dokument("d1", "h1"));
+                tx.mark_imported("d1", "2026-10-02");
+                tx.archive(&["d1".into()], "2026-10-10");
+                Ok(())
+            })
+            .unwrap();
+
+        store.clear_mirror().unwrap();
+
+        let kept = db(&folder);
+        let dokument = kept.dokument("d1").unwrap();
+        assert_eq!(dokument.archiviert_am.as_deref(), Some("2026-10-10"));
+        // clear_mirror reopens every Dokument; the archive is a separate flag.
+        assert_eq!(dokument.importiert_am, None);
+        assert!(kept.dokumente().is_empty());
     }
 
     #[test]

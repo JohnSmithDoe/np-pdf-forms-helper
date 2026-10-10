@@ -11,6 +11,10 @@
 // `masterSheet`, `entityDetail` and `telematik` are the exceptions: they RETURN the view and
 // store nothing. A view belongs to the one page that shows it, and up to 1,700
 // rows of display strings would otherwise outlive it in the store.
+//
+// The archive commands run `silent` and return their report like
+// `createExport`: no trains page listens on `report$`, so the page that asked
+// is the one that shows it.
 // ────────────────────────────────────────────────────────────────
 
 import { inject, Injectable } from '@angular/core';
@@ -24,6 +28,7 @@ import type {
   MasterSheetView,
   Partner,
   TelematikView,
+  TrainsData,
   TrainsSettings,
   Wagen,
 } from '../model/trains.types';
@@ -50,6 +55,7 @@ export class TrainsFacade {
   readonly partners = this.#store.partners;
   readonly templates = this.#store.templates;
   readonly dokumente = this.#store.dokumente;
+  readonly archiv = this.#store.archiv;
   readonly settings = this.#store.settings;
   readonly master = this.#store.master;
   readonly masterImportRun = this.#store.masterImportRun;
@@ -109,6 +115,28 @@ export class TrainsFacade {
     this.#store.clearStaging();
   }
 
+  async loadArchiv(): Promise<void> {
+    this.#store.applyTrainsData(await this.#backend.loadArchiv());
+  }
+
+  async archiveDokument(id: string): Promise<ClientReport | undefined> {
+    return this.#applied(
+      await this.#backend.archiveDokument(id, { silent: true })
+    );
+  }
+
+  async archiveAllDokumente(): Promise<ClientReport | undefined> {
+    return this.#applied(
+      await this.#backend.archiveAllDokumente({ silent: true })
+    );
+  }
+
+  async restoreDokument(id: string): Promise<ClientReport | undefined> {
+    return this.#applied(
+      await this.#backend.restoreDokument(id, { silent: true })
+    );
+  }
+
   async openFolder(folder: string): Promise<void> {
     await this.#backend.openFolder(folder);
   }
@@ -164,7 +192,10 @@ export class TrainsFacade {
   }
 
   async createExport(): Promise<ClientReport | undefined> {
-    const data = await this.#backend.createExport({ silent: true });
+    return this.#applied(await this.#backend.createExport({ silent: true }));
+  }
+
+  #applied(data: TrainsData): ClientReport | undefined {
     this.#store.applyTrainsData(data);
     return data.message;
   }

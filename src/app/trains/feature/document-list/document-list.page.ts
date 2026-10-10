@@ -22,6 +22,14 @@
 // is only ever written by „In Master übertragen“. An imported document offers
 // no „Importieren“, and that is only the explanation: `stage_document` and
 // `commit_document` refuse it themselves.
+//
+// „Archivieren“ HIDES a document, it deletes nothing — record, folder and
+// import state stay, and its bytes stay `vorhanden` for the cleaning hub. Rust
+// decides which list a document is in (`dokumente` / `archiv`); this page
+// filters nothing. „Alle archivieren“ takes every listed document and asks
+// nothing, because „Archivierte zeigen“ and „Wiederherstellen“ undo it. An
+// archived row offers no import and no master export: those start from the
+// list, so it is restored first.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -29,6 +37,7 @@ import {
   Component,
   computed,
   inject,
+  signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import {
@@ -44,8 +53,10 @@ import {
   IonListHeader,
   IonNote,
   IonTitle,
+  IonToggle,
   IonToolbar,
 } from '@ionic/angular/standalone';
+import type { ClientReport } from '../../../@shared/model/client.types';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import {
@@ -75,6 +86,7 @@ import { fileOf } from '../../util/path.utility';
     IonListHeader,
     IonNote,
     IonTitle,
+    IonToggle,
     IonToolbar,
   ],
 })
@@ -96,6 +108,44 @@ export class DocumentListPage {
         a.name.localeCompare(b.name)
     )
   );
+
+  protected readonly showArchiv = signal(false);
+  protected readonly archiviert = computed(
+    () => this.trains.counts().archiviert
+  );
+  protected readonly archiv = computed(() =>
+    (this.trains.archiv() ?? []).toSorted((a, b) =>
+      (b.archiviertAm ?? '').localeCompare(a.archiviertAm ?? '')
+    )
+  );
+
+  protected async onShowArchiv(event: Event): Promise<void> {
+    const on = (event as CustomEvent<{ checked: boolean }>).detail.checked;
+    this.showArchiv.set(on);
+    if (on) await this.#reports.run(() => this.trains.loadArchiv());
+  }
+
+  protected onArchive(id: string): void {
+    void this.#present(() => this.trains.archiveDokument(id));
+  }
+
+  protected onArchiveAll(): void {
+    void this.#present(() => this.trains.archiveAllDokumente());
+  }
+
+  protected onRestore(id: string): void {
+    void this.#present(() => this.trains.restoreDokument(id));
+  }
+
+  async #present(
+    action: () => Promise<ClientReport | undefined>
+  ): Promise<void> {
+    let report: ClientReport | undefined;
+    const ok = await this.#reports.run(async () => {
+      report = await action();
+    });
+    if (ok && report) await this.#reports.show(report);
+  }
 
   protected onOpen(path: string): void {
     void this.#reports.run(() => this.trains.openFile(path));

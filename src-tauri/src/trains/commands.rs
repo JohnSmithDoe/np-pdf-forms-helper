@@ -32,6 +32,10 @@
 // turn them into the per-row decisions `commit` checks. There is no other way
 // in any more — `commit_import` went with the manual import, and the mapper's
 // only exit is `save_template`, after which the file is cleaned like any other.
+//
+// Archiving HIDES a Dokument and deletes nothing. Every archive command answers
+// with both lists, `dokumente` without the archive and `archiv` with only it,
+// so which list a Dokument belongs to is decided here and never in Angular.
 // ────────────────────────────────────────────────────────────────
 
 use std::path::{Path, PathBuf};
@@ -407,6 +411,72 @@ fn file_cleaned(decisions: &CleanDecisions, state: &AppState) -> AppResult<Train
 }
 
 #[tauri::command]
+pub fn get_dokument_archiv(state: State<'_, AppState>) -> AppResult<TrainsData> {
+    Ok(listing(&state.trains()))
+}
+
+#[tauri::command]
+pub fn archive_dokument(id: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    archive(Some(&id), &state)
+}
+
+#[tauri::command]
+pub fn archive_all_dokumente(state: State<'_, AppState>) -> AppResult<TrainsData> {
+    archive(None, &state)
+}
+
+#[tauri::command]
+pub fn restore_dokument(id: String, state: State<'_, AppState>) -> AppResult<TrainsData> {
+    restore(&id, &state)
+}
+
+fn listing(db: &TrainsDb) -> TrainsData {
+    TrainsData::nothing()
+        .dokumente(db.dokumente())
+        .archiv(db.archiv())
+        .counts(db.counts())
+}
+
+fn dokument_gone() -> AppError {
+    AppError::Report(vec!["Das Dokument gibt es nicht mehr.".into()])
+}
+
+fn archive(id: Option<&str>, state: &AppState) -> AppResult<TrainsData> {
+    let mut db = state.trains();
+    let (ids, name) = match id {
+        Some(id) => {
+            let dokument = db.dokument(id).ok_or_else(dokument_gone)?;
+            (vec![dokument.id.clone()], Some(dokument.name.clone()))
+        }
+        None => (
+            db.dokumente()
+                .into_iter()
+                .map(|dokument| dokument.id)
+                .collect(),
+            None,
+        ),
+    };
+    let stamp = clock::today_iso();
+    let archived = db.transaction(|tx| Ok(tx.archive(&ids, &stamp)))?;
+    let headline = match (name, archived) {
+        (Some(name), _) => format!("„{name}“ wurde archiviert"),
+        (None, 0) => "Keine Dokumente zum Archivieren".to_string(),
+        (None, 1) => "1 Dokument wurde archiviert".to_string(),
+        (None, count) => format!("{count} Dokumente wurden archiviert"),
+    };
+    Ok(listing(&db).report(ClientReport::headline(headline)))
+}
+
+fn restore(id: &str, state: &AppState) -> AppResult<TrainsData> {
+    let mut db = state.trains();
+    let name = db.dokument(id).ok_or_else(dokument_gone)?.name.clone();
+    db.transaction(|tx| Ok(tx.restore(id)))?;
+    Ok(listing(&db).report(ClientReport::headline(format!(
+        "„{name}“ wurde wiederhergestellt"
+    ))))
+}
+
+#[tauri::command]
 pub fn discard_clean(state: State<'_, AppState>) -> AppResult<TrainsData> {
     abandon_cleaning(&state);
     Ok(TrainsData::nothing())
@@ -425,6 +495,7 @@ fn scanned(paths: &[PathBuf], state: &AppState) -> TrainsData {
             dokument_id: dokument.id.clone(),
             bereinigt_am: dokument.bereinigt_am.clone(),
             importiert_am: dokument.importiert_am.clone(),
+            archiviert_am: dokument.archiviert_am.clone(),
         })
     };
     TrainsData::nothing().scan(scan::scan(paths, &db.templates(), &owned))
@@ -738,7 +809,7 @@ mod tests {
     use super::*;
     use crate::testing::{workbook, TempDir};
     use crate::trains::model::{
-        ColumnBinding, EntityChoice, EntityDecision, FieldKind, ImportPlan,
+        ColumnBinding, EntityChoice, EntityDecision, FieldKind, ImportPlan, ScanStatus,
     };
     use crate::trains::sheet::layout::LayoutHint;
     use crate::trains::sheet::readers::ReaderKind;
@@ -927,5 +998,68 @@ mod tests {
         .unwrap_err();
         assert!(error.into_messages()[0].contains("bereinigtes Dokument"));
         assert_eq!(state.trains().counts().instandhaltungen, 0);
+    }
+
+    #[test]
+    fn an_archived_document_leaves_the_list_but_keeps_its_bytes_owned() {
+        let folder = TempDir::new("cmd-archive");
+        let state = folder.state();
+        let template = monatsliste(&state);
+        let file = sender_file(&folder);
+        adopt_and_clean(&file, "Tabelle1", &template, &state).unwrap();
+        let filed = file_cleaned(&CleanDecisions::default(), &state).unwrap();
+        let dokument = filed.dokumente.unwrap().remove(0);
+
+        let archived = archive(Some(&dokument.id), &state).unwrap();
+        assert_eq!(archived.dokumente.unwrap().len(), 0);
+        assert_eq!(archived.archiv.unwrap()[0].id, dokument.id);
+        assert_eq!(archived.counts.unwrap().dokumente, 0);
+        assert!(archived.message.unwrap().headline.contains("archiviert"));
+        assert!(Path::new(&dokument.folder).is_dir(), "hidden, not deleted");
+
+        // The same bytes dropped again are still `Vorhanden` — and say why
+        // the user will not find them in the list.
+        let scan = scanned(&[file.clone()], &state).scan.unwrap();
+        assert_eq!(scan[0].status, ScanStatus::Vorhanden);
+        assert!(scan[0]
+            .message
+            .as_deref()
+            .unwrap()
+            .contains("Archiviert am"));
+        let error = adopt_and_clean(&file, "Tabelle1", &template, &state).unwrap_err();
+        assert!(error.into_messages()[0].contains("bereits"));
+        assert_eq!(owned_folders(&state), 1);
+
+        let restored = restore(&dokument.id, &state).unwrap();
+        assert_eq!(restored.dokumente.unwrap()[0].id, dokument.id);
+        assert!(restored.archiv.unwrap().is_empty());
+    }
+
+    #[test]
+    fn archiving_all_takes_every_listed_document() {
+        let folder = TempDir::new("cmd-archive-all");
+        let state = folder.state();
+        let template = monatsliste(&state);
+        adopt_and_clean(&sender_file(&folder), "Tabelle1", &template, &state).unwrap();
+        file_cleaned(&CleanDecisions::default(), &state).unwrap();
+
+        let all = archive(None, &state).unwrap();
+        assert!(all.dokumente.unwrap().is_empty());
+        assert_eq!(all.archiv.unwrap().len(), 1);
+        assert_eq!(all.message.unwrap().headline, "1 Dokument wurde archiviert");
+
+        let nothing = archive(None, &state).unwrap();
+        assert_eq!(
+            nothing.message.unwrap().headline,
+            "Keine Dokumente zum Archivieren"
+        );
+    }
+
+    #[test]
+    fn archiving_an_unknown_document_is_an_error_not_a_silent_no_op() {
+        let folder = TempDir::new("cmd-archive-gone");
+        let state = folder.state();
+        assert!(archive(Some("nope"), &state).is_err());
+        assert!(restore("nope", &state).is_err());
     }
 }

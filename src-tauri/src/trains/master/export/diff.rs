@@ -8,7 +8,10 @@
 // The result is ROWS, because the client reads the master by rows — a Wagen's
 // line — and never by cells: one `RowChange` per row that changes, carrying
 // the WHOLE row in every column of the sheet so it compares by eye with Excel,
-// its changed cells flagged, and the per-cell before/after for the expansion.
+// its changed cells flagged. Every cell carries its value BEFORE as well, so
+// the frontend can lay the old row directly under the new one, column for
+// column — a before/after list beside the row would mean scrolling back to
+// read it.
 //
 // Only the columns the paste may change are compared (`Outcome.columns`):
 // formula columns are re-emitted with stale cached results on purpose, so
@@ -31,7 +34,7 @@
 
 use std::collections::HashSet;
 
-use crate::trains::model::{CellChange, ChangeColumn, RowCell, RowChange, RowChangeStatus};
+use crate::trains::model::{ChangeColumn, RowCell, RowChange, RowChangeStatus};
 use crate::trains::sanitise::{date, format};
 use crate::trains::sheet::grid::{Grid, RawCell};
 
@@ -61,13 +64,10 @@ pub fn rows(
         ..Rows::default()
     };
     for row in 2..=before.rows.max(after.rows) {
-        let differs: Vec<(u32, String, String)> = written
+        let differs: Vec<u32> = written
             .iter()
-            .filter_map(|col| {
-                let old = shown_as(before.cell(*col, row));
-                let new = shown_as(after.cell(*col, row));
-                (old != new).then_some((*col, old, new))
-            })
+            .copied()
+            .filter(|col| shown_as(before.cell(*col, row)) != shown_as(after.cell(*col, row)))
             .collect();
         if differs.is_empty() {
             continue;
@@ -95,22 +95,17 @@ pub fn rows(
         });
         let cells = (1..=width)
             .map(|col| {
+                let old = shown_as(before.cell(col, row));
                 let from_before = gone || (existed && !written.contains(&col));
                 RowCell {
-                    text: shown_as(if from_before { before } else { after }.cell(col, row)),
-                    changed: differs.iter().any(|(changed, ..)| *changed == col),
+                    text: if from_before {
+                        old.clone()
+                    } else {
+                        shown_as(after.cell(col, row))
+                    },
+                    before: old,
+                    changed: differs.contains(&col),
                 }
-            })
-            .collect();
-        let changes = differs
-            .into_iter()
-            .map(|(col, before, after)| CellChange {
-                cell: format!("{}{row}", letters(col)),
-                row,
-                column: out.columns[(col - 1) as usize].header.clone(),
-                key: key.clone(),
-                before,
-                after,
             })
             .collect();
         out.rows.push(RowChange {
@@ -118,7 +113,6 @@ pub fn rows(
             key,
             status,
             cells,
-            changes,
         });
     }
     out
@@ -142,29 +136,9 @@ fn shown_as(cell: Option<&RawCell>) -> String {
     }
 }
 
-pub fn letters(col: u32) -> String {
-    let mut col = col;
-    let mut out = Vec::new();
-    while col > 0 {
-        let rest = (col - 1) % 26;
-        out.push(b'A' + rest as u8);
-        col = (col - 1) / 26;
-    }
-    out.reverse();
-    String::from_utf8(out).unwrap_or_default()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn columns_are_spelled_as_excel_spells_them() {
-        assert_eq!(letters(1), "A");
-        assert_eq!(letters(26), "Z");
-        assert_eq!(letters(27), "AA");
-        assert_eq!(letters(703), "AAA");
-    }
 
     #[test]
     fn a_changed_row_is_listed_whole_with_its_changed_cells_flagged() {
@@ -202,20 +176,18 @@ mod tests {
         assert_eq!(texts, ["2", "Neu", ""]);
         let flags: Vec<bool> = changed.cells.iter().map(|cell| cell.changed).collect();
         assert_eq!(flags, [false, true, false]);
-        assert_eq!(changed.changes.len(), 1);
-        assert_eq!(changed.changes[0].cell, "B3");
-        assert_eq!(changed.changes[0].column, "Stadt");
-        assert_eq!(
-            (
-                changed.changes[0].before.as_str(),
-                changed.changes[0].after.as_str()
-            ),
-            ("Alt", "Neu")
-        );
+        // The old row lines up under the new one, column for column.
+        let befores: Vec<&str> = changed
+            .cells
+            .iter()
+            .map(|cell| cell.before.as_str())
+            .collect();
+        assert_eq!(befores, ["2", "Alt", ""]);
 
         let new = &diff.rows[1];
         assert_eq!(new.status, RowChangeStatus::Neu);
-        assert_eq!(new.changes.len(), 2);
+        assert_eq!(new.cells.iter().filter(|cell| cell.changed).count(), 2);
+        assert!(new.cells.iter().all(|cell| cell.before.is_empty()));
     }
 
     #[test]
@@ -239,7 +211,13 @@ mod tests {
         let after = Grid::from_text("Blatt", &[&["Wagen"]]);
         let diff = rows(&before, &after, &[1], Some(1), &[]);
         assert_eq!(diff.rows[0].key, "1");
-        assert_eq!(diff.rows[0].changes[0].after, "");
+        assert_eq!(
+            (
+                diff.rows[0].cells[0].before.as_str(),
+                diff.rows[0].cells[0].text.as_str()
+            ),
+            ("1", "")
+        );
     }
 
     #[test]
