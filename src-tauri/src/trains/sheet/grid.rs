@@ -501,4 +501,17 @@ mod tests {
     fn zeros_inside_the_limit_are_data() {
         assert!(check_rows("Liste", MAX_ROWS, 3).is_ok());
     }
+
+    // footguns.md: umya once truncated an INLINE string at its `&`. The fixture
+    // carries one deliberately, as `<is><t>` without `xml:space`; if this test
+    // fails, the footgun is back.
+    #[test]
+    fn an_ampersand_in_an_inline_string_reads_whole() {
+        let path = std::path::Path::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../docs/fixtures/problemfaelle_2026-03.xlsx"
+        ));
+        let source = read(path, None).unwrap();
+        assert_eq!(source.grid.text(3, 10), "Bahnwerk Süd GmbH & Co. KG");
+    }
 }

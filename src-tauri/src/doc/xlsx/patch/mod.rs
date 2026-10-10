@@ -460,6 +460,33 @@ mod tests {
         assert_eq!(sheet.cell((2u32, 3u32)).unwrap().value(), "Altstadt");
     }
 
+    // The patch writes text as an INLINE string, and footguns.md records umya
+    // truncating an inline string at its `&` ("… GmbH & Co. KG" → "Co. KG").
+    // German firm names end in "& Co. KG" all the time; such a write must
+    // neither be refused by `read_back` nor read back short by the mirror.
+    #[test]
+    fn an_ampersand_in_written_text_reads_back_whole() {
+        let folder = TempDir::new("patch-ampersand");
+        let path = file(&folder);
+        let name = "Fa. Müller GmbH & Co. KG";
+        write(
+            &path,
+            &telematik(vec![CellEdit {
+                col: 2,
+                row: 2,
+                content: Content::Text(name.into()),
+            }]),
+        )
+        .unwrap();
+        assert!(part(&path, "xl/worksheets/sheet1.xml").contains("GmbH &amp; Co. KG"));
+        let mut book = umya_spreadsheet::reader::xlsx::lazy_read(&path).unwrap();
+        book.read_sheet(0);
+        assert_eq!(
+            book.sheet(0).unwrap().cell((2u32, 2u32)).unwrap().value(),
+            name
+        );
+    }
+
     #[test]
     fn a_refused_patch_leaves_the_file_and_folder_untouched() {
         let folder = TempDir::new("patch-refused");

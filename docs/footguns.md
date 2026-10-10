@@ -90,7 +90,7 @@ Measured 2026-08-22 in Chrome against `@ionic/angular@8`, while reworking the ex
 
 ## Reading xlsx
 
-- **An `&` in an INLINE string is truncated to the text after it.** A cell holding
+- **umya 3.0.1 truncated an `&` in an INLINE string to the text after it — fixed in 3.1.0.** A cell holding
   `Fa. Müller GmbH & Co. KG`, stored as `<is><t>Fa. Müller GmbH &amp; Co. KG</t></is>`, comes back
   from `grid::read` as **`Co. KG`** — the file is correct (openpyxl reads it back intact) and nothing
   errors. The **same string in `sharedStrings.xml` reads correctly**, which is why this hides: Excel
@@ -103,9 +103,12 @@ Measured 2026-08-22 in Chrome against `@ionic/angular@8`, while reworking the ex
   `GmbH & Co. KG`, and a truncated name becomes the partner's `match_key`, its learnt alias and its
   displayed name. Two unrelated firms both ending `& Co. KG` would collapse onto one key.
 
-  `docs/fixtures/problemfaelle_2026-03.xlsx` carries one deliberate row for it. Not yet fixed;
-  fixing it means either an upstream `umya` change or reading the sheet XML directly, the same escape
-  hatch `workbookPr/@date1904` already needs.
+  `docs/fixtures/problemfaelle_2026-03.xlsx` carries one deliberate row for it. Reads whole since the
+  upgrade to 3.1.0 (2026-10-03), unnoticed until 2026-10-10. Now pinned twice, because the patch writer
+  (`doc::xlsx::patch`) writes every text as an inline string: `grid`'s
+  `an_ampersand_in_an_inline_string_reads_whole` reads the fixture, `patch`'s
+  `an_ampersand_in_written_text_reads_back_whole` reads what the patch wrote. Either failing after a umya
+  bump means the bug is back.
 
 - **umya 3.0.1 PANICS while reading shared formulas with whole-column ranges.** A real 28-sheet
   customer workbook full of `VLOOKUP(A:A,Blatt!A:D,4,0)` died in
