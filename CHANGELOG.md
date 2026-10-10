@@ -1,3 +1,23 @@
+### Version 2.1.0
+
+- MVP: clean a sender's sheet, then write it into the customer's own master file
+  - „Master-Datei wählen“ only remembers where the file lies; nothing is copied or cleaned
+  - „In Master übertragen“ on every document: one sheet per document, the column mapping comes from the template
+  - A backup goes to `Sicherungen/` beside the master before every write; a file open in Excel or changed since the preview is refused
+  - Only the edited cells are written; every other part of the workbook stays byte for byte as it was, and the file is verified before it replaces the original
+  - Preview by row: changed cells marked, new and emptied rows marked whole, a click shows the old row underneath
+  - Rows the document lacks can be emptied in place, per sheet, off by default
+  - A transferred document is archived
+- New: „Archivieren“ in the Dokumente list hides a document without deleting it
+- Schattensystem
+  - The import writes only into the Schattensystem; the master import empties it and rebuilds it from the master's sheets
+  - Wagen, Radsätze and Partner as cards with a detail page; every named Wagen, Radsatz or Werkstatt links to its own
+  - Wagen-Zustand: Telematik, Schadensmeldungen, Werkstattaufträge and Prüfungen, plus a Telematik list with the longest silent first
+  - Excel-like column filter and Farben on Wagen and Radsätze
+- The app is scaled back to Bereinigen, Dokumente and the master file; the rest sits behind a switch
+- Fixed: the installed 2.0.1 rendered unstyled
+- Fixed: `ECHO_Eingänge` is recognised as Werkstattaufträge although it has no Bestelldatum column
+
 ### Version 2.0.1
 
 - New: the customer's master file (Master-Datei)

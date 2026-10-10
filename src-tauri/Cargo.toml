@@ -1,6 +1,6 @@
 [package]
 name = "np-office-document-helper"
-version = "2.0.1"
+version = "2.1.0"
 description = "Copy and fill xlsx and pdf documents with the same input data"
 authors = ["leto the c0dem0nkey"]
 edition = "2021"
