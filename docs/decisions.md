@@ -1224,6 +1224,5 @@ schreiben“ den Punkt „Erst dann wird über `write_book` ersetzt“ und „Wa
   geschriebenen Werte zurück. Erst dann Temp-Datei → Umbenennen. `patch::check` ist dieselbe Prüfung im
   Speicher; die Vorschau zeigt ihr Scheitern als `problem`, damit sie nichts verspricht, was das
   Schreiben ablehnt.
-- **Erprobt an einer Kopie der echten Master** (2026-10-10, Martin): `rehearsal_on_the_real_master`,
-  `#[ignore]`, über `NPDH_REHEARSAL`.
+- **Erprobt an einer Kopie der echten Master** (2026-10-10, Martin).
 - `write_book` bleibt für Dateien, die der App gehören (bereinigte Kopien, „Export erstellen“).
