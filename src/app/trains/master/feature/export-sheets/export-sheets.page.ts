@@ -1,30 +1,28 @@
 // ─── why ────────────────────────────────────────────────────────
-// Step one of the master update: which sheets the document goes into. The base
-// is always the client master's current version, so it is named, not offered.
-// The ticks start on Rust's suggestion — every sheet the document's data would
-// change: the template's own sheet, and any sheet with a key that shares a
-// column with the document — and say why, so a pre-ticked sheet is never a
-// mystery.
+// Step one of the master update: the sheet the document goes into. The client
+// updates ONE sheet per document, so only the sheet bound to the document's
+// template is shown — Rust's `suggested`, already the only pre-ticked one — and
+// nothing is chosen here. The other sheets stay in the start data and are simply
+// not offered; with no bound sheet the step names where to bind one and Weiter
+// stays dead. The base is always the client master's current version, so it is
+// named, not offered.
 //
-// Every sheet can be ticked; Rust sorts the suggested ones first. A ticked sheet
-// carries „Neue Zeilen anhängen“: the update is incremental either way, the
-// toggle only decides whether a key the sheet lacks becomes a row. Rust turns it
-// on for the template's own sheet only, so a project list does not grow every
-// Wagen of a telematics export. „Fehlende Zeilen leeren“ is the opposite
-// direction — a sheet row whose key the document lacks is emptied, never moved — and is
-// offered on EVERY ticked sheet: whether a document is complete for a sheet is
-// the user's knowledge, not the code's. It starts where it was last left for
-// this template, and off everywhere else.
-//
-// The label sits INSIDE `ion-checkbox`, so the whole row toggles it; a separate
-// `ion-label` beside a slotted checkbox leaves only the box itself clickable.
+// „Neue Zeilen anhängen“: the update is incremental either way, the toggle only
+// decides whether a key the sheet lacks becomes a row. „Fehlende Zeilen leeren“
+// is the opposite direction — a sheet row whose key the document lacks is
+// emptied, never moved — and starts where it was last left for this template:
+// whether a document is complete is the user's knowledge, not the code's.
 // ────────────────────────────────────────────────────────────────
 
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import {
-  IonCheckbox,
-  IonChip,
+  IonIcon,
   IonItem,
   IonLabel,
   IonList,
@@ -32,6 +30,8 @@ import {
   IonNote,
   IonToggle,
 } from '@ionic/angular/standalone';
+import { addIcons } from 'ionicons';
+import { warningOutline } from 'ionicons/icons';
 import { ReportPresenterService } from '../../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { WizardShellComponent } from '../../../../@shared/ui/wizard-shell/wizard-shell.component';
@@ -44,8 +44,7 @@ import { EXPORT_PHASE, EXPORT_STEPS } from '../../../model/master-export';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BusyOverlayComponent,
-    IonCheckbox,
-    IonChip,
+    IonIcon,
     IonItem,
     IonLabel,
     IonList,
@@ -63,11 +62,12 @@ export class ExportSheetsPage {
   protected readonly phase = EXPORT_PHASE;
   protected readonly steps = EXPORT_STEPS;
 
-  protected onTick(sheet: string, event: Event): void {
-    this.facade.tick(
-      sheet,
-      (event as CustomEvent<{ checked: boolean }>).detail.checked
-    );
+  protected readonly sheets = computed(() =>
+    this.facade.sheets().filter((view) => view.sheet.suggested)
+  );
+
+  constructor() {
+    addIcons({ warningOutline });
   }
 
   protected onRemove(sheet: string, event: Event): void {

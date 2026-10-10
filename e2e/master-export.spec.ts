@@ -1,6 +1,6 @@
 // ─── why ────────────────────────────────────────────────────────
 // The master update wizard, as shallow as the rest: it reaches its four steps
-// from the document list — offered only while a client master is chosen — ticks what the backend suggested, renders the cell
+// from the document list — offered only while a client master is chosen — shows only the template's sheet, renders the cell
 // changes it was sent and keeps Weiter dead while a column is unanswered.
 //
 // Which sheets are suggested, what a structural conflict is and which cells a
@@ -128,13 +128,14 @@ test.describe('Master aktualisieren', () => {
     await expect(sheets.getByTestId('export-base')).toContainText(
       'Übersicht.xlsx'
     );
+    // Only the template's sheet is shown — one document updates one sheet —
+    // taking new rows; the other sheet the backend sent is not offered.
     const rows = sheets.getByTestId('export-sheet');
-    await expect(rows).toHaveCount(2);
-    // The template's sheet first, pre-ticked, taking new rows; the other one
-    // can still be ticked.
+    await expect(rows).toHaveCount(1);
     await expect(rows.nth(0)).toContainText('Telematik');
-    await expect(rows.nth(0)).toContainText('betroffen');
     await expect(rows.nth(0)).toContainText('neue Zeilen werden angehängt');
+    await expect(sheets.getByText('Überblick')).toHaveCount(0);
+    await expect(sheets.locator('ion-checkbox')).toHaveCount(0);
     await expect(sheets.getByTestId('export-sheet-append')).toHaveCount(1);
     await expect(
       sheets.getByTestId('export-sheet-append').locator('ion-toggle')
@@ -143,17 +144,6 @@ test.describe('Master aktualisieren', () => {
     await expect(
       sheets.getByTestId('export-sheet-remove').locator('ion-toggle')
     ).toHaveAttribute('aria-checked', 'false');
-    await expect(rows.nth(1).locator('ion-checkbox')).not.toHaveAttribute(
-      'aria-disabled',
-      'true'
-    );
-    // The row toggles, not only the box: tick the overview, untick it again.
-    await rows.nth(1).getByText('Überblick').click();
-    await expect(rows.nth(1).locator('ion-checkbox')).toHaveAttribute(
-      'aria-checked',
-      'true'
-    );
-    await rows.nth(1).getByText('Überblick').click();
     await sheets.getByRole('button', { name: 'Weiter' }).click();
 
     const structure = step(page, 'export-structure');
