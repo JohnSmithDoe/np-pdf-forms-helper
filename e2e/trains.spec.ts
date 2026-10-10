@@ -168,7 +168,9 @@ test.describe('Zug-Import', () => {
   test('der Einstieg „Dokumente“ führt zu Bereinigen, Dokumenten und Master-Datei', async ({
     page,
   }) => {
-    await installFakeBackend(page, { master: { file: 'data/Master.xlsx' } });
+    await installFakeBackend(page, {
+      master: { file: 'data/Master.xlsx', bindings: [] },
+    });
     await page.goto('/');
 
     const start = page.locator('app-page-trains-start');
@@ -178,13 +180,13 @@ test.describe('Zug-Import', () => {
       ).toBeVisible();
     }
     await expect(start.getByText('Master.xlsx', { exact: true })).toBeVisible();
-    // The ERP's entities are not on this hub.
+    // The Schattensystem's entities are not on this hub.
     await expect(
       start.getByRole('button', { name: 'Wagen', exact: true })
     ).toHaveCount(0);
   });
 
-  test('ohne npdh.full zeigt das ERP die Entitäten, aber keine Vorlagen und Einstellungen', async ({
+  test('ohne npdh.full zeigt das Schattensystem die Entitäten, aber keine Vorlagen und Einstellungen', async ({
     page,
   }) => {
     await installFakeBackend(page);

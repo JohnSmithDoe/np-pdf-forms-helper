@@ -257,7 +257,7 @@ test.describe('Master aktualisieren', () => {
     );
     expect(
       (previewed?.args['request'] as { sheets: { remove: boolean }[] })
-        .sheets[0].remove
+        .sheets[0]?.remove
     ).toBe(true);
   });
 
@@ -284,11 +284,12 @@ test.describe('Master aktualisieren', () => {
     await expect(preview.getByTestId('row-changes-shown')).toContainText(
       '100 von 150 Zeilen'
     );
-    await preview.getByTestId('row-change').last().scrollIntoViewIfNeeded();
     await preview
       .locator('ion-content')
       .evaluate((content) =>
-        (content as HTMLIonContentElement).scrollToBottom()
+        (
+          content as HTMLElement & { scrollToBottom(): Promise<void> }
+        ).scrollToBottom()
       );
     await expect(preview.getByTestId('row-change')).toHaveCount(150);
     await expect(preview.getByTestId('row-changes-shown')).toHaveCount(0);

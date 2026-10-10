@@ -28,7 +28,7 @@
 // as siblings, so the menu was a flat list in which nothing said that seven of
 // them were entities of one module and the eighth was how data gets in. Now it
 // has two entries, one per hub: „Dokumente“ (`/trains` — clean the sender's
-// sheets and write them into the customer's master, the MVP) and „ERP“
+// sheets and write them into the customer's master, the MVP) and „Schattensystem“
 // (`/trains/erp`, the Schattensystem's dashboard). Same domain, different jobs;
 // the menu says what the app is made of, a hub says what a part is made of.
 //
@@ -74,7 +74,7 @@ const NAV_GROUPS: NavGroup[] = [
         icon: 'documents-outline',
         exact: true,
       },
-      { route: '/trains/erp', label: 'ERP', icon: 'train-outline' },
+      { route: '/trains/erp', label: 'Schattensystem', icon: 'train-outline' },
       { route: '/about', label: 'Info', icon: 'information-circle-outline' },
     ],
   },

@@ -19,6 +19,10 @@
 // The marks are Ionic colour ROLES (`ion-color-*` classes, read as
 // `--ion-color-base` in the stylesheet), as `entity-card` does it: the
 // colour comes from the theme, dark mode included, and nothing here names one.
+// The one literal is the sticky label column's `#fff`: it must be OPAQUE or
+// scrolled cells show through it, and the light theme leaves
+// `--ion-background-color` unset — `#fff` is Ionic's own fallback, written
+// where `ion-card` writes it, so the column matches the card it sits in.
 //
 // Rust sends EVERY row, uncapped — the preview is what will be written. Only
 // the rendering is paged: `PAGE` rows at first, more as the user scrolls

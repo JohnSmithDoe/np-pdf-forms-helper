@@ -5,7 +5,7 @@
 // documents — Bereinigen (the action), Dokumente (where „In Master übertragen“
 // starts), Master-Datei (which file it writes into).
 //
-// The Schattensystem lives apart, under „ERP“ in the menu (`/trains/erp`):
+// The Schattensystem lives apart, under „Schattensystem“ in the menu (`/trains/erp`):
 // importing into it is a different job from keeping the master current, and one
 // hub for both made the master update a tile among a dozen.
 // ────────────────────────────────────────────────────────────────

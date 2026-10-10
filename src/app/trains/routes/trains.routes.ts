@@ -55,7 +55,7 @@ const pages: Routes = [
   },
   {
     path: 'erp',
-    title: 'ERP',
+    title: 'Schattensystem',
     loadComponent: () =>
       import('../feature/dashboard/dashboard.page').then(
         (m) => m.TrainsDashboardPage

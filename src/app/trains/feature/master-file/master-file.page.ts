@@ -5,7 +5,7 @@
 // write leaves a backup in `Sicherungen/` beside it first.
 //
 // The older walk — copy in, clean, take over as a version — still exists in the
-// backend and the facade for the ERP, but has no button here: two ways to pick
+// backend and the facade for the Schattensystem, but has no button here: two ways to pick
 // „the master“ on one page would leave the user guessing which one is written.
 // ────────────────────────────────────────────────────────────────
 

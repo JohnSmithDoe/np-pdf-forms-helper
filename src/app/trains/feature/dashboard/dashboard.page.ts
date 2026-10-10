@@ -1,5 +1,5 @@
 // ─── why ────────────────────────────────────────────────────────
-// The ERP hub — the Schattensystem — reached from the menu's „ERP“ entry. Every
+// The Schattensystem hub, reached from the menu's „Schattensystem“ entry. Every
 // entity list, the import and the master import are reached from this page
 // rather than from the menu. Cleaning and the master file live on the other
 // hub, „Dokumente“ (`feature/start`); the Dokumente tile stays here too because
@@ -159,7 +159,7 @@ export class TrainsDashboardPage {
         label: 'Dokumente',
         icon: 'documents-outline',
         description:
-          'Die bereinigten Dateien — von hier aus ins ERP importieren.',
+          'Die bereinigten Dateien — von hier aus ins Schattensystem importieren.',
         count: loaded ? counts.dokumente : undefined,
       },
       {

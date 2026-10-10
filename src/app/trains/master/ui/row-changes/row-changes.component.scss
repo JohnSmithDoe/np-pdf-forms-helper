@@ -31,7 +31,7 @@
   z-index: 1;
   background: var(
     --ion-card-background,
-    var(--ion-item-background, var(--ion-background-color))
+    var(--ion-item-background, var(--ion-background-color, #fff))
   );
 }
 

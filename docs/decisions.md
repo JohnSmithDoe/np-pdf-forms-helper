@@ -1108,7 +1108,7 @@ Kunden-Master ist die einzige Master“) auf.
 - **Was umya beim Schreiben verliert** (`customXml`, `calcChain`, siehe footguns.md), trifft jetzt die
   echte Datei. Erträglich wird das durch die Sicherung.
 - **Das Menü trennt die beiden Aufgaben.** „Dokumente“ (`/trains`, `feature/start`, Startseite der App)
-  enthält Bereinigen, Dokumente und Master-Datei. „ERP“ (`/trains/erp`, das bisherige Dashboard)
+  enthält Bereinigen, Dokumente und Master-Datei. „Schattensystem“ (`/trains/erp`, das bisherige Dashboard)
   enthält das Schattensystem. Die Dokumente-Kachel steht in beiden, weil der Import dort beginnt.
   Nichts wurde gelöscht: Fassungen, Master-Bereinigung und `MasterFileReport` bleiben im Backend und
   in der Fassade, sind aber über keinen Knopf mehr erreichbar. Sie fallen weg, sobald das MVP beim
@@ -1141,8 +1141,13 @@ nie nach Zellen; die Zellliste (Zelle | Schlüssel | Spalte | Vorher | Nachher) 
 
 - **Eine Zeile je geänderter Blattzeile, in allen Spalten des Blatts**, unter Spaltenbuchstabe und
   Überschrift, damit sie sich mit der offenen Datei in Excel vergleichen lässt. Geänderte Zellen sind
-  markiert, eine neue Zeile ganz grün, eine geleerte ganz rot und durchgestrichen. Ein Klick auf die
-  Zeile klappt darunter ihre Änderungen je Zelle auf („Spalte: vorher → nachher“).
+  markiert, eine neue Zeile ganz grün, eine geleerte ganz rot und durchgestrichen. Ein Klick auf eine
+  geänderte Zeile klappt darunter die Zeile von VORHER auf, Spalte für Spalte — der alte Wert steht
+  genau unter dem neuen. Eine Liste „Spalte: vorher → nachher“ neben der Zeile hieß: nach rechts
+  scrollen, um die Zelle zu finden, und zurück an den Anfang, um zu lesen, was sie vorher war. Die
+  Zeilenbeschriftung bleibt dafür links stehen (sticky). Eine neue Zeile hatte kein Vorher, eine
+  geleerte zeigt es schon — beide klappen nicht auf. Jede Zelle bringt ihren Vorher-Wert dafür aus
+  Rust mit (`RowCell.before`).
 - **Geleerte Zeilen stehen in derselben Tabelle**, mit dem, was sie heute enthalten; die Zeile mit den
   Schlüsseln darüber bleibt als Warnung vor dem Schreiben.
 - **Eine nicht geschriebene Spalte zeigt den Wert von VORHER** — das, was Excel heute zeigt. Formelspalten
