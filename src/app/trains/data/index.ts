@@ -40,9 +40,4 @@ export type {
   GroupView,
   PlanCount,
 } from './import-walk.facade';
-export type {
-  ColumnAnswer,
-  PairView,
-  ExportSheetView,
-  StructureView,
-} from './master-export.facade';
+export type { ExportSheetView } from './master-export.facade';

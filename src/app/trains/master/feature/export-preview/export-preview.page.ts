@@ -1,5 +1,5 @@
 // ─── why ────────────────────────────────────────────────────────
-// Step three, the approval: what the update WILL write, per sheet — the paste's
+// Step two, the approval: what the update WILL write, per sheet — the paste's
 // own line, its notes, every cell that changes, and the key of every row it
 // empties: a wipe nobody saw listed is the one mistake the preview exists to
 // stop. It is a real write into an in-memory copy of the workbook, diffed
@@ -7,10 +7,10 @@
 // „In Master-Datei schreiben“ runs the same code once more and writes it into
 // the customer's own file, after a backup beside it.
 //
-// „Zuordnung merken“ stores the ticks and the column answers on the master
-// bindings, so the next document of this template opens with the same sheets
-// and nothing to answer. On by default: remembering is what makes the second
-// export one click.
+// „Einstellungen merken“ stores the two toggles and the plan the dry run
+// settled on (a dropped alias stays dropped) on the master binding, so the
+// next document of this template opens the same way. On by default:
+// remembering is what makes the second export one click.
 // ────────────────────────────────────────────────────────────────
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
@@ -67,7 +67,7 @@ export class ExportPreviewPage {
   }
 
   protected async onBack(): Promise<void> {
-    await this.#router.navigate(['/trains/master/export/structure']);
+    await this.#router.navigate(['/trains/master/export/sheets']);
   }
 
   protected async onWrite(): Promise<void> {

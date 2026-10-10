@@ -192,20 +192,11 @@ const pages: Routes = [
       { path: '', pathMatch: 'full', redirectTo: '/trains/documents' },
       {
         path: 'sheets',
-        title: 'Blätter wählen',
+        title: 'Blatt der Vorlage',
         canActivate: [masterExportGuard],
         loadComponent: () =>
           import('../master/feature/export-sheets/export-sheets.page').then(
             (m) => m.ExportSheetsPage
-          ),
-      },
-      {
-        path: 'structure',
-        title: 'Spalten abgleichen',
-        canActivate: [masterExportPreviewGuard],
-        loadComponent: () =>
-          import('../master/feature/export-structure/export-structure.page').then(
-            (m) => m.ExportStructurePage
           ),
       },
       {

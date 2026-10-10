@@ -1115,3 +1115,21 @@ Kunden-Master ist die einzige Master“) auf.
   Kunden bestätigt ist.
 - **„In Master übertragen“ ist ohne Schalter da**, sobald eine Master-Datei gewählt ist. Es löst
   „Master aktualisieren“ hinter `npdh.full` ab.
+
+## Master aktualisieren: ein Blatt, Zuordnung aus der Vorlage (appended 2026-10-10)
+
+Entschieden mit Martin am 2026-10-10. Ersetzt für die Oberfläche „Angeboten wird weiter jedes Blatt“
+(„Export in die Master-Datei“) und Schritt 2 aus „Spalten werden im Abgleich frei zugeordnet“.
+
+- **Ein Dokument aktualisiert genau ein Blatt**: das, dessen Bindung die Vorlage des Dokuments nennt.
+  Schritt 1 zeigt nur dieses Blatt, ohne Auswahl. Hat die Vorlage kein Blatt, sagt der Schritt, wo es
+  zugeordnet wird („Master-Import“), und Weiter bleibt gesperrt.
+- **Die Spaltenzuordnung kommt aus der Vorlage** — Schlüssel, Aliase und Ignorierte der Bindung, wie
+  das Backend sie anbietet. Der Schritt „Spalten abgleichen“ ist entfallen; Schritt 1 nennt nur das
+  Schlüsselpaar (nur lesend) und was der Probelauf beanstandet. Der Assistent hat drei Schritte:
+  Blatt → Vorschau → Ergebnis.
+- **Eine Dokument-Spalte ohne Gegenstück hält nicht mehr an.** Ohne Abgleich gibt es nichts, womit sie
+  beantwortet werden könnte; sie wird als „nicht übertragen“ genannt. Gesperrt ist Weiter nur noch,
+  wenn das Blatt gar nicht geschrieben werden kann.
+- **Das Backend ist unverändert**: es schickt weiter jedes Blatt und nimmt Aliase und Schlüssel im
+  Auftrag an. Blätter oder Zuordnung wieder anzubieten ist eine Änderung der Oberfläche.

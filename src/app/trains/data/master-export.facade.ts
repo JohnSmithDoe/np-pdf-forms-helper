@@ -1,34 +1,22 @@
 // ─── why ────────────────────────────────────────────────────────
-// The master export wizard's API: one filed Dokument into the sheets of the
-// master the user ticks — Blätter, Abgleich, Vorschau, Ergebnis — written as a
-// new version of the client master. Rust decides everything about the sheets (which to suggest,
-// what a column conflict is, which cells change); this only holds the answers
-// and sends them WHOLE, like the import walk sends its plan.
+// The master export wizard's API: one filed Dokument into the sheet of the
+// master its template is bound to — Blatt, Vorschau, Ergebnis — written into
+// the customer's own file. Rust decides everything about the sheets (which one
+// belongs to the template, how columns pair, which cells change); this only
+// holds the two toggles and sends the plan WHOLE, like the import walk sends
+// its plan.
 //
-// Every answer re-runs the DRY RUN, because an alias or a key changes what the
-// paste does, and a preview of the previous answer would show the wrong cells.
-// The dry run's effective answers are adopted back (`previewed`): a remembered
-// alias the sheet no longer fits comes back dropped, and the selects must show
-// what will actually be written.
+// The column mapping comes from the template and is not asked: the binding's
+// key, aliases and ignored columns go out as Rust offered them, so step one
+// can only SHOW the key pair and what is wrong. That is why the dry run starts
+// with `begin` and not on Weiter — the first step already needs its result —
+// and every toggle re-runs it, because append and remove change what the
+// paste does. The dry run's effective answers are adopted back (`previewed`):
+// a remembered alias the sheet no longer fits comes back dropped.
 //
-// The update is incremental; `append` per sheet says whether a key the sheet
-// lacks becomes a new row — on, by Rust's default, only for the sheet the
-// document's template belongs to. `remove` says whether a sheet row whose key
-// the document lacks is emptied in place — offered on every ticked sheet, because only
-// the user knows which documents are complete, and on where Rust remembered it
-// for this template. On such a sheet a document column with
-// nowhere to go blocks Weiter until answered — an alias onto a hand-kept
-// column, or „nicht übertragen“; a sheet that is only updated asks nothing. That is the conflict rule of
-// this wizard: a value difference is the update, a structure difference is a
-// question (docs/decisions.md, „Export in die Master-Datei“).
-//
-// Beyond the questions, every pair of a sheet can be set by hand (`pair`):
-// document column → master column, one place per document column, stored as
-// an alias. Removing a pair (`unpair`) means „nicht übertragen“, so a column of
-// the same name in the sheet does not quietly take it back. The key is set the
-// same way, as a pair (`setIdentifier`): the document's identifier column and
-// the sheet's, paired and made the key in one dry run — `RadsatzID` →
-// `Radsatz ID` on RSmonitoring, where no column of the same name exists.
+// A document column the sheet has no column for is not transferred and is
+// named, never blocking: with no mapping step there is nothing to answer it
+// with. Only a sheet that cannot be written at all (`problem`) stops Weiter.
 // ────────────────────────────────────────────────────────────────
 
 import { computed, inject, Injectable } from '@angular/core';
@@ -48,30 +36,8 @@ export interface ExportSheetView {
   ticked: boolean;
   append: boolean;
   remove: boolean;
-}
-
-export interface ColumnAnswer {
-  column: string;
-  target: string | undefined;
-  ignored: boolean;
-  options: string[];
-}
-
-export interface PairView {
-  source: string;
-  master: string;
-  sources: string[];
-  masters: string[];
-}
-
-export interface StructureView {
-  run: MasterExportSheetRun;
+  run: MasterExportSheetRun | undefined;
   keySource: string | undefined;
-  keyMasters: string[];
-  answers: ColumnAnswer[];
-  pairs: PairView[];
-  unpaired: string[];
-  untransferred: string[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -92,12 +58,18 @@ export class MasterExportFacade {
   readonly sheets = computed<ExportSheetView[]>(() => {
     const ticked = this.#store.ticked();
     const choices = this.#store.choices();
-    return (this.start()?.sheets ?? []).map((sheet) => ({
-      sheet,
-      ticked: ticked[sheet.sheet] ?? false,
-      append: choices[sheet.sheet]?.append ?? sheet.append,
-      remove: choices[sheet.sheet]?.remove ?? sheet.remove,
-    }));
+    const runs = this.preview()?.sheets ?? [];
+    return (this.start()?.sheets ?? []).map((sheet) => {
+      const run = runs.find((each) => each.sheet === sheet.sheet);
+      return {
+        sheet,
+        ticked: ticked[sheet.sheet] ?? false,
+        append: choices[sheet.sheet]?.append ?? sheet.append,
+        remove: choices[sheet.sheet]?.remove ?? sheet.remove,
+        run,
+        keySource: run?.pairs.find((pair) => pair.master === run.key)?.source,
+      };
+    });
   });
 
   readonly tickedCount = computed(
@@ -127,56 +99,25 @@ export class MasterExportFacade {
     };
   });
 
-  readonly structure = computed<StructureView[]>(() =>
-    (this.preview()?.sheets ?? []).map((run) => {
-      const paired = new Set(run.pairs.map((pair) => pair.source));
-      const unpaired = run.sources.filter((source) => !paired.has(source));
-      return {
-        run,
-        keySource: run.pairs.find((pair) => pair.master === run.key)?.source,
-        keyMasters: [
-          ...new Set([...run.pairs.map((pair) => pair.master), ...run.targets]),
-        ],
-        answers: this.#answers(run),
-        pairs: run.pairs.map((pair) => ({
-          ...pair,
-          sources: [pair.source, ...unpaired],
-          masters: [pair.master, ...run.targets],
-        })),
-        unpaired,
-        untransferred: unpaired.filter((source) => !run.open.includes(source)),
-      };
-    })
-  );
-
-  readonly unanswered = computed(() =>
-    (this.preview()?.sheets ?? []).reduce(
-      (sum, sheet) => sum + sheet.open.length + (sheet.problem ? 1 : 0),
-      0
-    )
-  );
-
-  readonly writable = computed(
-    () =>
-      this.unanswered() === 0 &&
-      (this.preview()?.sheets ?? []).some((sheet) => !sheet.problem)
+  readonly writable = computed(() =>
+    (this.preview()?.sheets ?? []).some((sheet) => !sheet.problem)
   );
 
   async begin(dokumentId: string): Promise<void> {
     const data = await this.#backend.openMasterExport(dokumentId);
-    if (data.masterExportStart) this.#store.begin(data.masterExportStart);
+    if (!data.masterExportStart) return;
+    this.#store.begin(data.masterExportStart);
+    if (this.tickedCount() > 0) await this.run();
   }
 
-  tick(sheet: string, on: boolean): void {
-    this.#store.tick(sheet, on);
-  }
-
-  setAppend(sheet: string, append: boolean): void {
+  async setAppend(sheet: string, append: boolean): Promise<void> {
     this.#store.choose({ ...this.#choice(sheet), append });
+    await this.run();
   }
 
-  setRemove(sheet: string, remove: boolean): void {
+  async setRemove(sheet: string, remove: boolean): Promise<void> {
     this.#store.choose({ ...this.#choice(sheet), remove });
+    await this.run();
   }
 
   setRemember(remember: boolean): void {
@@ -188,68 +129,6 @@ export class MasterExportFacade {
     if (!request) return;
     const data = await this.#backend.previewMasterExport(request);
     if (data.masterExport) this.#store.previewed(data.masterExport);
-  }
-
-  async answer(
-    sheet: string,
-    column: string,
-    target: string | undefined
-  ): Promise<void> {
-    if (target) await this.pair(sheet, column, target);
-    else await this.unpair(sheet, column);
-  }
-
-  async pair(sheet: string, source: string, master: string): Promise<void> {
-    const choice = this.#choice(sheet);
-    this.#store.choose({
-      ...choice,
-      aliases: [
-        ...choice.aliases.filter(
-          (alias) => alias.source !== source && alias.master !== master
-        ),
-        { master, source },
-      ],
-      ignored: choice.ignored.filter((ignored) => ignored !== source),
-    });
-    await this.run();
-  }
-
-  async setIdentifier(
-    sheet: string,
-    source: string,
-    master: string
-  ): Promise<void> {
-    const choice = this.#choice(sheet);
-    this.#store.choose({
-      ...choice,
-      key: master,
-      aliases: [
-        ...choice.aliases.filter(
-          (alias) => alias.source !== source && alias.master !== master
-        ),
-        { master, source },
-      ],
-      ignored: choice.ignored.filter((ignored) => ignored !== source),
-    });
-    await this.run();
-  }
-
-  async unpair(sheet: string, source: string): Promise<void> {
-    const choice = this.#choice(sheet);
-    this.#store.choose({
-      ...choice,
-      aliases: choice.aliases.filter((alias) => alias.source !== source),
-      ignored: [
-        ...choice.ignored.filter((ignored) => ignored !== source),
-        source,
-      ],
-    });
-    await this.run();
-  }
-
-  async setKey(sheet: string, key: string | undefined): Promise<void> {
-    this.#store.choose({ ...this.#choice(sheet), key });
-    await this.run();
   }
 
   async write(): Promise<void> {
@@ -282,24 +161,5 @@ export class MasterExportFacade {
         remove: false,
       }
     );
-  }
-
-  #answers(run: MasterExportSheetRun): ColumnAnswer[] {
-    const columns = [
-      ...run.open,
-      ...run.aliases.map((alias) => alias.source),
-      ...run.ignored,
-    ];
-    return [...new Set(columns)].map((column) => {
-      const target = run.aliases.find(
-        (alias) => alias.source === column
-      )?.master;
-      return {
-        column,
-        target,
-        ignored: run.ignored.includes(column),
-        options: [...new Set([...(target ? [target] : []), ...run.targets])],
-      };
-    });
   }
 }

@@ -3,7 +3,7 @@
   heading="Vorschau"
   [phase]="phase"
   phaseColor="secondary"
-  [step]="3"
+  [step]="2"
   [stepCount]="steps"
   nextLabel="In Master-Datei schreiben"
   nextColor="success"
@@ -59,8 +59,7 @@
         (ionChange)="onRemember($event)"
         data-testid="export-remember"
       >
-        Blätter und Spalten für die Vorlage „{{ facade.start()?.template }}“
-        merken
+        Einstellungen für die Vorlage „{{ facade.start()?.template }}“ merken
       </ion-checkbox>
     </ion-item>
   </ion-list>

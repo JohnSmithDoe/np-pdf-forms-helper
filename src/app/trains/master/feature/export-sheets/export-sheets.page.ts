@@ -1,17 +1,22 @@
 // ─── why ────────────────────────────────────────────────────────
-// Step one of the master update: the sheet the document goes into. The client
-// updates ONE sheet per document, so only the sheet bound to the document's
-// template is shown — Rust's `suggested`, already the only pre-ticked one — and
-// nothing is chosen here. The other sheets stay in the start data and are simply
-// not offered; with no bound sheet the step names where to bind one and Weiter
-// stays dead. The base is always the client master's current version, so it is
-// named, not offered.
+// Step one of the master update, and the only one before the preview: the
+// sheet the document goes into and what is wrong with it. The client updates
+// ONE sheet per document, so only the sheet bound to the document's template
+// is shown — Rust's `suggested`, the only pre-ticked one — and nothing is
+// chosen. With no bound sheet the step names where to bind one.
+//
+// The column mapping is the template's and is not edited here: the step states
+// the KEY pair read-only, because the update matches rows by it, and lists
+// what the dry run found wrong — a sheet that cannot be written (danger, Weiter
+// dead), a remembered alias or key the sheet lost, document columns the sheet
+// has no column for (not transferred). The dry run already ran in `begin`.
 //
 // „Neue Zeilen anhängen“: the update is incremental either way, the toggle only
 // decides whether a key the sheet lacks becomes a row. „Fehlende Zeilen leeren“
 // is the opposite direction — a sheet row whose key the document lacks is
 // emptied, never moved — and starts where it was last left for this template:
-// whether a document is complete is the user's knowledge, not the code's.
+// whether a document is complete is the user's knowledge, not the code's. Each
+// toggle re-runs the dry run.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -31,7 +36,7 @@ import {
   IonToggle,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { warningOutline } from 'ionicons/icons';
+import { alertCircleOutline, warningOutline } from 'ionicons/icons';
 import { ReportPresenterService } from '../../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { WizardShellComponent } from '../../../../@shared/ui/wizard-shell/wizard-shell.component';
@@ -67,21 +72,17 @@ export class ExportSheetsPage {
   );
 
   constructor() {
-    addIcons({ warningOutline });
+    addIcons({ alertCircleOutline, warningOutline });
   }
 
   protected onRemove(sheet: string, event: Event): void {
-    this.facade.setRemove(
-      sheet,
-      (event as CustomEvent<{ checked: boolean }>).detail.checked
-    );
+    const on = (event as CustomEvent<{ checked: boolean }>).detail.checked;
+    void this.#reports.run(() => this.facade.setRemove(sheet, on));
   }
 
   protected onAppend(sheet: string, event: Event): void {
-    this.facade.setAppend(
-      sheet,
-      (event as CustomEvent<{ checked: boolean }>).detail.checked
-    );
+    const on = (event as CustomEvent<{ checked: boolean }>).detail.checked;
+    void this.#reports.run(() => this.facade.setAppend(sheet, on));
   }
 
   protected async onBack(): Promise<void> {
@@ -90,7 +91,6 @@ export class ExportSheetsPage {
   }
 
   protected async onNext(): Promise<void> {
-    const ok = await this.#reports.run(() => this.facade.run());
-    if (ok) await this.#router.navigate(['/trains/master/export/structure']);
+    await this.#router.navigate(['/trains/master/export/preview']);
   }
 }

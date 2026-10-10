@@ -1,14 +1,12 @@
 // ─── why ────────────────────────────────────────────────────────
-// The master export wizard's own state: what the backend offered, which sheets
-// are ticked, the per-sheet answers (key, aliases, ignored columns), the base
+// The master export wizard's own state: what the backend offered, which sheet
+// is ticked (the template's, fixed at `begin`), the per-sheet plan (key,
+// aliases, ignored columns — the template's, never edited here), the base
 // file (the current master version, sent back so a newer one is refused), and the two runs — the dry run being looked at and the written one.
 //
 // Like the import walk, nothing survives leaving the wizard: the answers are
 // cheap to give again, and the ones worth keeping are remembered on the master
 // bindings by the backend, not here.
-//
-// `choices` holds an answer for EVERY offered sheet, ticked or not, so unticking
-// and re-ticking a sheet does not lose what was answered for it.
 // ────────────────────────────────────────────────────────────────
 
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
@@ -62,13 +60,6 @@ export const MasterExportStore = signalStore(
         base: start.base,
         ticked,
         choices,
-      });
-    },
-
-    tick(sheet: string, on: boolean): void {
-      patchState(store, {
-        ticked: { ...store.ticked(), [sheet]: on },
-        preview: undefined,
       });
     },
 

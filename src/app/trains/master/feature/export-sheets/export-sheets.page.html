@@ -6,7 +6,7 @@
   [step]="1"
   [stepCount]="steps"
   backLabel="Abbrechen"
-  [nextDisabled]="facade.tickedCount() === 0"
+  [nextDisabled]="!facade.writable()"
   (back)="onBack()"
   (next)="onNext()"
 >
@@ -32,6 +32,56 @@
             <p>{{ view.sheet.reason }}</p>
           </ion-label>
         </ion-item>
+        @if (view.run; as run) {
+          <ion-item lines="none" data-testid="export-sheet-key">
+            <ion-label class="ion-text-wrap">
+              <p>Schlüssel</p>
+              <h3>
+                @if (run.key) {
+                  „{{ view.keySource ?? '–' }}“ → „{{ run.key }}“
+                } @else {
+                  keine Schlüsselspalte
+                }
+              </h3>
+            </ion-label>
+          </ion-item>
+          @if (run.problem) {
+            <ion-item lines="none" data-testid="export-sheet-problem">
+              <ion-icon
+                slot="start"
+                name="alert-circle-outline"
+                color="danger"
+                aria-hidden="true"
+              />
+              <ion-label class="ion-text-wrap">{{ run.problem }}</ion-label>
+            </ion-item>
+          }
+          @for (conflict of run.conflicts; track $index) {
+            <ion-item lines="none" data-testid="export-sheet-conflict">
+              <ion-icon
+                slot="start"
+                name="warning-outline"
+                color="warning"
+                aria-hidden="true"
+              />
+              <ion-label class="ion-text-wrap">{{ conflict }}</ion-label>
+            </ion-item>
+          }
+          @if (run.open.length) {
+            <ion-item lines="none" data-testid="export-sheet-open">
+              <ion-icon
+                slot="start"
+                name="warning-outline"
+                color="warning"
+                aria-hidden="true"
+              />
+              <ion-label class="ion-text-wrap"
+                >Ohne Spalte im Blatt, wird nicht übertragen:
+                {{ run.open.join(', ') }}</ion-label
+              >
+            </ion-item>
+          }
+        }
         <ion-item lines="none" data-testid="export-sheet-append">
           <ion-toggle
             justify="space-between"

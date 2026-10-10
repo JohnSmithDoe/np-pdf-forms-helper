@@ -1,12 +1,13 @@
 // ─── why ────────────────────────────────────────────────────────
-// The master update wizard, as shallow as the rest: it reaches its four steps
-// from the document list — offered only while a client master is chosen — shows only the template's sheet, renders the cell
-// changes it was sent and keeps Weiter dead while a column is unanswered.
+// The master update wizard, as shallow as the rest: it reaches its three steps
+// from the document list — offered only while a client master is chosen —
+// shows only the template's sheet with its key pair and problems, renders the
+// cell changes it was sent and keeps Weiter dead while the sheet cannot be
+// written.
 //
 // Which sheets are suggested, what a structural conflict is and which cells a
 // paste changes are all Rust's (`master/export`) and proved by `cargo test`;
-// the fake serves hand-written runs and only echoes answers back. The column
-// selects are `ion-select` popovers and deliberately not driven here.
+// the fake serves hand-written runs and only echoes the plan back.
 // ────────────────────────────────────────────────────────────────
 
 import { expect, test, type Page } from '@playwright/test';
@@ -144,11 +145,13 @@ test.describe('Master aktualisieren', () => {
     await expect(
       sheets.getByTestId('export-sheet-remove').locator('ion-toggle')
     ).toHaveAttribute('aria-checked', 'false');
+    // The mapping is the template's: only the key pair is stated, read-only.
+    await expect(sheets.getByTestId('export-sheet-key')).toContainText(
+      '„Asset“ → „Asset“'
+    );
+    await expect(sheets.locator('ion-select')).toHaveCount(0);
+    await expect(sheets.getByTestId('export-sheet-open')).toHaveCount(0);
     await sheets.getByRole('button', { name: 'Weiter' }).click();
-
-    const structure = step(page, 'export-structure');
-    await expect(structure.getByTestId('export-structure-clear')).toBeVisible();
-    await structure.getByRole('button', { name: 'Weiter' }).click();
 
     const preview = step(page, 'export-preview');
     await expect(preview.getByTestId('cell-change')).toHaveCount(2);
@@ -216,12 +219,6 @@ test.describe('Master aktualisieren', () => {
     ).toHaveAttribute('aria-checked', 'true');
     await sheets.getByRole('button', { name: 'Weiter' }).click();
 
-    const structure = step(page, 'export-structure');
-    await expect(structure.getByTestId('export-structure-sheet')).toContainText(
-      'fehlende Zeilen werden geleert'
-    );
-    await structure.getByRole('button', { name: 'Weiter' }).click();
-
     // The rows to be emptied are listed by key before anything is written.
     await expect(
       step(page, 'export-preview').getByTestId('export-preview-removed')
@@ -245,61 +242,39 @@ test.describe('Master aktualisieren', () => {
     await expect(list.getByTestId('documents-export-master')).toHaveCount(0);
   });
 
-  test('eine Spalte ohne Gegenstück hält den Abgleich an', async ({ page }) => {
+  // With no mapping step there is nothing to answer a column with: it is
+  // named as not transferred and Weiter stays open.
+  test('nennt Spalten ohne Gegenstück, ohne anzuhalten', async ({ page }) => {
     await installFakeBackend(
       page,
-      seed({
-        ...TELEMATIK,
-        matched: ['Asset'],
-        targets: ['Ort'],
-        open: ['Stadt'],
-      })
+      seed({ ...TELEMATIK, matched: ['Asset'], targets: [], open: ['Stadt'] })
     );
     await open(page);
-    await step(page, 'export-sheets')
-      .getByRole('button', { name: 'Weiter' })
-      .click();
 
-    const structure = step(page, 'export-structure');
-    await expect(structure.getByTestId('export-structure-column')).toHaveCount(
-      1
+    const sheets = step(page, 'export-sheets');
+    await expect(sheets.getByTestId('export-sheet-open')).toContainText(
+      'wird nicht übertragen: Stadt'
     );
-    await expect(
-      structure.getByRole('button', { name: 'Weiter' })
-    ).toBeDisabled();
+    await expect(sheets.getByRole('button', { name: 'Weiter' })).toBeEnabled();
   });
 
-  // A header spelled differently in the master is fed by a pair set by hand,
-  // on any sheet: the step lists every pair, offers a new one while a
-  // document column and a hand-kept column are free, and names the rest.
-  test('der Abgleich zeigt jede Zuordnung und bietet eine neue an', async ({
+  test('ein Blatt, das nicht geschrieben werden kann, hält an', async ({
     page,
   }) => {
     await installFakeBackend(
       page,
       seed({
         ...TELEMATIK,
-        matched: ['Asset'],
-        sources: ['Asset', 'RadsatzID'],
-        targets: ['Radsatz ID'],
-        open: [],
+        problem: 'Im Blatt „Telematik“ fehlt eine Schlüsselspalte.',
       })
     );
     await open(page);
-    await step(page, 'export-sheets')
-      .getByRole('button', { name: 'Weiter' })
-      .click();
 
-    const structure = step(page, 'export-structure');
-    await expect(structure.getByTestId('export-structure-key')).toHaveCount(1);
-    await expect(structure.getByTestId('export-structure-pair')).toHaveCount(1);
-    await expect(structure.getByTestId('export-structure-add')).toHaveCount(1);
-    await expect(
-      structure.getByTestId('export-structure-untransferred')
-    ).toContainText('RadsatzID');
-    await expect(
-      structure.getByRole('button', { name: 'Weiter' })
-    ).toBeEnabled();
+    const sheets = step(page, 'export-sheets');
+    await expect(sheets.getByTestId('export-sheet-problem')).toContainText(
+      'fehlt eine Schlüsselspalte'
+    );
+    await expect(sheets.getByRole('button', { name: 'Weiter' })).toBeDisabled();
   });
 
   test('ein kalter Link in den Assistenten führt zu den Dokumenten', async ({
