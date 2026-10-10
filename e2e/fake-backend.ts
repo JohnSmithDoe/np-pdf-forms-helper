@@ -597,13 +597,21 @@ export interface FakeExportSheetRun {
   notes?: string[];
   changed: number;
   removed?: string[];
-  changes: {
-    cell: string;
+  rowsChanged: number;
+  columns: { index: number; header: string }[];
+  rows: {
     row: number;
-    column: string;
     key: string;
-    before: string;
-    after: string;
+    status: 'geaendert' | 'neu' | 'geleert';
+    cells: { text: string; changed: boolean }[];
+    changes: {
+      cell: string;
+      row: number;
+      column: string;
+      key: string;
+      before: string;
+      after: string;
+    }[];
   }[];
 }
 
@@ -922,8 +930,15 @@ export function install(seed: FakeSeed): void {
         open: [],
         line: `„${choice.sheet}“: übernommen.`,
         changed: 0,
-        changes: [],
+        rowsChanged: 0,
+        columns: [],
+        rows: [],
       };
+      // An emptied row exists only while the request asks to empty rows,
+      // like `removed`; which rows those are is `export/diff.rs`'s.
+      const rows = seeded.rows.filter(
+        (row) => choice.remove || row.status !== 'geleert'
+      );
       const answered = new Set([
         ...choice.aliases.map((alias) => alias.source),
         ...choice.ignored,
@@ -946,6 +961,8 @@ export function install(seed: FakeSeed): void {
         append: choice.append,
         remove: choice.remove,
         removed: choice.remove ? copy(seeded.removed ?? []) : [],
+        rows: copy(rows),
+        rowsChanged: seeded.rowsChanged - (seeded.rows.length - rows.length),
         key: choice.key,
         aliases: copy(choice.aliases),
         ignored: copy(choice.ignored),

@@ -209,6 +209,26 @@ export interface CellChange {
   after: string;
 }
 
+export interface ChangeColumn {
+  index: number;
+  header: string;
+}
+
+export type RowChangeStatus = 'geaendert' | 'neu' | 'geleert';
+
+export interface RowCell {
+  text: string;
+  changed: boolean;
+}
+
+export interface RowChange {
+  row: number;
+  key: string;
+  status: RowChangeStatus;
+  cells: RowCell[];
+  changes: CellChange[];
+}
+
 export interface MasterExportSheetRun {
   sheet: string;
   append: boolean;
@@ -226,7 +246,9 @@ export interface MasterExportSheetRun {
   line: string;
   notes: string[];
   changed: number;
-  changes: CellChange[];
+  rowsChanged: number;
+  columns: ChangeColumn[];
+  rows: RowChange[];
   removed: string[];
 }
 

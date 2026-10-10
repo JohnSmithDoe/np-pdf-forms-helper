@@ -260,8 +260,11 @@ fn sheet(
         let outcome = paste::write(worksheet, &binding, table, choice.append, choice.remove)?;
         let after = grid::from_worksheet(worksheet)?;
         let removed: Vec<u32> = outcome.removed.iter().map(|(row, _)| *row).collect();
-        (out.changed, out.changes) =
-            diff::changes(&before, &after, &outcome.columns, outcome.key, &removed);
+        let diff = diff::rows(&before, &after, &outcome.columns, outcome.key, &removed);
+        out.changed = diff.cells;
+        out.rows_changed = diff.total;
+        out.columns = diff.columns;
+        out.rows = diff.rows;
         out.removed = outcome.removed.into_iter().map(|(_, key)| key).collect();
         out.line = outcome.line;
         out.notes = outcome.notes;
@@ -523,7 +526,12 @@ mod tests {
             sheet.open.is_empty(),
             "the other document columns just stay out"
         );
-        let city = sheet.changes.iter().find(|c| c.cell == "B2").unwrap();
+        let city = sheet
+            .rows
+            .iter()
+            .flat_map(|row| &row.changes)
+            .find(|c| c.cell == "B2")
+            .unwrap();
         assert_eq!(
             (city.before.as_str(), city.after.as_str()),
             ("Altstadt", "Neuhof")
@@ -543,15 +551,28 @@ mod tests {
         assert!(sheet.open.is_empty() && sheet.conflicts.is_empty());
         // Incremental: the date and the city of the known Wagen change, the
         // other Wagen's row is not touched.
-        let cells: Vec<&str> = sheet.changes.iter().map(|c| c.cell.as_str()).collect();
+        let cells: Vec<&str> = sheet
+            .rows
+            .iter()
+            .flat_map(|row| &row.changes)
+            .map(|c| c.cell.as_str())
+            .collect();
         assert!(cells.contains(&"C2") && cells.contains(&"D2"), "{cells:?}");
         assert!(!cells.iter().any(|cell| cell.ends_with('3')), "{cells:?}");
-        let city = sheet.changes.iter().find(|c| c.cell == "D2").unwrap();
+        let city = sheet
+            .rows
+            .iter()
+            .flat_map(|row| &row.changes)
+            .find(|c| c.cell == "D2")
+            .unwrap();
         assert_eq!(
             (city.before.as_str(), city.after.as_str()),
             ("Altstadt", "Neuhof")
         );
         assert_eq!(city.key, "338506591522");
+        assert_eq!((sheet.rows_changed, sheet.rows.len()), (1, 1));
+        assert_eq!(sheet.columns.len(), sheet.rows[0].cells.len());
+        assert!(sheet.rows[0].cells[3].changed && !sheet.rows[0].cells[0].changed);
         assert_eq!(std::fs::read(&file).unwrap(), before);
         assert_eq!(std::fs::read_dir(folder.path()).unwrap().count(), 3);
     }
@@ -682,7 +703,11 @@ mod tests {
         });
         let run = preview(&db, &request(&db, aliased)).unwrap();
         assert!(run.sheets[0].open.is_empty());
-        assert!(run.sheets[0].changes.iter().any(|c| c.after == "Neuhof"));
+        assert!(run.sheets[0]
+            .rows
+            .iter()
+            .flat_map(|row| &row.changes)
+            .any(|c| c.after == "Neuhof"));
 
         let mut ignoring = telematik();
         ignoring.ignored.push("Ort".into());
@@ -793,11 +818,12 @@ mod tests {
         assert!(sheet.conflicts[0].contains("„Stadt“ ist schon „Projekt“ zugeordnet"));
         assert!(
             sheet
-                .changes
+                .rows
                 .iter()
+                .flat_map(|row| &row.changes)
                 .any(|change| change.column == "Projekt" && change.after == "Neuhof"),
             "{:?}",
-            sheet.changes
+            sheet.rows
         );
     }
 }

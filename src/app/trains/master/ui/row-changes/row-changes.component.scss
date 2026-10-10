@@ -1,0 +1,48 @@
+:host {
+  display: block;
+}
+
+.row-changes {
+  overflow-x: auto;
+}
+
+.row-changes table {
+  border-collapse: collapse;
+}
+
+.row-changes th,
+.row-changes td {
+  padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+  text-align: start;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.row-changes__header {
+  min-width: 4rem;
+  max-width: 14rem;
+  white-space: pre-line;
+}
+
+.row-changes__row {
+  cursor: pointer;
+  border-top: 1px solid var(--ion-color-step-150);
+}
+
+.row-changes__row th ion-note {
+  display: block;
+}
+
+.row-changes__mark {
+  background: color-mix(in srgb, var(--ion-color-base) 18%, transparent);
+}
+
+.row-changes__gone {
+  text-decoration: line-through;
+}
+
+.row-changes__detail {
+  margin: 0 0 0.5rem;
+  padding-inline-start: 1rem;
+  white-space: normal;
+}

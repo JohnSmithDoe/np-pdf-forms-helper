@@ -1,8 +1,9 @@
 // ─── why ────────────────────────────────────────────────────────
 // Step two, the approval: what the update WILL write, per sheet — the paste's
-// own line, its notes, every cell that changes, and the key of every row it
-// empties: a wipe nobody saw listed is the one mistake the preview exists to
-// stop. It is a real write into an in-memory copy of the workbook, diffed
+// own line, its notes, every ROW that changes (the client reads the master by
+// rows; a click opens the cells), and the keys of every row it empties, once
+// more as a line above the table: a wipe nobody saw listed is the one mistake
+// the preview exists to stop. It is a real write into an in-memory copy of the workbook, diffed
 // before and after, so this is the result and not a prediction of it.
 // „In Master-Datei schreiben“ runs the same code once more and writes it into
 // the customer's own file, after a backup beside it.
@@ -31,7 +32,7 @@ import { BusyOverlayComponent } from '../../../../@shared/ui/busy-overlay/busy-o
 import { WizardShellComponent } from '../../../../@shared/ui/wizard-shell/wizard-shell.component';
 import { MasterExportFacade } from '../../../data';
 import { EXPORT_PHASE, EXPORT_STEPS } from '../../../model/master-export';
-import { CellChangesComponent } from '../../ui/cell-changes/cell-changes.component';
+import { RowChangesComponent } from '../../ui/row-changes/row-changes.component';
 
 @Component({
   selector: 'app-page-export-preview',
@@ -39,7 +40,6 @@ import { CellChangesComponent } from '../../ui/cell-changes/cell-changes.compone
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BusyOverlayComponent,
-    CellChangesComponent,
     IonCard,
     IonCardContent,
     IonCardHeader,
@@ -49,6 +49,7 @@ import { CellChangesComponent } from '../../ui/cell-changes/cell-changes.compone
     IonItem,
     IonList,
     IonNote,
+    RowChangesComponent,
     WizardShellComponent,
   ],
 })

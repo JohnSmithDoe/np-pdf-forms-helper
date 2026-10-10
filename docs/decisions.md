@@ -1133,3 +1133,20 @@ Entschieden mit Martin am 2026-10-10. Ersetzt für die Oberfläche „Angeboten 
   wenn das Blatt gar nicht geschrieben werden kann.
 - **Das Backend ist unverändert**: es schickt weiter jedes Blatt und nimmt Aliase und Schlüssel im
   Auftrag an. Blätter oder Zuordnung wieder anzubieten ist eine Änderung der Oberfläche.
+
+## Vorschau zeilenweise (appended 2026-10-10)
+
+Entschieden mit Martin am 2026-10-10. Der Kunde liest die Master nach Zeilen — die Zeile eines Wagens —,
+nie nach Zellen; die Zellliste (Zelle | Schlüssel | Spalte | Vorher | Nachher) ist ersetzt.
+
+- **Eine Zeile je geänderter Blattzeile, in allen Spalten des Blatts**, unter Spaltenbuchstabe und
+  Überschrift, damit sie sich mit der offenen Datei in Excel vergleichen lässt. Geänderte Zellen sind
+  markiert, eine neue Zeile ganz grün, eine geleerte ganz rot und durchgestrichen. Ein Klick auf die
+  Zeile klappt darunter ihre Änderungen je Zelle auf („Spalte: vorher → nachher“).
+- **Geleerte Zeilen stehen in derselben Tabelle**, mit dem, was sie heute enthalten; die Zeile mit den
+  Schlüsseln darüber bleibt als Warnung vor dem Schreiben.
+- **Eine nicht geschriebene Spalte zeigt den Wert von VORHER** — das, was Excel heute zeigt. Formelspalten
+  werden mit veraltetem Cache neu ausgegeben; der Wert von nachher wäre dort falsch.
+- **Rust baut die Zeilen** (`export/diff.rs`, Backend for Frontend), gekappt auf 200 mit Gesamtzahl;
+  Angular zeigt nur an und klappt auf. Vorschau und Ergebnis nutzen dieselbe Komponente
+  (`trains/master/ui/row-changes`).

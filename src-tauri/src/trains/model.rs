@@ -362,6 +362,38 @@ pub struct CellChange {
     pub after: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangeColumn {
+    pub index: u32,
+    pub header: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RowChangeStatus {
+    Geaendert,
+    Neu,
+    Geleert,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RowCell {
+    pub text: String,
+    pub changed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RowChange {
+    pub row: u32,
+    pub key: String,
+    pub status: RowChangeStatus,
+    pub cells: Vec<RowCell>,
+    pub changes: Vec<CellChange>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MasterExportSheetRun {
@@ -383,7 +415,9 @@ pub struct MasterExportSheetRun {
     pub line: String,
     pub notes: Vec<String>,
     pub changed: u32,
-    pub changes: Vec<CellChange>,
+    pub rows_changed: u32,
+    pub columns: Vec<ChangeColumn>,
+    pub rows: Vec<RowChange>,
     pub removed: Vec<String>,
 }
 

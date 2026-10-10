@@ -1,6 +1,6 @@
 // ─── why ────────────────────────────────────────────────────────
 // The last step: the customer's master file that was written, the backup taken
-// before, and per sheet which cells changed — the summary of the update. Read
+// before, and per sheet which rows changed — the summary of the update. Read
 // from the written run rather than the preview, because the write ran the
 // paste again and this is what it did.
 //
@@ -27,7 +27,7 @@ import { BusyOverlayComponent } from '../../../../@shared/ui/busy-overlay/busy-o
 import { WizardShellComponent } from '../../../../@shared/ui/wizard-shell/wizard-shell.component';
 import { MasterExportFacade } from '../../../data';
 import { EXPORT_PHASE, EXPORT_STEPS } from '../../../model/master-export';
-import { CellChangesComponent } from '../../ui/cell-changes/cell-changes.component';
+import { RowChangesComponent } from '../../ui/row-changes/row-changes.component';
 
 @Component({
   selector: 'app-page-export-result',
@@ -35,7 +35,6 @@ import { CellChangesComponent } from '../../ui/cell-changes/cell-changes.compone
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     BusyOverlayComponent,
-    CellChangesComponent,
     IonButton,
     IonCard,
     IonCardContent,
@@ -44,6 +43,7 @@ import { CellChangesComponent } from '../../ui/cell-changes/cell-changes.compone
     IonCardTitle,
     IonIcon,
     IonNote,
+    RowChangesComponent,
     WizardShellComponent,
   ],
 })

@@ -1,0 +1,73 @@
+// ─── why ────────────────────────────────────────────────────────
+// What one sheet of the master update changes, by ROW — the client reads the
+// master by rows, never by cells. On the preview before anything is written
+// and on the result after: one component for both, so what the user approved
+// and what was written read the same.
+//
+// Every row arrives whole and display-ready from Rust (`export/diff.rs`), in
+// every column of the sheet under its letter and header, so it compares by
+// eye with the open workbook; nothing here formats or decides. A changed cell
+// is marked, a new row and an emptied row are marked whole. A click on a row
+// opens its changes cell by cell underneath — the open rows are this
+// component's own view state, which is why a `ui` component holds a signal.
+//
+// The marks are Ionic colour ROLES (`ion-color-*` classes, read as
+// `--ion-color-base` in the stylesheet), as `entity-card` does it: the
+// colour comes from the theme, dark mode included, and nothing here names one.
+//
+// Rust sends a CAPPED list and the full count; the rest is said in a line.
+// A plain `<table>` for the same reason as `sheet-table`: a sheet is a grid.
+// ────────────────────────────────────────────────────────────────
+
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  input,
+  signal,
+} from '@angular/core';
+import { IonNote } from '@ionic/angular/standalone';
+import type {
+  ChangeColumn,
+  RowChange,
+  RowChangeStatus,
+} from '../../../model/trains.types';
+import { columnLetter } from '../../util/column-letter.utility';
+
+const STATUS: Record<RowChangeStatus, { label: string; color: string }> = {
+  geaendert: { label: 'geändert', color: 'warning' },
+  neu: { label: 'neu', color: 'success' },
+  geleert: { label: 'geleert', color: 'danger' },
+};
+
+@Component({
+  selector: 'app-row-changes',
+  templateUrl: 'row-changes.component.html',
+  styleUrls: ['row-changes.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [IonNote],
+})
+export class RowChangesComponent {
+  readonly columns = input.required<ChangeColumn[]>();
+  readonly rows = input.required<RowChange[]>();
+  readonly total = input.required<number>();
+
+  protected readonly letter = columnLetter;
+  protected readonly status = STATUS;
+  protected readonly open = signal<ReadonlySet<number>>(new Set());
+  protected readonly more = computed(() => this.total() - this.rows().length);
+
+  protected toggle(row: number): void {
+    this.open.update((open) => {
+      const next = new Set(open);
+      if (!next.delete(row)) next.add(row);
+      return next;
+    });
+  }
+
+  protected mark(row: RowChange, changed: boolean): string {
+    const gone = row.status === 'geleert' ? ' row-changes__gone' : '';
+    if (row.status === 'geaendert' && !changed) return gone;
+    return `row-changes__mark ion-color-${STATUS[row.status].color}${gone}`;
+  }
+}

@@ -1,0 +1,81 @@
+@if (total() === 0) {
+  <ion-note data-testid="row-changes-none">Keine Zeile ändert sich.</ion-note>
+} @else {
+  <div class="row-changes">
+    <table data-testid="row-changes">
+      <thead>
+        <tr>
+          <th scope="col">
+            <ion-note>Zeile</ion-note>
+          </th>
+          @for (column of columns(); track column.index) {
+            <th scope="col">
+              <ion-note>{{ letter(column.index) }}</ion-note>
+              <div class="row-changes__header">{{ column.header }}</div>
+            </th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.row) {
+          @let isOpen = open().has(row.row);
+          <tr
+            class="row-changes__row"
+            data-testid="row-change"
+            [attr.data-status]="row.status"
+            tabindex="0"
+            role="button"
+            [attr.aria-expanded]="isOpen"
+            (click)="toggle(row.row)"
+            (keydown.enter)="toggle(row.row)"
+            (keydown.space)="toggle(row.row); $event.preventDefault()"
+          >
+            <th scope="row">
+              {{ row.row }}
+              <ion-note [color]="status[row.status].color">{{
+                status[row.status].label
+              }}</ion-note>
+            </th>
+            @for (cell of row.cells; track $index) {
+              <td
+                [class]="mark(row, cell.changed)"
+                [attr.data-changed]="cell.changed || null"
+              >
+                {{ cell.text }}
+              </td>
+            }
+          </tr>
+          @if (isOpen) {
+            <tr data-testid="row-change-detail">
+              <td></td>
+              <td [attr.colspan]="columns().length">
+                <ul class="row-changes__detail">
+                  @for (change of row.changes; track change.cell) {
+                    <li data-testid="row-change-cell">
+                      <ion-note>{{ change.cell }}</ion-note>
+                      {{ change.column }}:
+                      @if (change.before) {
+                        {{ change.before }}
+                      } @else {
+                        <ion-note>leer</ion-note>
+                      }
+                      →
+                      @if (change.after) {
+                        {{ change.after }}
+                      } @else {
+                        <ion-note>leer</ion-note>
+                      }
+                    </li>
+                  }
+                </ul>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (more() > 0) {
+    <ion-note>… und {{ more() }} weitere Zeile(n).</ion-note>
+  }
+}

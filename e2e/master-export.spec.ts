@@ -2,8 +2,8 @@
 // The master update wizard, as shallow as the rest: it reaches its three steps
 // from the document list — offered only while a client master is chosen —
 // shows only the template's sheet with its key pair and problems, renders the
-// cell changes it was sent and keeps Weiter dead while the sheet cannot be
-// written.
+// changed rows it was sent — a row opening onto its cells — and keeps Weiter
+// dead while the sheet cannot be written.
 //
 // Which sheets are suggested, what a structural conflict is and which cells a
 // paste changes are all Rust's (`master/export`) and proved by `cargo test`;
@@ -54,23 +54,58 @@ const TELEMATIK: FakeExportSheetRun = {
   targets: [],
   open: [],
   line: '„Telematik“: 1 Zeile(n) aus „assets.xlsx“ übernommen (vorher 2).',
-  changed: 2,
-  changes: [
+  changed: 1,
+  rowsChanged: 2,
+  columns: [
+    { index: 1, header: 'Asset' },
+    { index: 2, header: 'Stadt' },
+  ],
+  rows: [
     {
-      cell: 'B2',
       row: 2,
-      column: 'Stadt',
       key: '338506591522',
-      before: 'Altstadt',
-      after: 'Neuhof',
+      status: 'geaendert',
+      cells: [
+        { text: '338506591522', changed: false },
+        { text: 'Neuhof', changed: true },
+      ],
+      changes: [
+        {
+          cell: 'B2',
+          row: 2,
+          column: 'Stadt',
+          key: '338506591522',
+          before: 'Altstadt',
+          after: 'Neuhof',
+        },
+      ],
     },
     {
-      cell: 'A3',
       row: 3,
-      column: 'Asset',
       key: '338506590011',
-      before: '338506590011',
-      after: '',
+      status: 'geleert',
+      cells: [
+        { text: '338506590011', changed: true },
+        { text: 'Fulda', changed: true },
+      ],
+      changes: [
+        {
+          cell: 'A3',
+          row: 3,
+          column: 'Asset',
+          key: '338506590011',
+          before: '338506590011',
+          after: '',
+        },
+        {
+          cell: 'B3',
+          row: 3,
+          column: 'Stadt',
+          key: '338506590011',
+          before: 'Fulda',
+          after: '',
+        },
+      ],
     },
   ],
 };
@@ -154,10 +189,23 @@ test.describe('Master aktualisieren', () => {
     await sheets.getByRole('button', { name: 'Weiter' }).click();
 
     const preview = step(page, 'export-preview');
-    await expect(preview.getByTestId('cell-change')).toHaveCount(2);
-    await expect(preview.getByTestId('cell-change').first()).toContainText(
+    // One line per row, laid out like the sheet; only the changed cell is
+    // marked, and its before/after shows only once the row is opened.
+    const changed = preview.getByTestId('row-change');
+    await expect(changed).toHaveCount(1);
+    await expect(changed.first()).toContainText('geändert');
+    await expect(changed.first()).toContainText('Neuhof');
+    await expect(changed.first().locator('td[data-changed]')).toHaveCount(1);
+    await expect(changed.first().locator('td[data-changed]')).toHaveText(
       'Neuhof'
     );
+    await expect(preview.getByTestId('row-change-detail')).toHaveCount(0);
+    await changed.first().click();
+    await expect(preview.getByTestId('row-change-cell')).toContainText(
+      'Stadt: Altstadt → Neuhof'
+    );
+    await changed.first().click();
+    await expect(preview.getByTestId('row-change-detail')).toHaveCount(0);
     await preview
       .getByRole('button', { name: 'In Master-Datei schreiben' })
       .click();
@@ -171,8 +219,9 @@ test.describe('Master aktualisieren', () => {
       'Übersicht 2026-10-10 120000.xlsx'
     );
     await expect(result.getByTestId('export-result-sheet')).toContainText(
-      '2 Zelle(n) aktualisiert'
+      '1 Zeile(n) geändert'
     );
+    await expect(result.getByTestId('row-change')).toHaveCount(1);
 
     const write = (await recordedCalls(page)).find(
       (call) => call.command === 'write_master_export'
@@ -223,6 +272,12 @@ test.describe('Master aktualisieren', () => {
     await expect(
       step(page, 'export-preview').getByTestId('export-preview-removed')
     ).toContainText('1 Zeile(n) werden geleert: 338506590011');
+    // The emptied row is in the table too, with what it holds today.
+    const emptied = step(page, 'export-preview').locator(
+      '[data-testid="row-change"][data-status="geleert"]'
+    );
+    await expect(emptied).toContainText('Fulda');
+    await expect(emptied).toContainText('geleert');
     const previewed = (await recordedCalls(page)).find(
       (call) => call.command === 'preview_master_export'
     );
