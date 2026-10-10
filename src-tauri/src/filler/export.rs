@@ -86,7 +86,7 @@ pub fn run(
 // user types, and typing the same one twice is easy.
 //
 // The advice names a SECOND, because that is the resolution of the name the
-// renderer builds (`run-folder.util.ts`): only a second run inside the same
+// renderer builds (`run-folder.utility.ts`): only a second run inside the same
 // second can collide on the timestamp alone.
 fn create_output_folder(folder: &Path) -> AppResult<Vec<String>> {
     if folder.exists() {

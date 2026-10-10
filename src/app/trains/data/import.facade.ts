@@ -25,7 +25,7 @@ import type {
   TrainsData,
 } from '../model/trains.types';
 import { requiredFields } from '../model/field-catalogue';
-import { suggestBindings } from '../util/column-suggest.util';
+import { suggestBindings } from '../util/column-suggest.utility';
 import { ImportStore, type Stage } from './import.store';
 import { TrainsBackend } from './trains.backend';
 import { TrainsStore } from './trains.store';

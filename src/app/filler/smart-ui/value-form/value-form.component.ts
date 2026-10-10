@@ -15,7 +15,7 @@
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { IonInput } from '@ionic/angular/standalone';
-import { inputValue } from '../../../@shared/util/input-value.util';
+import { inputValue } from '../../../@shared/util/input-value.utility';
 import { FillerFacade } from '../../data';
 
 @Component({

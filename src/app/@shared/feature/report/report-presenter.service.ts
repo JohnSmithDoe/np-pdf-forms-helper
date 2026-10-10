@@ -39,7 +39,7 @@ import { ToastService } from '../../data/toast/toast.service';
 import type { ClientReport } from '../../model/client.types';
 import type { ToastColor } from '../../model/toast.types';
 import { ReportDialog } from '../../smart-ui/report-dialog/report.dialog';
-import { needsDialog } from '../../util/report.util';
+import { needsDialog } from '../../util/report.utility';
 
 const FAILURE_HEADLINE = 'Es ist ein Problem aufgetreten';
 

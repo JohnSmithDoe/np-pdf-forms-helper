@@ -33,9 +33,12 @@ export class OverlayService {
 
   async openModal<T>(
     component: ModalOptions['component'],
-    componentProps?: ModalOptions['componentProps']
+    componentProperties?: ModalOptions['componentProps']
   ): Promise<T | undefined> {
-    const modal = await this.#modals.create({ component, componentProps });
+    const modal = await this.#modals.create({
+      component,
+      componentProps: componentProperties,
+    });
     await modal.present();
     const { data } = await modal.onWillDismiss<T>();
     return data;

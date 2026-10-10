@@ -42,7 +42,7 @@ export const importedDocumentsGuard = stepGuard(
 );
 
 export const setupReportGuard = stepGuard(
-  (facade) => facade.setupReport() !== null,
+  (facade) => facade.setupReport() !== undefined,
   SETUP_START
 );
 
@@ -52,6 +52,6 @@ export const exportFieldsGuard = stepGuard(
 );
 
 export const runReportGuard = stepGuard(
-  (facade) => facade.runReport() !== null,
+  (facade) => facade.runReport() !== undefined,
   EXPORT_START
 );

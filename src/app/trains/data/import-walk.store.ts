@@ -25,7 +25,7 @@ type ImportWalkState = {
   decisions: Record<string, EntityDecision | undefined>;
   einbau: Record<string, boolean | undefined>;
   included: Record<number, boolean | undefined>;
-  report: ClientReport | null;
+  report: ClientReport | undefined;
 };
 
 const initial: ImportWalkState = {
@@ -34,7 +34,7 @@ const initial: ImportWalkState = {
   decisions: {},
   einbau: {},
   included: {},
-  report: null,
+  report: undefined,
 };
 
 export const ImportWalkStore = signalStore(

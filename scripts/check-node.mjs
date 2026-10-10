@@ -21,11 +21,11 @@
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import path from 'node:path';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const required = JSON.parse(
-  readFileSync(join(HERE, '..', 'package.json'), 'utf8')
+  readFileSync(path.join(HERE, '..', 'package.json'), 'utf8')
 ).engines?.node;
 
 // Only the `>=x.y[.z]` form this repo declares. A different range is a change to

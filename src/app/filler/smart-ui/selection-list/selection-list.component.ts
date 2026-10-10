@@ -52,7 +52,7 @@ import { addIcons } from 'ionicons';
 import { buildOutline, documentAttachOutline } from 'ionicons/icons';
 import { FillerFacade } from '../../data';
 import { FillerDocument, FillerField } from '../../model/filler.types';
-import { documentMeta, fieldOrigin } from '../../util/document-labels.util';
+import { documentMeta, fieldOrigin } from '../../util/document-labels.utility';
 
 @Component({
   selector: 'app-selection-list',

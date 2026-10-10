@@ -54,7 +54,7 @@ import {
   MasterFileFacade,
   TrainsFacade,
 } from '../../data';
-import { fileOf } from '../../util/path.util';
+import { fileOf } from '../../util/path.utility';
 
 @Component({
   selector: 'app-page-document-list',

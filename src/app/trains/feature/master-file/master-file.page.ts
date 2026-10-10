@@ -33,7 +33,7 @@ import {
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { MasterFileFacade, TrainsFacade } from '../../data';
-import { fileOf, folderOf } from '../../util/path.util';
+import { fileOf, folderOf } from '../../util/path.utility';
 
 @Component({
   selector: 'app-page-master-file',

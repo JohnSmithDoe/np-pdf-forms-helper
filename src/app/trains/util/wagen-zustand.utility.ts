@@ -24,7 +24,7 @@ import type {
   Werkstattauftrag,
   WagenZustand,
 } from '../model/trains.types';
-import { formatIsoDate } from './uic.util';
+import { formatIsoDate } from './uic.utility';
 
 export const STUMM_AB_TAGEN = 7;
 

@@ -70,8 +70,8 @@ export class InfoPage {
   readonly #backend = inject(InfoBackend);
 
   protected readonly wordmark = APP_WORDMARK;
-  protected readonly info = signal<AppInfo | null>(null);
-  protected readonly unavailable = signal<string | null>(null);
+  protected readonly info = signal<AppInfo | undefined>(undefined);
+  protected readonly unavailable = signal<string | undefined>(undefined);
 
   constructor() {
     void this.#load();
@@ -82,7 +82,7 @@ export class InfoPage {
       this.info.set(await this.#backend.appInfo());
     } catch (error) {
       if (!(error instanceof BackendError)) throw error;
-      this.unavailable.set(error.messages[0] ?? null);
+      this.unavailable.set(error.messages[0] ?? undefined);
     }
   }
 }

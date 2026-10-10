@@ -23,7 +23,6 @@ module.exports = defineConfig(
       parserOptions: {
         // Use the TypeScript project service so each file resolves via the
         // tsconfig that owns it instead of one hardcoded `project`.
-        project: null,
         projectService: true,
         tsconfigRootDir: __dirname,
       },
@@ -78,26 +77,13 @@ module.exports = defineConfig(
           custom: { regex: '^(I|T)[A-Z][a-z]', match: false },
         },
       ],
-      // Unicorn's `all`, as in np-commlink: every rule on, the exceptions below
-      // named one by one. `null` is idiomatic across Angular and RxJS, and it
-      // is what serde writes for an absent `Option` on the wire.
-      'unicorn/no-null': 'off',
-      // `util` is a Sheriff layer name (`util/`, `*.util.ts`), not a shorthand.
-      'unicorn/prevent-abbreviations': [
-        'error',
-        {
-          allowList: { util: true, utils: true, prod: true },
-          ignore: ['e2e', 'Ref', 'componentProps'],
-        },
-      ],
-      'unicorn/no-useless-undefined': ['error', { checkArguments: false }],
-      'unicorn/prefer-export-from': ['error', { checkUsedVariables: false }],
-      // Every file opens with a hand-wrapped `─── why ───` block and prettier
-      // never reflows a comment, so "unwrapped" means one 300-column line.
+      // Unicorn's `all` rules over house preference. The one exception: every
+      // file opens with a hand-wrapped `─── why ───` block, prettier never
+      // reflows a comment, and the rule's fix glues the banner onto the text.
       'unicorn/no-manually-wrapped-comments': 'off',
-      // A `finally` that balances a counter (`BackendService.call`) has to span
-      // the whole body; a one-statement `try` would move work outside it.
-      'unicorn/try-complexity': 'off',
+      // Angular's `signal()` requires its initial value, so the argument
+      // fix makes `signal<T | undefined>(undefined)` stop compiling.
+      'unicorn/no-useless-undefined': ['error', { checkArguments: false }],
       // A published subpath is fine — `@ionic/angular/standalone` and
       // `rxjs/operators` are the supported way in. A path into a package's
       // BUILD OUTPUT is not, and neither resolution nor tsc will say so:
@@ -154,21 +140,15 @@ module.exports = defineConfig(
     plugins: { unicorn },
     extends: ['unicorn/recommended'],
     rules: {
-      // `eslint.config.js` is CommonJS.
-      'unicorn/prefer-module': 'off',
+      'unicorn/no-manually-wrapped-comments': 'off',
+    },
+  },
+  {
+    // stylelint turns a rule off with `null` and nothing else; `undefined`
+    // reads as "not set" and the preset's value comes back.
+    files: ['stylelint.config.mjs'],
+    rules: {
       'unicorn/no-null': 'off',
-      'unicorn/prevent-abbreviations': [
-        'error',
-        {
-          allowList: { utils: true, prod: true },
-          ignore: ['e2e', 'Ref', 'componentProps', 'dir', 'rel', 'doc'],
-        },
-      ],
-      'unicorn/no-useless-undefined': ['error', { checkArguments: false }],
-      'unicorn/import-style': [
-        'error',
-        { styles: { 'node:path': { named: true } } },
-      ],
     },
   },
   {

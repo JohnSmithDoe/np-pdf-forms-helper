@@ -42,13 +42,13 @@ import {
   toggleSort,
 } from '../../@shared/util/item-lists/list.selector';
 import type { Einbau } from '../model/trains.types';
-import { farbeOf } from '../util/farbe.util';
-import { formatIsoDate, formatUic } from '../util/uic.util';
+import { farbeOf } from '../util/farbe.utility';
+import { formatIsoDate, formatUic } from '../util/uic.utility';
 import {
   indexZustand,
   summarise,
   type ZustandSummary,
-} from '../util/wagen-zustand.util';
+} from '../util/wagen-zustand.utility';
 import { TrainsStore } from './trains.store';
 
 export interface WagenRow extends BaseItem {

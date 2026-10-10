@@ -252,24 +252,31 @@ export class IntakeFacade {
     if (!pick || pick.kind === 'skip') return 'summary';
 
     try {
-      if (pick.kind === 'create') {
-        await this.#import.stagePath(row.file.path);
-        this.#store.handOver(row.file.path);
-        return 'template';
-      }
-      const data = await this.#backend.cleanFile(
-        row.file.path,
-        pick.sheet,
-        pick.templateId
-      );
-      this.#store.begin(row.file.path, data.cleaning);
-      return 'clean';
+      return await this.#open(row.file.path, pick);
     } catch (error) {
       if (error instanceof BackendError) {
         this.#store.setResult(row.file.path, { outcome: 'fehlgeschlagen' });
       }
       throw error;
     }
+  }
+
+  async #open(
+    path: string,
+    pick: Exclude<FilePick, { kind: 'skip' }>
+  ): Promise<IntakeStep> {
+    if (pick.kind === 'create') {
+      await this.#import.stagePath(path);
+      this.#store.handOver(path);
+      return 'template';
+    }
+    const data = await this.#backend.cleanFile(
+      path,
+      pick.sheet,
+      pick.templateId
+    );
+    this.#store.begin(path, data.cleaning);
+    return 'clean';
   }
 
   async correct(row: number, column: number, value: string): Promise<void> {

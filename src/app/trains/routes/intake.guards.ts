@@ -64,7 +64,7 @@ export const importWalkGuard = guard(
 export const importResultGuard = guard(
   ImportWalkFacade,
   (facade) => facade.loaded(),
-  (facade) => facade.report() !== null,
+  (facade) => facade.report() !== undefined,
   DOCUMENTS
 );
 

@@ -65,16 +65,16 @@ import {
   FARBE_COLOR,
   FARBE_LABEL,
   FARBEN,
-} from '../../../@shared/util/farbe.util';
+} from '../../../@shared/util/farbe.utility';
 import { TrainsFacade } from '../../data';
 import type {
   DetailLink,
   DetailLinkKind,
   DetailTone,
   EntityDetail,
-  EntityRef,
+  EntityReference,
 } from '../../model/trains.types';
-import { farbeOf, type FarbStand } from '../../util/farbe.util';
+import { farbeOf, type FarbStand } from '../../util/farbe.utility';
 
 const ROUTES: Record<DetailLinkKind, string> = {
   wagen: '/trains/wagen',
@@ -83,7 +83,7 @@ const ROUTES: Record<DetailLinkKind, string> = {
   telematik: '/trains/telematik',
 };
 
-const LISTS: Record<EntityRef, string> = {
+const LISTS: Record<EntityReference, string> = {
   wagen: '/trains/wagen',
   radsatz: '/trains/radsaetze',
   partner: '/trains/erp',
@@ -127,8 +127,8 @@ export class EntityDetailPage {
   readonly #params = toSignal(this.#route.paramMap);
   readonly #data = toSignal(this.#route.data);
 
-  protected readonly kind = computed<EntityRef>(
-    () => (this.#data()?.['kind'] as EntityRef | undefined) ?? 'wagen'
+  protected readonly kind = computed<EntityReference>(
+    () => (this.#data()?.['kind'] as EntityReference | undefined) ?? 'wagen'
   );
   protected readonly id = computed(() => this.#params()?.get('id') ?? '');
   protected readonly detail = signal<EntityDetail | undefined>(undefined);
@@ -208,7 +208,7 @@ export class EntityDetailPage {
     }
   }
 
-  async #load(kind: EntityRef, id: string): Promise<void> {
+  async #load(kind: EntityReference, id: string): Promise<void> {
     this.detail.set(undefined);
     if (!id) return;
     await this.#reports.run(async () => {

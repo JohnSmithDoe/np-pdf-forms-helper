@@ -87,7 +87,7 @@ import {
   FillerDocument,
   SortDirection,
 } from '../model/filler.types';
-import { runFolder } from '../util/run-folder.util';
+import { runFolder } from '../util/run-folder.utility';
 
 type FillerState = {
   documents: AnyDocument[];
@@ -100,8 +100,8 @@ type FillerState = {
   exportSuffix: string;
   exportStamp: number;
   loaded: boolean;
-  setupReport: ClientReport | null;
-  runReport: ClientReport | null;
+  setupReport: ClientReport | undefined;
+  runReport: ClientReport | undefined;
   importedIds: string[];
 };
 
@@ -116,8 +116,8 @@ const initialState: FillerState = {
   exportSuffix: '',
   exportStamp: Date.now(),
   loaded: false,
-  setupReport: null,
-  runReport: null,
+  setupReport: undefined,
+  runReport: undefined,
   importedIds: [],
 };
 
@@ -311,11 +311,11 @@ export const FillerStore = signalStore(
           importedIds: state.documents
             .map((document) => document.id)
             .filter((id) => !before.has(id)),
-          setupReport: data.message ?? null,
+          setupReport: data.message ?? undefined,
         }));
       },
 
-      setRunReport(report: ClientReport | null): void {
+      setRunReport(report: ClientReport | undefined): void {
         patchState(store, { runReport: report });
       },
 
@@ -326,7 +326,7 @@ export const FillerStore = signalStore(
           fieldValues: {},
           exportSuffix: '',
           selectedProfileId: '',
-          runReport: null,
+          runReport: undefined,
         });
       },
 
@@ -337,20 +337,20 @@ export const FillerStore = signalStore(
       documentWithField(
         documentId: string,
         field: MappedField
-      ): AnyDocument | null {
+      ): AnyDocument | undefined {
         const document = store
           .documents()
           .find((entry) => entry.id === documentId);
-        if (!document) return null;
+        if (!document) return undefined;
         return { ...document, mapped: [...(document.mapped ?? []), field] };
       },
 
       documentWithRenamedField(
         origId: string,
         mappedName: string
-      ): AnyDocument | null {
+      ): AnyDocument | undefined {
         const document = documentOfField(origId);
-        if (!document) return null;
+        if (!document) return undefined;
         return {
           ...document,
           mapped: (document.mapped ?? []).map((field) =>
@@ -359,9 +359,9 @@ export const FillerStore = signalStore(
         };
       },
 
-      documentWithoutField(origId: string): AnyDocument | null {
+      documentWithoutField(origId: string): AnyDocument | undefined {
         const document = documentOfField(origId);
-        if (!document) return null;
+        if (!document) return undefined;
         return {
           ...document,
           mapped: (document.mapped ?? []).filter(

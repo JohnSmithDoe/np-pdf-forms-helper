@@ -165,7 +165,7 @@ export class FillerFacade {
       { silent }
     );
     this.#store.applyClientData(data);
-    if (silent) this.#store.setRunReport(data.message ?? null);
+    if (silent) this.#store.setRunReport(data.message ?? undefined);
   }
 
   startOver(): void {

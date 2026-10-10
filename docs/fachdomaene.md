@@ -214,7 +214,7 @@ würden die Alias-Mechanik doppeln.
 
 **Die Wagennummer ist die zwölfstellige europäische Fahrzeugnummer (EVN)** und die einzige
 Eigenschaft, auf die im Modul gematcht wird. Sie trägt eine **Prüfziffer** an letzter Stelle, ist
-also validierbar — `util/uic.util.ts` tut das. Diese Eigenschaft ist der Grund, warum ein Wagen
+also validierbar — `util/uic.utility.ts` tut das. Diese Eigenschaft ist der Grund, warum ein Wagen
 über einen exakten Index aufgelöst werden darf und ein Radsatz nicht (Abschnitt 6).
 
 Daneben stehen das **Halterkürzel (VKM)** am Fahrzeug und der Eintrag im **NVR**.

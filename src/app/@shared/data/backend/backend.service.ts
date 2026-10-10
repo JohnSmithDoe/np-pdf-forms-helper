@@ -147,12 +147,16 @@ export class BackendService {
     request: BackendRequest,
     { silent = false }: CallOptions = {}
   ): Promise<T> {
+    const result = await this.#counted(() => this.#send<T>(request));
+    const report = reportOf(result);
+    if (report && !silent) this.report$.next(report);
+    return result;
+  }
+
+  async #counted<T>(work: () => Promise<T>): Promise<T> {
     this.#pending.update((count) => count + 1);
     try {
-      const result = await this.#send<T>(request);
-      const report = reportOf(result);
-      if (report && !silent) this.report$.next(report);
-      return result;
+      return await work();
     } catch (error) {
       throw toBackendError(error);
     } finally {

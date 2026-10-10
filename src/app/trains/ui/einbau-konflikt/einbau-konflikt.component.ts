@@ -30,7 +30,7 @@ import {
   IonRadioGroup,
 } from '@ionic/angular/standalone';
 import type { EinbauKonflikt } from '../../model/trains.types';
-import { formatIsoDate } from '../../util/uic.util';
+import { formatIsoDate } from '../../util/uic.utility';
 
 @Component({
   selector: 'app-einbau-konflikt',

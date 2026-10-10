@@ -15,5 +15,5 @@
 
 export function inputValue(event: Event): string {
   const { value } = event.target as { value?: string | number | null };
-  return value == null ? '' : String(value);
+  return value == undefined ? '' : String(value);
 }

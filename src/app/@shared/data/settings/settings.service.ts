@@ -40,11 +40,11 @@ function isViewMode(value: unknown): value is ViewMode {
   return value === 'expert' || value === 'wizard';
 }
 
-function read(key: string): string | null {
+function read(key: string): ReturnType<Storage['getItem']> | undefined {
   try {
     return localStorage.getItem(key);
   } catch {
-    return null;
+    return;
   }
 }
 

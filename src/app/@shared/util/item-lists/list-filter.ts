@@ -20,7 +20,7 @@ import type {
   ColumnFilters,
   FilterOp,
 } from '../../model/item-list.types';
-import { FARBEN } from '../farbe.util';
+import { FARBEN } from '../farbe.utility';
 import { compareValues } from './list.selector';
 
 export type ValueOf<T> = (item: T, key: string) => string;

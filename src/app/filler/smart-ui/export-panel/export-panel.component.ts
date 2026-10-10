@@ -56,7 +56,7 @@ import {
   folderOpenOutline,
 } from 'ionicons/icons';
 import { BackendError } from '../../../@shared/data/backend/backend.service';
-import { inputValue } from '../../../@shared/util/input-value.util';
+import { inputValue } from '../../../@shared/util/input-value.utility';
 import { FillerFacade } from '../../data';
 
 @Component({

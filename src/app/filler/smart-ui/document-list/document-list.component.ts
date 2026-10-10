@@ -97,10 +97,10 @@ import {
   trashOutline,
 } from 'ionicons/icons';
 import { BackendError } from '../../../@shared/data/backend/backend.service';
-import { inputValue } from '../../../@shared/util/input-value.util';
+import { inputValue } from '../../../@shared/util/input-value.utility';
 import { FillerFacade } from '../../data';
 import { FillerDocument, FillerField } from '../../model/filler.types';
-import { documentMeta, fieldOrigin } from '../../util/document-labels.util';
+import { documentMeta, fieldOrigin } from '../../util/document-labels.utility';
 
 @Component({
   selector: 'app-document-list',

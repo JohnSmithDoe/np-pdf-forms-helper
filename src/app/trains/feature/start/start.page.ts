@@ -38,7 +38,7 @@ import {
   gridOutline,
 } from 'ionicons/icons';
 import { MasterFileFacade, TrainsFacade } from '../../data';
-import { fileOf } from '../../util/path.util';
+import { fileOf } from '../../util/path.utility';
 
 interface StartTile {
   route: string;

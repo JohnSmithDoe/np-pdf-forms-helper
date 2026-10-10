@@ -15,7 +15,7 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { IonNote } from '@ionic/angular/standalone';
 import type { SheetColumn, SheetRow } from '../../../model/trains.types';
-import { columnLetter } from '../../util/column-letter.util';
+import { columnLetter } from '../../util/column-letter.utility';
 
 @Component({
   selector: 'app-sheet-table',

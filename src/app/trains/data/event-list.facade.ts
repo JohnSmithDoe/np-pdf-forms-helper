@@ -30,7 +30,7 @@ import {
   sortList,
   toggleSort,
 } from '../../@shared/util/item-lists/list.selector';
-import { formatCents, formatIsoDate, formatUic } from '../util/uic.util';
+import { formatCents, formatIsoDate, formatUic } from '../util/uic.utility';
 import { TrainsFacade } from './trains.facade';
 import { TrainsStore } from './trains.store';
 

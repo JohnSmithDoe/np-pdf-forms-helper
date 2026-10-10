@@ -59,7 +59,7 @@ import {
   ModalController,
 } from '@ionic/angular/standalone';
 import { MappedField } from '../../../@shared/model/document.types';
-import { inputValue } from '../../../@shared/util/input-value.util';
+import { inputValue } from '../../../@shared/util/input-value.utility';
 import { FillerFacade } from '../../data';
 import { FillerDocument } from '../../model/filler.types';
 

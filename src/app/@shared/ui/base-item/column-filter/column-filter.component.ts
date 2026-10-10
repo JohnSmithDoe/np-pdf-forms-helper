@@ -63,9 +63,9 @@ import type {
   ItemListSort,
   SortDirection,
 } from '../../../model/item-list.types';
-import { FARBE_COLOR, FARBE_LABEL } from '../../../util/farbe.util';
+import { FARBE_COLOR, FARBE_LABEL } from '../../../util/farbe.utility';
 import { matches } from '../../../util/item-lists/list-filter';
-import { inputValue } from '../../../util/input-value.util';
+import { inputValue } from '../../../util/input-value.utility';
 
 const OPS: readonly { op: FilterOp; label: string }[] = [
   { op: 'gleich', label: 'Ist gleich' },

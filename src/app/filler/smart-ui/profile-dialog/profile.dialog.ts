@@ -30,7 +30,7 @@ import {
   IonToolbar,
   ModalController,
 } from '@ionic/angular/standalone';
-import { inputValue } from '../../../@shared/util/input-value.util';
+import { inputValue } from '../../../@shared/util/input-value.utility';
 
 @Component({
   selector: 'app-profile-dialog',

@@ -56,7 +56,7 @@ export class SetupFieldsPage {
   readonly #params = toSignal(this.#route.paramMap);
 
   protected readonly documentId = computed(
-    () => this.#params()?.get('id') ?? null
+    () => this.#params()?.get('id') ?? undefined
   );
 
   protected readonly document = computed<FillerDocument | undefined>(() => {

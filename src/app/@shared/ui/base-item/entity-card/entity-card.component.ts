@@ -31,7 +31,7 @@ import {
   IonIcon,
 } from '@ionic/angular/standalone';
 import type { Farbe } from '../../../model/farbe.types';
-import { FARBE_COLOR, FARBE_LABEL } from '../../../util/farbe.util';
+import { FARBE_COLOR, FARBE_LABEL } from '../../../util/farbe.utility';
 
 @Component({
   selector: 'app-entity-card',

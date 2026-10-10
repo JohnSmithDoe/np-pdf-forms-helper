@@ -9,7 +9,7 @@
 // silent ones are what the list is opened for. A device that never reported is
 // the most silent of all and comes first. `STUMM_AB_TAGEN` is the customer's
 // dashboard threshold (red above seven days) — the same number as the Wagen
-// card's `STUMM_AB_TAGEN` in `util/wagen-zustand.util.ts`; change one, change both.
+// card's `STUMM_AB_TAGEN` in `util/wagen-zustand.utility.ts`; change one, change both.
 //
 // Days are counted in calendar days against `today`, the way the customer's
 // sheet subtracts dates. `today` is an argument so the view is a pure function;
