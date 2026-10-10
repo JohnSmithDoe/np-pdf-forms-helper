@@ -35,7 +35,12 @@
 // master spells differently (`RadsatzID` is `Radsatz ID`). The wheelset
 // snapshot needs both: its sheet holds one row per Radsatz, so the Wagennummer
 // would never be a unique key, and without the respelling the sheet is not
-// even recognised as the template's.
+// even recognised as the template's. `absent` names the columns the sender's
+// file has and the master sheet does not carry at all — ECHO's order export
+// has `best_datum`, `ECHO_Eingänge` has no column for it. Only a column NAMED
+// here is excused; any other missing column still means „not this template“.
+// The order sheet is keyed by `bestellnr`: one row per order, and a Wagen can
+// have several.
 // ────────────────────────────────────────────────────────────────
 
 use super::model::{ColumnBinding, FieldKind, ImportPlan, ImportTemplate};
@@ -119,6 +124,7 @@ pub fn all() -> Vec<ImportTemplate> {
 pub struct MasterHint {
     pub key: &'static str,
     pub renamed: &'static [(&'static str, &'static str)],
+    pub absent: &'static [&'static str],
 }
 
 pub fn master_hint(id: &str) -> Option<MasterHint> {
@@ -126,6 +132,12 @@ pub fn master_hint(id: &str) -> Option<MasterHint> {
         "radsatz-monitoring" => Some(MasterHint {
             key: "RadsatzID",
             renamed: &[("RadsatzID", "Radsatz ID")],
+            absent: &[],
+        }),
+        "werkstattauftraege" => Some(MasterHint {
+            key: "bestellnr",
+            renamed: &[],
+            absent: &["best_datum"],
         }),
         _ => None,
     }

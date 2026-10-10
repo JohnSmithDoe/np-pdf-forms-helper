@@ -1184,3 +1184,18 @@ bereinigten Datei; was erledigt ist, soll aus dem Blick, ohne verloren zu gehen.
   erst, wenn die Master-Datei sicher geschrieben ist, datiert mit dem Stempel des Schreibens — und nie
   als Fehler: das Schreiben ist schon geschehen, ein Fehler hier läse sich, als wäre es nicht. Die
   Ergebnisseite sagt es in einer Zeile (`MasterExportRun.archiviert`), samt wo es zu finden ist.
+
+## Eine Vorlage darf Spalten kennen, die ihr Master-Blatt nicht hat (appended 2026-10-10)
+
+Anlass: `Echo_BestellungenSeitSeptember.XLSX` (Vorlage „Werkstattaufträge“) ließ sich nicht in die Master
+übertragen — „kein Blatt“. Das Blatt `ECHO_Eingänge` trägt sieben der acht zugeordneten Spalten; nur
+`best_datum` fehlt. Die Bindung leitet die Vorlage eines Blatts aber nur ab, wenn ALLE ihre Spalten da sind.
+
+- **`builtin::master_hint` nennt jetzt auch `absent`** — Spalten, die die Datei des Absenders hat und das
+  Master-Blatt gar nicht. Für die Erkennung zählen sie als vorhanden. Entschuldigt wird nur, was dort
+  benannt ist; jede andere fehlende Spalte heißt weiter „nicht diese Vorlage“.
+- **Schlüssel ist `bestellnr`, nicht der Wagen**: das Blatt hat eine Zeile je Bestellung. In der Datei
+  sind 42 Bestellnummern eindeutig, aber nur 39 Wagen — mit dem Wagen als Schlüssel wäre das Schreiben
+  abgelehnt worden.
+- Die Bindungen mit `auto` werden bei jedem `sync` neu abgeleitet; eine bestehende Installation bekommt
+  die Bindung also ohne Klick.

@@ -16,7 +16,10 @@
 // spelling for recognition, and the binding starts with that template's key
 // and those respellings as aliases — so the Radsatz-Monitoring sheet is the
 // template's, keyed by `Radsatz ID` ← `RadsatzID`, on a fresh install without a
-// click. A user copy takes the hint of the built-in it came from.
+// click. Columns the hint names `absent` count as present for recognition —
+// the master sheet simply has no column for them, so `ECHO_Eingänge` is the
+// order template's without `best_datum`. A user copy takes the hint of the
+// built-in it came from.
 //
 // ONLY MAPPING, IMPORT, EXPORT AND A SHEET VIEW READ THE FILE. `sync` runs when
 // a version is taken over or written, on „Standardzuordnung“, when an import
@@ -195,6 +198,7 @@ fn respelled_template(headers: &[String], templates: &[ImportTemplate]) -> Optio
                         .find(|(_, master)| *master == header.trim())
                         .map_or_else(|| header.clone(), |(source, _)| source.to_string())
                 })
+                .chain(hint.absent.iter().map(|header| header.to_string()))
                 .collect();
             source_template(&respelled, std::slice::from_ref(*template)).is_some()
         })
@@ -394,6 +398,49 @@ mod tests {
         let binding = bound(&folder, &["Wagennr.", "Radsatz ID", "Radsatznummer"]);
         assert_eq!(binding.template_id, "");
         assert_eq!(binding.key, None);
+    }
+
+    // ECHO's order export has `best_datum`; the master's order sheet has no such
+    // column. The hint excuses exactly that one, and keys the sheet by order.
+    #[test]
+    fn a_column_the_hint_names_absent_still_binds_the_template_by_its_key() {
+        let folder = TempDir::new("bindings-hint-absent");
+        let binding = bound(
+            &folder,
+            &[
+                "wagen",
+                "bestellnr",
+                "empfaenger",
+                "eingang_ist",
+                "werk_ausg_ist",
+                "status",
+                "bemerkung_intern",
+                "Empfangsdatum",
+                "barcode",
+                "rs_bez",
+            ],
+        );
+        assert_eq!(binding.template_id, "builtin:werkstattauftraege");
+        assert_eq!(binding.key.as_deref(), Some("bestellnr"));
+        assert!(binding.aliases.is_empty());
+    }
+
+    // Only the named column is excused: without `status` it is not the template.
+    #[test]
+    fn a_column_not_named_absent_still_keeps_the_sheet_unbound() {
+        let folder = TempDir::new("bindings-hint-absent-other");
+        let binding = bound(
+            &folder,
+            &[
+                "wagen",
+                "bestellnr",
+                "empfaenger",
+                "eingang_ist",
+                "werk_ausg_ist",
+                "bemerkung_intern",
+            ],
+        );
+        assert_eq!(binding.template_id, "");
     }
 
     #[test]
