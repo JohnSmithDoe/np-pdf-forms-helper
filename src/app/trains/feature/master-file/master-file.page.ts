@@ -1,22 +1,20 @@
 // ─── why ────────────────────────────────────────────────────────
-// The customer's master workbook as a file: pick it, read what the cleaning
-// changed, take it over. Its own page and its own walk on purpose — the
-// Bereinigen hub cleans a sender's file through a template and asks per
-// column; the master has no template, and its cleaning asks nothing because it
-// only does what cannot change a meaning (`master_file::clean` in Rust).
+// The customer's master workbook, chosen WHERE IT LIES: the MVP writes into
+// that very file (`master_file::write_in_place`), so nothing is copied in and
+// nothing is cleaned — the customer keeps working in their own file, and every
+// write leaves a backup in `Sicherungen/` beside it first.
 //
-// Plan/apply: „Master-Datei wählen“ copies and cleans and shows the result as
-// PENDING; nothing is the current master until „Übernehmen“. A new pick
-// replaces an untaken one. Only one master exists, so taking over makes the
-// pick the latest version and the previous ones history.
-//
-// No import and no export here: the master is never walked into the
-// Schattensystem as a Dokument, nor pasted into itself. A version the master
-// update wrote (`quelle`) shows up here too — it is the same master, one
-// document further — and has no cleaning report, so it shows the file alone.
+// The older walk — copy in, clean, take over as a version — still exists in the
+// backend and the facade for the ERP, but has no button here: two ways to pick
+// „the master“ on one page would leave the user guessing which one is written.
 // ────────────────────────────────────────────────────────────────
 
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+} from '@angular/core';
 import {
   IonBackButton,
   IonButton,
@@ -28,10 +26,6 @@ import {
   IonCardTitle,
   IonContent,
   IonHeader,
-  IonItem,
-  IonLabel,
-  IonList,
-  IonListHeader,
   IonNote,
   IonTitle,
   IonToolbar,
@@ -39,7 +33,7 @@ import {
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { MasterFileFacade, TrainsFacade } from '../../data';
-import { MasterFileReportComponent } from '../../ui/master-file-report/master-file-report.component';
+import { fileOf, folderOf } from '../../util/path.util';
 
 @Component({
   selector: 'app-page-master-file',
@@ -58,14 +52,9 @@ import { MasterFileReportComponent } from '../../ui/master-file-report/master-fi
     IonCardTitle,
     IonContent,
     IonHeader,
-    IonItem,
-    IonLabel,
-    IonList,
-    IonListHeader,
     IonNote,
     IonTitle,
     IonToolbar,
-    MasterFileReportComponent,
   ],
 })
 export class MasterFilePage {
@@ -73,20 +62,17 @@ export class MasterFilePage {
   protected readonly trains = inject(TrainsFacade);
   readonly #reports = inject(ReportPresenterService);
 
+  protected readonly name = computed(() => fileOf(this.facade.target() ?? ''));
+  protected readonly folder = computed(() =>
+    folderOf(this.facade.target() ?? '')
+  );
+
   constructor() {
     void this.#reports.run(() => this.facade.load());
   }
 
   protected onPick(): void {
-    void this.#reports.run(() => this.facade.clean());
-  }
-
-  protected onAccept(): void {
-    void this.#reports.run(() => this.facade.accept());
-  }
-
-  protected onDiscard(): void {
-    void this.#reports.run(() => this.facade.discard());
+    void this.#reports.run(() => this.facade.pickTarget());
   }
 
   protected onOpen(path: string): void {

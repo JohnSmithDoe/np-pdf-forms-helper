@@ -5,7 +5,7 @@
   phaseColor="secondary"
   [step]="3"
   [stepCount]="steps"
-  nextLabel="Übernehmen"
+  nextLabel="In Master-Datei schreiben"
   nextColor="success"
   [nextDisabled]="!facade.writable()"
   (back)="onBack()"
@@ -66,8 +66,9 @@
   </ion-list>
 
   <ion-note>
-    Erst mit „Übernehmen“ wird geschrieben — als neue Fassung der Master-Datei.
-    Die jetzige Fassung bleibt unverändert erhalten.
+    Erst mit „In Master-Datei schreiben“ wird geschrieben — direkt in Ihre
+    Master-Datei. Vorher legt das Programm eine Sicherung im Ordner
+    „Sicherungen“ daneben an. Bitte die Datei in Excel schließen.
   </ion-note>
 </app-wizard-shell>
 

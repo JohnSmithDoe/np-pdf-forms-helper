@@ -8,12 +8,16 @@
 //
 // `icon` is an ionicons name, registered by importing the symbol in the
 // component that renders it: a wrong name renders NOTHING and raises no error.
+//
+// `exact` marks an entry whose route is a prefix of another entry's — `/trains`
+// under `/trains/erp` — so only one of them is shown active.
 // ────────────────────────────────────────────────────────────────
 
 export interface NavItem {
   route: string;
   label: string;
   icon: string;
+  exact?: boolean;
 }
 
 export interface NavGroup {

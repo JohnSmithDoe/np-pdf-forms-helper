@@ -10,6 +10,9 @@
 // version's headers once (`bindings::sync`), so the master settings page and the
 // export open on it without a second wait. The decision is a free fn over `&AppState`
 // (`clean_picked`) so a test can walk a file in without a window.
+//
+// `pick_master_target` is the MVP's way in: it only RECORDS the customer's path
+// (`target_picked`) and reads its headers once, so the export opens on it.
 // ────────────────────────────────────────────────────────────────
 
 use std::path::Path;
@@ -41,6 +44,18 @@ pub fn clean_master_file(
 }
 
 #[tauri::command(async)]
+pub fn pick_master_target(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    let Some(path) = picker::file(&window, "Master-Datei wählen", None, Some(picker::EXCEL))
+    else {
+        return Ok(TrainsData::nothing());
+    };
+    target_picked(&path, &state)
+}
+
+#[tauri::command(async)]
 pub fn accept_master_file(state: State<'_, AppState>) -> AppResult<TrainsData> {
     let mut db = state.trains();
     super::accept(&mut db, &today_iso())?;
@@ -53,6 +68,15 @@ pub fn discard_master_file(state: State<'_, AppState>) -> AppResult<TrainsData> 
     let mut db = state.trains();
     super::discard(&mut db)?;
     Ok(TrainsData::nothing().master_file(db.master_file().clone()))
+}
+
+fn target_picked(path: &Path, state: &AppState) -> AppResult<TrainsData> {
+    let mut db = state.trains();
+    super::set_target(&mut db, path)?;
+    crate::trains::master::bindings::sync(&mut db, false)?;
+    Ok(TrainsData::nothing()
+        .master_file(db.master_file().clone())
+        .master(crate::trains::master::view(db.master())))
 }
 
 fn clean_picked(path: &Path, state: &AppState) -> AppResult<TrainsData> {
@@ -91,5 +115,22 @@ mod tests {
         assert!(first.master_file.unwrap().pending.is_some());
         let error = clean_picked(&original, &state).unwrap_err();
         assert!(error.into_messages()[1].contains("schon vor"));
+    }
+
+    #[test]
+    fn a_picked_target_becomes_the_master_the_export_reads() {
+        let folder = TempDir::new("masterfile-target-picked");
+        let state = folder.state();
+        let original = workbook(&folder, "Master.xlsx", &[("Liste", &[&["Wagennummer"]])]);
+
+        let data = target_picked(&original, &state).unwrap();
+        let path = original.to_string_lossy().into_owned();
+        assert_eq!(
+            data.master_file.unwrap().pfad.as_deref(),
+            Some(path.as_str())
+        );
+        let db = state.trains();
+        assert_eq!(db.master().file.as_deref(), Some(path.as_str()));
+        assert_eq!(db.master().scan.as_ref().unwrap().sheets[0].name, "Liste");
     }
 }

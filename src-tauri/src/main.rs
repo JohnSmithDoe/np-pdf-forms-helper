@@ -103,6 +103,7 @@ fn main() {
             trains::commands::stage_master_sheet,
             trains::master_file::commands::get_master_file,
             trains::master_file::commands::clean_master_file,
+            trains::master_file::commands::pick_master_target,
             trains::master_file::commands::accept_master_file,
             trains::master_file::commands::discard_master_file,
             trains::commands::pick_import_folder,

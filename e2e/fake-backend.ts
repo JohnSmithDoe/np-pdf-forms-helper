@@ -44,8 +44,8 @@
 //
 // The master workbook is `seed.masterSheets` — its sheet names and header rows,
 // which is all `get_master` reads of it. Its file is never picked: like
-// `bindings::follow`, `follow()` points `master.file` at the client master's
-// current version (`seed.masterFile.versions[0].cleaned`) and binds a fresh
+// `bindings::follow`, `follow()` points `master.file` at the customer's own
+// file (`seed.masterFile.pfad`), else the current version's cleaned copy, and binds a fresh
 // file by `seed.masterDefaults`.
 //
 // The master EXPORT wizard is faked shallow. `open_master_export` offers every
@@ -55,8 +55,9 @@
 // alias are `cargo test`'s. `preview_master_export` and `write_master_export` serve
 // `seed.masterExport[sheet]` — hand-written runs with their structure and cell
 // changes — and only ECHO the request's answers back: an answered column leaves
-// `open`, nothing is pasted or diffed. The write records a new version of the
-// client master, `quelle` the document — it is the current one afterwards.
+// `open`, nothing is pasted or diffed. The write goes into the customer's own
+// file (`pfad`) and answers the backup path it would have taken — no version
+// is recorded, as in Rust.
 // Recognising a sheet by its header row is `kinds::recognise`'s too, so the
 // defaults are SEEDED (`seed.masterDefaults`): a client master taken over with
 // nothing bound and `reset_master_bindings` apply them.
@@ -84,6 +85,8 @@
 // cleaned version `clean_master_file` answers in place of picker + cleaning —
 // what the cleaning changes is `master_file::clean`'s and proved by `cargo
 // test`. The pick lands as `pending`; accept puts it first, discard drops it.
+// `seed.masterTargetPick` is the path `pick_master_target` answers — the MVP's
+// pick, which only records `pfad`.
 // A seed that names `master.file` and no `masterFile` gets a client master at
 // that path (`clientMaster`, applied in `installFakeBackend` because `install`
 // is serialised), since the file can no longer exist without one.
@@ -545,14 +548,16 @@ export interface FakeMasterFileVersion {
 }
 
 export interface FakeMasterFile {
+  pfad?: string;
   versions: FakeMasterFileVersion[];
   pending?: FakeMasterFileVersion;
 }
 
-/** A client master taken over as one version whose cleaned copy is `path`. */
+/** A client master chosen at `path` (`pfad`), plus the version an older install would hold. */
 export function clientMaster(path: string): FakeMasterFile {
   const name = path.split(/[\\/]/).pop() ?? path;
   return {
+    pfad: path,
     versions: [
       {
         id: 'mv-1',
@@ -712,6 +717,8 @@ export interface FakeSeed {
   masterFile?: FakeMasterFile;
   /** What `clean_master_file` answers in place of picker and cleaning; `null` = cancelled. */
   masterFilePick?: FakeMasterFileVersion | null;
+  /** The path `pick_master_target` answers in place of the picker; `null` = cancelled. */
+  masterTargetPick?: string | null;
   /** Command name → the German lines it should reject with. */
   failures?: Record<string, string[]>;
 }
@@ -743,10 +750,7 @@ export function recordedCalls(page: Page): Promise<RecordedCall[]> {
 
 /**
  * Installs the fake on the CURRENT page — what `installFakeBackend` sends into
- * the browser, callable directly.
- *
- * `dev/main.mock.ts` calls it that way to serve the real app against this same
- * fake (`pnpm run start:mock`), so the command set stays in one file.
+ * the browser.
  *
  * Serialised into the page by `addInitScript`, so it must be self-contained: no
  * imports, no closure over anything in this module.
@@ -781,6 +785,7 @@ export function install(seed: FakeSeed): void {
     masterExport: Record<string, FakeExportSheetRun>;
     masterFile: FakeMasterFile;
     masterFilePick: FakeMasterFileVersion | null;
+    masterTargetPick: string | null;
     committed: number[];
     failures: Record<string, string[]>;
     calls: RecordedCall[];
@@ -824,6 +829,7 @@ export function install(seed: FakeSeed): void {
     masterExport: seed.masterExport ?? {},
     masterFile: seed.masterFile ?? { versions: [] },
     masterFilePick: seed.masterFilePick ?? null,
+    masterTargetPick: seed.masterTargetPick ?? null,
     committed: [],
     failures: seed.failures ?? {},
     calls: [],
@@ -877,7 +883,8 @@ export function install(seed: FakeSeed): void {
   };
 
   const follow = () => {
-    const current = state.masterFile.versions[0]?.cleaned;
+    const current =
+      state.masterFile.pfad ?? state.masterFile.versions[0]?.cleaned;
     if (state.master.file === current) return;
     state.master = {
       ...state.master,
@@ -1533,54 +1540,29 @@ export function install(seed: FakeSeed): void {
     write_master_export: (args) => {
       const request = args['request'] as unknown as FakeExportRequest;
       const run = exportRun(request);
-      const current = state.masterFile.versions[0];
-      if (!current || request.base !== state.master.file) {
+      const target = state.master.file;
+      if (!target || request.base !== target) {
         return Promise.reject({
           messages: [
             'Die gewählte Ausgangsdatei gehört nicht zur Master-Datei.',
           ],
         });
       }
-      const id = `mv-${state.masterFile.versions.length + 1}`;
-      const folder = `data/trains/masterdatei/${id}`;
-      const target = `${folder}/${current.name}`;
-      const dokument = state.dokumente.find(
-        (entry) => entry.id === request.dokumentId
-      );
-      state.masterFile = {
-        ...state.masterFile,
-        versions: [
-          {
-            id,
-            name: current.name,
-            folder,
-            original: target,
-            cleaned: target,
-            originalHash: id,
-            cleanedHash: id,
-            bereinigtAm: '2026-10-04',
-            uebernommenAm: '2026-10-04',
-            quelle: dokument?.name,
-            report: {
-              sheets: [],
-              totals: {
-                rowsCut: 0,
-                tailRowsCut: 0,
-                trimmed: 0,
-                numbers: 0,
-                dates: 0,
-                notes: 0,
-              },
-            },
-          },
-          ...state.masterFile.versions,
-        ],
-      };
+      const name = target.split(/[\\/]/).pop() ?? target;
+      const folder = `${target.slice(0, target.length - name.length - 1)}/Sicherungen`;
+      const sicherung = `${folder}/${name.replace(/\.xlsx$/i, '')} 2026-10-10 120000.xlsx`;
       return {
-        masterExport: { ...run, target, folder },
+        masterExport: { ...run, target, folder, sicherung },
         ...masterView(),
         masterFile: copy(state.masterFile),
       };
+    },
+
+    pick_master_target: () => {
+      if (!state.masterTargetPick) return {};
+      state.masterFile = { ...state.masterFile, pfad: state.masterTargetPick };
+      follow();
+      return { masterFile: copy(state.masterFile), ...masterView() };
     },
 
     get_master_file: () => ({ masterFile: copy(state.masterFile) }),

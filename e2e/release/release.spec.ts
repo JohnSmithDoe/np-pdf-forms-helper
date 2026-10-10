@@ -29,16 +29,13 @@ test('the release build renders and navigates under the shipped CSP', async ({
   await installFakeBackend(page);
   await page.goto('/#/trains');
 
-  const dashboard = page.locator('app-page-trains-dashboard');
+  const start = page.locator('app-page-trains-start');
   // The global stylesheet: Ionic's core CSS positions every `.ion-page`.
-  await expect(dashboard).toHaveCSS('position', 'absolute');
+  await expect(start).toHaveCSS('position', 'absolute');
   // An Angular component style, injected at runtime as a `<style>`.
-  await expect(dashboard.locator('.dashboard__tiles')).toHaveCSS(
-    'display',
-    'grid'
-  );
+  await expect(start.locator('.start__tiles')).toHaveCSS('display', 'grid');
 
-  await dashboard.getByRole('button', { name: 'Bereinigen', exact: true }).click();
+  await start.getByRole('button', { name: 'Bereinigen', exact: true }).click();
   // Without Ionic's page CSS the next page lands BELOW the old one, off-screen.
   await expect(page.locator('app-page-clean-hub')).toBeInViewport();
 

@@ -1831,9 +1831,11 @@ export const DEMO_SEED: FakeSeed = {
   masterSheetViews,
   masterExport,
   masterFile: {
+    pfad: 'C:\\Users\\wagenmut\\Master\\Wagenmut Master.xlsx',
     versions: [masterFileVersion('m-2026-09', '2026-09-15', '2026-09-15')],
   },
   masterFilePick: masterFileVersion('m-2026-10', '2026-10-04'),
+  masterTargetPick: 'C:\\Users\\wagenmut\\Master\\Wagenmut Master 2026-10.xlsx',
   masterSheets: [
     { name: 'Alle Wagen', headers: ['Wagen-Nr.', 'Status', 'Bemerkung'] },
     {

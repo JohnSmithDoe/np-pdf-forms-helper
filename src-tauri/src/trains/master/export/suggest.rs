@@ -23,9 +23,9 @@
 // Suggested sheets come FIRST, the rest in workbook order: the real master has
 // 28 sheets and the two that matter must not be scrolled for.
 //
-// THE BASE is the current version of the client master and nothing else: a run
-// of documents accumulates because each written version becomes the current
-// one. `bindings::sync` has pointed the settings at it before anything is read.
+// THE BASE is the client master and nothing else — the customer's own file
+// once one is picked: a run of documents accumulates because each write goes
+// into it. `bindings::sync` has pointed the settings at it before anything is read.
 // ────────────────────────────────────────────────────────────────
 
 use std::collections::HashSet;

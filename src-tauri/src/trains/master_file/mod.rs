@@ -1,9 +1,8 @@
 // ─── why ────────────────────────────────────────────────────────
 // The customer's master workbook as a FILE the app owns: picked, copied in,
 // cleaned, and kept as versions. It is THE master — `trains/master/` binds,
-// mirrors and exports against its current version (`bindings::follow`), and an
-// export's result comes back here as a new version (`updated`), its `quelle`
-// the document. Still no Dokument: a master is never imported by the walk nor
+// mirrors and exports against its current version (`bindings::follow`). Still
+// no Dokument: a master is never imported by the walk nor
 // exported into itself.
 //
 // ONLY ONE EXISTS. The customer produces it again and again, so each pick is a
@@ -26,12 +25,21 @@
 // workbook back“), so `clean_adopted` reads twice: a probe book cleans every
 // sheet and throws it away, and only the sheets that changed are deserialised
 // in the book that is written. On the real master that is a dozen of 28.
+//
+// THE MVP WRITES THE CUSTOMER'S OWN FILE (`pfad`, set by `set_target`, no copy,
+// no cleaning). When set it is THE master and `bindings::follow` prefers it over
+// any version; the versions and the cleaning stay for the ERP's older path.
+// `write_in_place` never writes without a backup: it first opens the file for
+// writing — Excel's lock on Windows fails HERE, before anything is copied — then
+// copies it into `Sicherungen/` beside it, and only then replaces it through
+// `write_book`'s temp + rename. A failed copy writes nothing. See
+// `docs/decisions.md`, „MVP: In die Kunden-Master schreiben“.
 // ────────────────────────────────────────────────────────────────
 
 mod clean;
 pub mod commands;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
@@ -44,6 +52,7 @@ use super::model::{
 use crate::error::{AppError, AppResult};
 
 const PROTOCOL_FILE: &str = "protokoll.json";
+const SICHERUNGEN: &str = "Sicherungen";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,10 +71,7 @@ pub fn known(file: &MasterFile, hash: &str) -> Option<String> {
 }
 
 pub fn clean(original: &Path, root: &Path, stamp: &str) -> AppResult<MasterFileVersion> {
-    if !original
-        .extension()
-        .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx"))
-    {
+    if !is_xlsx(original) {
         return Err(AppError::Report(vec![
             "Nur Excel-Dateien (.xlsx) können als Master-Datei bereinigt werden.".into(),
         ]));
@@ -206,54 +212,80 @@ pub fn accept(db: &mut TrainsDb, stamp: &str) -> AppResult<()> {
     db.save_master_file(file)
 }
 
-pub fn updated(
-    db: &mut TrainsDb,
-    book: &umya_spreadsheet::Workbook,
-    quelle: &str,
-    stamp: &str,
-) -> AppResult<MasterFileVersion> {
-    let name = db
-        .master_file()
-        .versions
-        .first()
-        .map(|version| version.name.clone())
-        .ok_or_else(|| {
-            AppError::Report(vec!["Es ist noch keine Master-Datei übernommen.".into()])
-        })?;
-    let id = uuid::Uuid::new_v4().to_string();
-    let folder = db.master_file_folder().join(&id);
-    std::fs::create_dir_all(&folder).map_err(|error| AppError::io(&folder, error))?;
-    let path = folder.join(&name);
-    let written = (|| {
-        crate::doc::write_book(
-            book,
-            &path,
-            format!("Die Master-Datei {name} konnte nicht geschrieben werden."),
-        )?;
-        let hash = dokument::hash_of(&path)?;
-        let file = path.to_string_lossy().into_owned();
-        let version = MasterFileVersion {
-            id,
-            name: name.clone(),
-            folder: folder.to_string_lossy().into_owned(),
-            original: file.clone(),
-            cleaned: file,
-            original_hash: hash.clone(),
-            cleaned_hash: hash,
-            bereinigt_am: stamp.to_string(),
-            uebernommen_am: Some(stamp.to_string()),
-            quelle: Some(quelle.to_string()),
-            report: MasterFileReport::default(),
-        };
-        let mut master = db.master_file().clone();
-        master.versions.insert(0, version.clone());
-        db.save_master_file(master)?;
-        Ok(version)
-    })();
-    if written.is_err() {
-        dokument::discard(&folder);
+pub fn set_target(db: &mut TrainsDb, path: &Path) -> AppResult<()> {
+    if !is_xlsx(path) {
+        return Err(AppError::Report(vec![
+            "Nur Excel-Dateien (.xlsx) können als Master-Datei gewählt werden.".into(),
+        ]));
     }
-    written
+    if !path.is_file() {
+        return Err(AppError::Report(vec![format!(
+            "Die Master-Datei {} gibt es nicht.",
+            path.display()
+        )]));
+    }
+    let mut file = db.master_file().clone();
+    file.pfad = Some(path.to_string_lossy().into_owned());
+    db.save_master_file(file)
+}
+
+#[derive(Debug)]
+pub struct Written {
+    pub target: PathBuf,
+    pub sicherung: PathBuf,
+}
+
+pub fn write_in_place(
+    book: &umya_spreadsheet::Workbook,
+    target: &Path,
+    stamp: &str,
+) -> AppResult<Written> {
+    let name = crate::doc::file_name(target);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(target)
+        .map_err(|error| {
+            AppError::detail(
+                format!(
+                    "Die Master-Datei {name} kann nicht geschrieben werden. Ist sie noch in Excel geöffnet?"
+                ),
+                error,
+            )
+        })?;
+    let sicherung = backup(target, stamp)?;
+    crate::doc::write_book(
+        book,
+        target,
+        format!("Die Master-Datei {name} konnte nicht geschrieben werden."),
+    )?;
+    Ok(Written {
+        target: target.to_path_buf(),
+        sicherung,
+    })
+}
+
+fn backup(target: &Path, stamp: &str) -> AppResult<PathBuf> {
+    let headline = || {
+        "Die Sicherung der Master-Datei konnte nicht angelegt werden. Es wurde nichts geschrieben."
+            .to_string()
+    };
+    let folder = target
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(SICHERUNGEN);
+    std::fs::create_dir_all(&folder).map_err(|error| AppError::detail(headline(), error))?;
+    let stem = target.file_stem().map_or_else(
+        || "Master".into(),
+        |stem| stem.to_string_lossy().into_owned(),
+    );
+    let path = crate::doc::free_path(&folder, &format!("{stem} {stamp}.xlsx"));
+    std::fs::copy(target, &path).map_err(|error| AppError::detail(headline(), error))?;
+    Ok(path)
+}
+
+fn is_xlsx(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx"))
 }
 
 pub fn discard(db: &mut TrainsDb) -> AppResult<()> {
@@ -376,6 +408,65 @@ mod tests {
         hold(&mut db, second).unwrap();
         assert!(!Path::new(&first_folder).exists());
         assert_eq!(db.master_file().pending.as_ref().unwrap().name, "B.xlsx");
+    }
+
+    #[test]
+    fn a_target_is_the_customers_own_path_and_nothing_is_copied() {
+        let folder = TempDir::new("masterfile-target");
+        let original = master(&folder, "Master.xlsx");
+        let mut db = db(&folder);
+        set_target(&mut db, &original).unwrap();
+        assert_eq!(
+            db.master_file().pfad.as_deref(),
+            Some(original.to_string_lossy().as_ref())
+        );
+        assert!(!db.master_file_folder().exists());
+        assert!(set_target(&mut db, &folder.write("Master.xlsm", "x")).is_err());
+        assert!(set_target(&mut db, &folder.join("fehlt.xlsx")).is_err());
+    }
+
+    #[test]
+    fn writing_in_place_backs_the_old_file_up_first() {
+        let folder = TempDir::new("masterfile-in-place");
+        let original = master(&folder, "Master.xlsx");
+        let before = std::fs::read(&original).unwrap();
+        let mut book = umya_spreadsheet::reader::xlsx::read(&original).unwrap();
+        book.sheet_by_name_mut("Liste")
+            .unwrap()
+            .cell_mut("B2")
+            .set_value("Dortmund");
+
+        let written = write_in_place(&book, &original, "2026-10-10 120000").unwrap();
+        assert_eq!(
+            written.sicherung,
+            folder
+                .join("Sicherungen")
+                .join("Master 2026-10-10 120000.xlsx")
+        );
+        assert_eq!(std::fs::read(&written.sicherung).unwrap(), before);
+        let after = umya_spreadsheet::reader::xlsx::read(&original).unwrap();
+        assert_eq!(
+            after.sheet_by_name("Liste").unwrap().value("B2"),
+            "Dortmund"
+        );
+
+        // A second write the same second does not overwrite the first backup.
+        let again = write_in_place(&book, &original, "2026-10-10 120000").unwrap();
+        assert_ne!(again.sicherung, written.sicherung);
+        assert_eq!(std::fs::read(&written.sicherung).unwrap(), before);
+    }
+
+    #[test]
+    fn without_a_backup_nothing_is_written() {
+        let folder = TempDir::new("masterfile-no-backup");
+        let original = master(&folder, "Master.xlsx");
+        let before = std::fs::read(&original).unwrap();
+        // A FILE where the backup folder should go makes the backup fail.
+        folder.write("Sicherungen", "kein Ordner");
+        let book = umya_spreadsheet::reader::xlsx::read(&original).unwrap();
+        let error = write_in_place(&book, &original, "x").unwrap_err();
+        assert!(error.into_messages()[0].contains("nichts geschrieben"));
+        assert_eq!(std::fs::read(&original).unwrap(), before);
     }
 
     #[test]

@@ -1,19 +1,19 @@
 // ─── why ────────────────────────────────────────────────────────
-// Layout only — the cards bring their own surface, and the counts are
-// `ion-card-subtitle` rather than a hand-set colour for the same reason.
-//
-// The tiles are a `grid` with a `minmax` track and not a wrapping flex row: they
-// carry counts that are read down a column, and `flex: 1 1 <basis>` gives the
-// last row of a wrap wider cards than the rows above it.
+// Layout only, the same shape as the ERP dashboard: the one action full width,
+// the tiles in a `minmax` grid below it.
 // ────────────────────────────────────────────────────────────────
 
-.dashboard__tiles {
+.start__action {
+  margin: 0 0 1.5rem;
+}
+
+.start__tiles {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
   gap: 1rem;
   align-items: stretch;
 }
 
-.dashboard__tile {
+.start__tile {
   margin: 0;
 }

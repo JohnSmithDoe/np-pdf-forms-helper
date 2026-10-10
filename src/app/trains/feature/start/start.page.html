@@ -1,0 +1,44 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button aria-label="Menü öffnen" />
+    </ion-buttons>
+    <ion-title>Dokumente</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <ion-card
+    class="start__action"
+    [button]="true"
+    (click)="open(cleanTile)"
+    [attr.aria-label]="cleanTile.label"
+    data-testid="start-clean"
+  >
+    <ion-card-header>
+      <ion-icon [name]="cleanTile.icon" aria-hidden="true" size="large" />
+      <ion-card-subtitle>{{ cleanTile.subtitle }}</ion-card-subtitle>
+      <ion-card-title>{{ cleanTile.label }}</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>{{ cleanTile.description }}</ion-card-content>
+  </ion-card>
+
+  <div class="start__tiles">
+    @for (tile of tiles(); track tile.route) {
+      <ion-card
+        class="start__tile"
+        [button]="true"
+        (click)="open(tile)"
+        [attr.aria-label]="tile.label"
+        data-testid="start-tile"
+      >
+        <ion-card-header>
+          <ion-icon [name]="tile.icon" aria-hidden="true" size="large" />
+          <ion-card-subtitle>{{ tile.subtitle }}</ion-card-subtitle>
+          <ion-card-title>{{ tile.label }}</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>{{ tile.description }}</ion-card-content>
+      </ion-card>
+    }
+  </div>
+</ion-content>

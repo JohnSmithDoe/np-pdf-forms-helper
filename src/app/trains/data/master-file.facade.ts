@@ -1,6 +1,7 @@
 // ─── why ────────────────────────────────────────────────────────
-// The customer's master FILE: pick it, read the cleaning, take it over or drop
-// it. Its own facade because it shares no command and no decision with the
+// The customer's master FILE: pick its path (`pickTarget`, the MVP — written
+// in place by the master update), or the older way, pick a copy, read the
+// cleaning, take it over or drop it. Its own facade because it shares no command and no decision with the
 // master bindings, mirror or export behind `TrainsFacade`; the state still
 // rides `TrainsStore`, because `get_trains_data` carries it to the document
 // list too.
@@ -24,6 +25,7 @@ export class MasterFileFacade {
     () => this.#store.masterFile()?.versions.slice(1) ?? []
   );
   readonly pending = computed(() => this.#store.masterFile()?.pending);
+  readonly target = computed(() => this.#store.masterFile()?.pfad);
 
   async load(): Promise<void> {
     this.#store.applyTrainsData(await this.#backend.loadMasterFile());
@@ -31,6 +33,10 @@ export class MasterFileFacade {
 
   async clean(): Promise<void> {
     this.#store.applyTrainsData(await this.#backend.cleanMasterFile());
+  }
+
+  async pickTarget(): Promise<void> {
+    this.#store.applyTrainsData(await this.#backend.pickMasterTarget());
   }
 
   async accept(): Promise<void> {

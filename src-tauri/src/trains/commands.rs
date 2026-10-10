@@ -679,7 +679,7 @@ pub fn write_master_export(
     state: State<'_, AppState>,
 ) -> AppResult<TrainsData> {
     let mut db = state.trains();
-    let run = master::export::write(&mut db, &request, &crate::trains::clock::today_iso())?;
+    let run = master::export::write(&mut db, &request, &crate::trains::clock::now_stamp())?;
     Ok(TrainsData::nothing()
         .master_export(run)
         .master(master::view(db.master()))

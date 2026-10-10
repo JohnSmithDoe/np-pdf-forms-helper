@@ -248,7 +248,7 @@ test.describe('Master-Import auf dem Dashboard', () => {
         },
       },
     });
-    await page.goto('/#/trains');
+    await page.goto('/#/trains/erp');
 
     await expect(
       page
@@ -268,7 +268,7 @@ test.describe('Master-Import auf dem Dashboard', () => {
         },
       },
     });
-    await page.goto('/#/trains');
+    await page.goto('/#/trains/erp');
 
     const dashboard = page.locator('app-page-trains-dashboard');
     await expect(dashboard.getByRole('heading').first()).toBeVisible();

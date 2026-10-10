@@ -86,7 +86,7 @@ const ROUTES: Record<DetailLinkKind, string> = {
 const LISTS: Record<EntityRef, string> = {
   wagen: '/trains/wagen',
   radsatz: '/trains/radsaetze',
-  partner: '/trains',
+  partner: '/trains/erp',
 };
 
 const TONE_ICONS: Record<DetailTone, string> = {

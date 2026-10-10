@@ -165,17 +165,37 @@ test.describe('Zug-Import', () => {
     await expect(page.getByTestId('import-commit')).toHaveCount(0);
   });
 
-  test('ohne npdh.full zeigt das Dashboard die Entitäten, aber keine Vorlagen und Einstellungen', async ({
+  test('der Einstieg „Dokumente“ führt zu Bereinigen, Dokumenten und Master-Datei', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, { master: { file: 'data/Master.xlsx' } });
+    await page.goto('/');
+
+    const start = page.locator('app-page-trains-start');
+    for (const name of ['Bereinigen', 'Dokumente', 'Master-Datei']) {
+      await expect(
+        start.getByRole('button', { name, exact: true })
+      ).toBeVisible();
+    }
+    await expect(start.getByText('Master.xlsx', { exact: true })).toBeVisible();
+    // The ERP's entities are not on this hub.
+    await expect(
+      start.getByRole('button', { name: 'Wagen', exact: true })
+    ).toHaveCount(0);
+  });
+
+  test('ohne npdh.full zeigt das ERP die Entitäten, aber keine Vorlagen und Einstellungen', async ({
     page,
   }) => {
     await installFakeBackend(page);
-    await page.goto('/#/trains');
+    await page.goto('/#/trains/erp');
 
     const dashboard = page.locator('app-page-trains-dashboard');
+    // Cleaning and the master file live on the „Dokumente“ hub.
     await expect(
       dashboard.getByRole('button', { name: 'Bereinigen', exact: true })
-    ).toBeVisible();
-    await expect(dashboard.locator('ion-card')).toHaveCount(11);
+    ).toHaveCount(0);
+    await expect(dashboard.locator('ion-card')).toHaveCount(9);
     await expect(
       dashboard.getByRole('button', { name: 'Dokumente', exact: true })
     ).toBeVisible();
@@ -194,7 +214,7 @@ test.describe('Zug-Import', () => {
     await installFakeBackend(page);
     // „Export erstellen“ is behind the full-app toggle.
     await page.addInitScript(() => localStorage.setItem('npdh.full', 'on'));
-    await page.goto('/#/trains');
+    await page.goto('/#/trains/erp');
     await page.getByTestId('trains-export').click();
     await expect(
       page.getByText('Export wurde erfolgreich erstellt')
@@ -550,7 +570,7 @@ test.describe('Zug-Listen', () => {
         ],
       },
     });
-    await page.goto('/#/trains');
+    await page.goto('/#/trains/erp');
     const dashboard = page.locator('app-page-trains-dashboard');
     await expect(dashboard.getByText('2 Wagen · 1 stumm')).toBeVisible();
     await dashboard

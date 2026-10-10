@@ -31,8 +31,9 @@
 // file rebinds from the stored headers without opening the workbook at all.
 //
 // THE FILE IS THE CLIENT MASTER, never one picked here: `follow` points
-// `MasterSettings.file` at the cleaned copy of `MasterFile.versions[0]` and is
-// the only writer of that field. No version, no master. A new version is the
+// `MasterSettings.file` at the customer's own file (`MasterFile.pfad`), else at
+// the cleaned copy of `MasterFile.versions[0]`, and is the only writer of that
+// field. No version, no master. A new version is the
 // same workbook again, so the bindings stay — matched by sheet name, and a sheet
 // it gained is bound by default — while the scan belongs to the old path and
 // goes, which is what makes the next `sync` read the new one.
@@ -51,11 +52,13 @@ use crate::trains::model::{
 use crate::trains::recognise;
 
 pub fn follow(db: &mut TrainsDb) -> AppResult<()> {
-    let current = db
-        .master_file()
-        .versions
-        .first()
-        .map(|version| version.cleaned.clone());
+    let master = db.master_file();
+    let current = master.pfad.clone().or_else(|| {
+        master
+            .versions
+            .first()
+            .map(|version| version.cleaned.clone())
+    });
     if db.master().file == current {
         return Ok(());
     }

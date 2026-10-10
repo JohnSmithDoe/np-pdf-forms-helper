@@ -4,8 +4,8 @@
 // empties: a wipe nobody saw listed is the one mistake the preview exists to
 // stop. It is a real write into an in-memory copy of the workbook, diffed
 // before and after, so this is the result and not a prediction of it.
-// „Übernehmen“ runs the same code once more and saves it as the master's next
-// version.
+// „In Master-Datei schreiben“ runs the same code once more and writes it into
+// the customer's own file, after a backup beside it.
 //
 // „Zuordnung merken“ stores the ticks and the column answers on the master
 // bindings, so the next document of this template opens with the same sheets

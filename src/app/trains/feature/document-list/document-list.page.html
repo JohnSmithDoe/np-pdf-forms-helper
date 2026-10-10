@@ -15,50 +15,17 @@
 <ion-content class="ion-padding">
   <ion-list lines="full" data-testid="documents-master">
     <ion-list-header>Master-Datei</ion-list-header>
-    @if (masterFile.current(); as master) {
+    @if (masterFile.target(); as target) {
       <ion-item data-testid="documents-master-row">
         <ion-label class="ion-text-wrap">
-          <h2>{{ master.name }}</h2>
+          <h2>{{ masterName() }}</h2>
+          <p>{{ target }}</p>
           <p>
-            @if (master.quelle) {
-              Aktuelle Fassung · aktualisiert mit „{{ master.quelle }}“ am
-              {{ master.bereinigtAm }}
-            } @else {
-              Aktuelle Fassung · bereinigt am {{ master.bereinigtAm }}
-            }
-          </p>
-          @if (master.report.totals.tailRowsCut) {
-            <p>
-              {{ master.report.totals.tailRowsCut }} Formelzeilen am Ende
-              entfernt (je Blatt 3 behalten)
-            </p>
-          }
-          <p>
-            <ion-button
-              size="small"
-              fill="clear"
-              (click)="onOpenFolder(master.folder)"
-            >
-              Ordner öffnen
-            </ion-button>
-            @if (!master.quelle) {
-              <ion-button
-                size="small"
-                fill="clear"
-                (click)="onOpen(master.original)"
-              >
-                Original
-              </ion-button>
-            }
-            <ion-button
-              size="small"
-              fill="clear"
-              (click)="onOpen(master.cleaned)"
-            >
-              {{ master.quelle ? 'Datei öffnen' : 'Bereinigte Datei' }}
+            <ion-button size="small" fill="clear" (click)="onOpen(target)">
+              Datei öffnen
             </ion-button>
             <ion-button size="small" fill="clear" (click)="onMasterFile()">
-              Fassungen
+              Ändern
             </ion-button>
           </p>
         </ion-label>
@@ -67,7 +34,7 @@
     } @else {
       <ion-item data-testid="documents-master-empty">
         <ion-label class="ion-text-wrap">
-          <p>Noch keine Master-Datei übernommen.</p>
+          <p>Noch keine Master-Datei gewählt.</p>
         </ion-label>
         <ion-button slot="end" fill="clear" (click)="onMasterFile()">
           Master-Datei wählen
@@ -112,7 +79,7 @@
               >
                 Bereinigte Datei
               </ion-button>
-              @if (fullEnabled && masterFile.current()) {
+              @if (masterFile.target()) {
                 <ion-button
                   size="small"
                   fill="clear"
@@ -120,7 +87,7 @@
                   (click)="onExport(dokument.id)"
                   data-testid="documents-export-master"
                 >
-                  Master aktualisieren
+                  In Master übertragen
                 </ion-button>
               }
               @if (!dokument.importiertAm) {

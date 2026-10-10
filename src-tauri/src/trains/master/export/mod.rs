@@ -25,12 +25,13 @@
 // sheet that cannot be written at all — no shared column, no key, a key the
 // document names twice — is a `problem`.
 //
-// THE RESULT IS A NEW VERSION OF THE CLIENT MASTER (`master_file::updated`),
-// never a write into the current one and never a loose copy beside it: there is
-// one master, and its versions are the history of what changed it. The base is
-// always the current version (`suggest::bases`); the request still names it, so
-// a version taken over between preview and write is refused rather than
-// overwritten. The document's cleaned copy is the source and refused when
+// THE RESULT IS WRITTEN INTO THE CUSTOMER'S OWN FILE (`master_file::
+// write_in_place`, a backup in `Sicherungen/` first), never a loose copy beside
+// it: the MVP's user works in that file. The base is that file and nothing else
+// (`suggest::bases`); a file changed on disk since the wizard read its headers
+// — the stored scan's mtime — is refused in preview and write alike, so an
+// edit saved in Excel meanwhile is never overwritten unseen. The document's
+// cleaned copy is the source and refused when
 // edited since filing (`source::load`). `.xlsm` is refused: umya has no VBA
 // story.
 // ────────────────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ pub fn preview(db: &TrainsDb, request: &MasterExportRequest) -> AppResult<Master
 pub fn write(
     db: &mut TrainsDb,
     request: &MasterExportRequest,
-    today: &str,
+    stamp: &str,
 ) -> AppResult<MasterExportRun> {
     let (mut run, book) = apply(db, request)?;
     if run.sheets.iter().all(|sheet| sheet.problem.is_some()) {
@@ -72,17 +73,23 @@ pub fn write(
                 .collect(),
         ));
     }
-    let source = dokument(db, &request.dokument_id)?;
-    let (quelle, template) = (source.name.clone(), source.template_id.clone());
-    let version = crate::trains::master_file::updated(db, &book, &quelle, today)?;
+    let template = dokument(db, &request.dokument_id)?.template_id.clone();
+    let written =
+        crate::trains::master_file::write_in_place(&book, Path::new(&request.base), stamp)?;
+    drop(book);
 
     if request.remember {
         let mut settings = db.master().clone();
         remember(&mut settings, &db.templates(), &template, &run);
         db.save_master(settings)?;
     }
-    run.folder = Some(version.folder);
-    run.target = Some(version.cleaned);
+    super::bindings::sync(db, false)?;
+    run.folder = written
+        .sicherung
+        .parent()
+        .map(|folder| folder.to_string_lossy().into_owned());
+    run.target = Some(written.target.to_string_lossy().into_owned());
+    run.sicherung = Some(written.sicherung.to_string_lossy().into_owned());
     Ok(run)
 }
 
@@ -92,9 +99,10 @@ pub(super) fn dokument<'a>(db: &'a TrainsDb, id: &str) -> AppResult<&'a Dokument
 }
 
 pub(super) fn original(settings: &MasterSettings) -> AppResult<&Path> {
-    let path = settings.file.as_deref().map(Path::new).ok_or_else(|| {
-        AppError::Report(vec!["Es ist noch keine Master-Datei übernommen.".into()])
-    })?;
+    let path =
+        settings.file.as_deref().map(Path::new).ok_or_else(|| {
+            AppError::Report(vec!["Es ist noch keine Master-Datei gewählt.".into()])
+        })?;
     if path.is_file() {
         Ok(path)
     } else {
@@ -118,6 +126,13 @@ fn apply(db: &TrainsDb, request: &MasterExportRequest) -> AppResult<(MasterExpor
         ]));
     }
     let base = Path::new(&request.base);
+    let read = settings.scan.as_ref().map(|scan| scan.modified);
+    if read != Some(crate::doc::file_mtime_ms(base)? as u64) {
+        return Err(AppError::Report(vec![
+            "Die Master-Datei wurde inzwischen geändert.".into(),
+            "Bitte „In Master übertragen“ neu starten.".into(),
+        ]));
+    }
     if base
         .extension()
         .is_some_and(|ext| ext.eq_ignore_ascii_case("xlsm"))
@@ -542,39 +557,43 @@ mod tests {
     }
 
     #[test]
-    fn the_write_is_a_new_version_the_next_export_builds_on() {
+    fn the_write_goes_into_the_customers_file_after_a_backup() {
         let folder = TempDir::new("export-write");
         let (mut db, file) = setup(&folder, &HEADERS);
         let before = std::fs::read(&file).unwrap();
 
         let wanted = request(&db, telematik());
-        let run = write(&mut db, &wanted, "2026-10-04").unwrap();
-        let target = PathBuf::from(run.target.unwrap());
-        assert_eq!(crate::doc::file_name(&target), "Übersicht.xlsx");
-        assert_ne!(target, file);
-        assert_eq!(
-            std::fs::read(&file).unwrap(),
-            before,
-            "previous version untouched"
-        );
+        let run = write(&mut db, &wanted, "2026-10-10 120000").unwrap();
+        assert_eq!(PathBuf::from(run.target.unwrap()), file);
+        let sicherung = PathBuf::from(run.sicherung.unwrap());
+        assert_eq!(std::fs::read(&sicherung).unwrap(), before);
+        assert_eq!(run.folder.as_deref(), sicherung.parent().unwrap().to_str());
 
-        let current = &db.master_file().versions[0];
-        assert_eq!(current.cleaned, target.to_string_lossy());
-        assert_eq!(current.quelle.as_deref(), Some("assets.xlsx"));
-        assert_eq!(db.master_file().versions.len(), 2);
-
-        crate::trains::master::bindings::sync(&mut db, false).unwrap();
-        let (bases, base) = suggest::bases(db.master()).unwrap();
-        assert_eq!(bases.len(), 1);
-        assert_eq!(
-            base,
-            target.to_string_lossy(),
-            "the new version is the base"
-        );
-
-        let book = umya_spreadsheet::reader::xlsx::read(&target).unwrap();
+        let book = umya_spreadsheet::reader::xlsx::read(&file).unwrap();
         let sheet = book.sheet_by_name("Telematik").unwrap();
         assert_eq!(sheet.cell((4u32, 2u32)).unwrap().value(), "Neuhof");
+
+        // The write re-read the file, so the next export builds on it unrefused.
+        let (_, base) = suggest::bases(db.master()).unwrap();
+        assert_eq!(base, file.to_string_lossy());
+        preview(&db, &request(&db, telematik())).unwrap();
+    }
+
+    #[test]
+    fn a_file_changed_since_it_was_read_is_refused() {
+        let folder = TempDir::new("export-changed");
+        let (db, file) = setup(&folder, &HEADERS);
+        let wanted = request(&db, telematik());
+        // As if the customer saved it in Excel after the wizard opened.
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
+        let messages = preview(&db, &wanted).unwrap_err().into_messages();
+        assert!(messages[0].contains("inzwischen geändert"), "{messages:?}");
     }
 
     #[test]
@@ -583,7 +602,7 @@ mod tests {
         let mut db = TrainsDb::load(&folder.config()).unwrap();
         filed(&folder, &mut db, &HEADERS, "Neuhof");
         let messages = start(&mut db, "d-1").unwrap_err().into_messages();
-        assert!(messages[0].contains("übernommen"), "{messages:?}");
+        assert!(messages[0].contains("gewählt"), "{messages:?}");
     }
 
     #[test]

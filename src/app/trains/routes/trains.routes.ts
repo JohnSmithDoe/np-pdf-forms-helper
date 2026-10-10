@@ -6,10 +6,11 @@
 // route `data` — np-commlink's `data: { listId }` pattern. A real param would say
 // the value varies; it does not, there are exactly two.
 //
-// The empty path is the DASHBOARD and no longer a redirect to `import`. It is the
-// domain's one menu entry, so what it lands on has to be the way to all of the
-// rest — a redirect would have made the import the hub and left seven lists
-// reachable only by URL.
+// TWO HUBS, two menu entries. The empty path is „Dokumente“ (`feature/start`):
+// clean, file, write into the customer's master — the MVP, and what the app
+// opens on. `erp` is the Schattensystem's DASHBOARD, the way to every entity
+// list, the import and the master import; a redirect instead would have left
+// seven lists reachable only by URL.
 //
 // The guided import is TWO walks, and the URLs say which one a page belongs to.
 // `clean` is the cleaning hub (drop a folder, check the list), `clean/file`
@@ -19,14 +20,13 @@
 // Partner, Wagen and Radsätze are one page with the kind in route `data`. All
 // steps are guarded in `intake.guards.ts`.
 //
-// `master-file` is the customer's master workbook taken in as a FILE — picked,
-// cleaned, kept in versions. It is the only master: `master/*` below reads its
-// current version.
+// `master-file` is the customer's master workbook, chosen where it lies. It is
+// the only master: `master/*` below reads it.
 //
-// `master/export/*` is the third walk, „Master aktualisieren“: one filed
+// `master/export/*` is the third walk, „In Master übertragen“: one filed
 // document into the client master — sheets, column check, preview to approve,
-// result — started from the document list, written as the master's next
-// version.
+// result — started from the document list, written into the customer's file
+// after a backup.
 //
 // The entry load hangs on a PATHLESS parent so every route below it shares one
 // resolver run. Any of the six can be the first one reached, and the alternative
@@ -49,7 +49,13 @@ const pages: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    title: 'Schattensystem',
+    title: 'Dokumente',
+    loadComponent: () =>
+      import('../feature/start/start.page').then((m) => m.TrainsStartPage),
+  },
+  {
+    path: 'erp',
+    title: 'ERP',
     loadComponent: () =>
       import('../feature/dashboard/dashboard.page').then(
         (m) => m.TrainsDashboardPage

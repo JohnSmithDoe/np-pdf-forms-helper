@@ -106,6 +106,12 @@ front of a screen, or a piece of the migration that does not exist yet. Settled 
   avoid. A sheet that size is refused by the grid's row limit in the first place. Every sheet recognised
   by a Wagen key column is bound as the overview kind; the wizard no longer blocks those, it only refuses
   to SUGGEST one without a remembered template and warns on it.
+- **The in-place master write (MVP, 2026-10-10) is proved by `cargo test` and Playwright only.** It has
+  never written the real master, and it has never met Excel's lock. On macOS, opening a file for
+  writing succeeds while Excel has it open, so the „noch in Excel geöffnet?“ refusal can only be seen
+  on Windows. Also unverified: whether a Citrix home drive or a network share allows the `Sicherungen/`
+  folder and the rename over the file, and whether a mtime on a share is stable enough for the
+  „inzwischen geändert“ check.
 - **The master IMPORT (Phase 1: Wagen, Halter, Radsatz, Einbau) has run against the real master only
   from a temporary test**, 2026-10-04, through `mirror::start` / `stage_sheet` / `commit` with every
   group answered „neu anlegen“: dashboard, fitting list and stock in 3.5 s, peak ~750 MB for the test

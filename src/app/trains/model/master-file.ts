@@ -12,9 +12,14 @@
 // is a cleaned version the user has not taken over yet. A version with `quelle`
 // was written by the master update from that document, not cleaned: its
 // `original` and `cleaned` are the same file and its report is empty.
+//
+// `pfad` is the customer's OWN file, picked in the MVP and written in place by
+// the master update after a backup. When set it is the master, ahead of any
+// version.
 // ────────────────────────────────────────────────────────────────
 
 export interface MasterFile {
+  pfad?: string;
   versions: MasterFileVersion[];
   pending?: MasterFileVersion;
 }

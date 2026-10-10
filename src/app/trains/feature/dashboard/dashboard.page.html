@@ -3,7 +3,7 @@
     <ion-buttons slot="start">
       <ion-menu-button aria-label="Menü öffnen" />
     </ion-buttons>
-    <ion-title>Schattensystem</ion-title>
+    <ion-title>ERP</ion-title>
     @if (fullEnabled) {
       <ion-buttons slot="end">
         <ion-button (click)="onExport()" data-testid="trains-export">
@@ -45,20 +45,6 @@
       </ion-item>
     </ion-list>
   }
-
-  <ion-card
-    class="dashboard__action"
-    [button]="true"
-    (click)="open(importTile)"
-    [attr.aria-label]="importTile.label"
-  >
-    <ion-card-header>
-      <ion-icon [name]="importTile.icon" aria-hidden="true" size="large" />
-      <ion-card-subtitle>Hier kommen die Dateien herein</ion-card-subtitle>
-      <ion-card-title>{{ importTile.label }}</ion-card-title>
-    </ion-card-header>
-    <ion-card-content>{{ importTile.description }}</ion-card-content>
-  </ion-card>
 
   <div class="dashboard__tiles">
     @for (tile of tiles(); track tile.route) {

@@ -82,6 +82,7 @@ export type TrainsCommand =
   | { command: 'stage_master_sheet'; payload: { sheet: string } }
   | { command: 'get_master_file'; payload: Record<string, never> }
   | { command: 'clean_master_file'; payload: Record<string, never> }
+  | { command: 'pick_master_target'; payload: Record<string, never> }
   | { command: 'accept_master_file'; payload: Record<string, never> }
   | { command: 'discard_master_file'; payload: Record<string, never> }
   | { command: 'open_output_folder'; payload: { folder: string } }
@@ -316,6 +317,10 @@ export class TrainsBackend {
 
   cleanMasterFile(): Promise<TrainsData> {
     return this.#call({ command: 'clean_master_file', payload: {} });
+  }
+
+  pickMasterTarget(): Promise<TrainsData> {
+    return this.#call({ command: 'pick_master_target', payload: {} });
   }
 
   acceptMasterFile(): Promise<TrainsData> {

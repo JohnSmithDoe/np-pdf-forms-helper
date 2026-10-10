@@ -119,9 +119,10 @@
 // documents are complete for which sheet. There is no replace mode any more — a
 // `mode` left in an old `master.json` is ignored on read and dropped on the next
 // write.
-// What it writes is a new `MasterFileVersion`, its `quelle` the document.
-// `MasterSettings.file` is derived — always the current version's cleaned copy
-// (`bindings::follow`) — and the backend owns it, like `import_run`.
+// It writes into the customer's own file (`MasterFile.pfad`) after a backup,
+// named in `sicherung`. `MasterSettings.file` is derived — that file, else the
+// current version's cleaned copy (`bindings::follow`) — and the backend owns
+// it, like `import_run`.
 //
 // The MASTER FILE is the customer's workbook itself and the only master: copied
 // in and cleaned of what nothing reads — never a formula, never a moved row — or
@@ -396,6 +397,8 @@ pub struct MasterExportRun {
     pub target: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub folder: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sicherung: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1447,6 +1450,8 @@ pub struct InstandhaltungPage {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct MasterFile {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pfad: Option<String>,
     pub versions: Vec<MasterFileVersion>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pending: Option<MasterFileVersion>,

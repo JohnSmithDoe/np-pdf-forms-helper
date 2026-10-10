@@ -15,6 +15,7 @@
                   [button]="true"
                   [routerLink]="item.route"
                   routerLinkActive="app-menu__item--active"
+                  [routerLinkActiveOptions]="{ exact: item.exact ?? false }"
                   lines="none"
                   data-testid="menu-row"
                 >

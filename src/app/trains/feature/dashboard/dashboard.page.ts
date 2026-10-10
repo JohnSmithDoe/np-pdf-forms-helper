@@ -1,8 +1,9 @@
 // ─── why ────────────────────────────────────────────────────────
-// The trains hub. One menu entry — „Schattensystem“ — leads here, and every
-// entity list plus the import is reached from this page rather than from the
-// menu. Eight sibling entries said nothing about what belongs to what; a hub
-// says it once, and the menu is back to the three things the app is made of.
+// The ERP hub — the Schattensystem — reached from the menu's „ERP“ entry. Every
+// entity list, the import and the master import are reached from this page
+// rather than from the menu. Cleaning and the master file live on the other
+// hub, „Dokumente“ (`feature/start`); the Dokumente tile stays here too because
+// an import into the Schattensystem starts from a filed document.
 //
 // The tiles carry COUNTS, which is what makes this a dashboard rather than a
 // second menu: „Wagen 128“ answers the question the list would have to be opened
@@ -23,10 +24,8 @@
 // 0 that would read as an empty store. The route sits under the domain's
 // resolver, so in practice the data is there before the page is.
 //
-// Bereinigen gets no count and comes first: it is the only tile that is an
-// ACTION, and everything the others show arrives through it. Dokumente comes
-// right after it — the files the app owns, and the place an import starts from
-// once the cleaning is done.
+// Dokumente comes first: the files the app owns, and the place an import
+// starts from.
 //
 // „Export erstellen“ sits in the toolbar here because the dashboard is the
 // domain's one way in. It runs `silent` and presents its own report, since no
@@ -41,8 +40,8 @@
 // The entity tiles — Wagen, Radsätze, Instandhaltungen and the three partner
 // roles — are always there: the Schattensystem is the information hub. So is
 // „Master-Import“ (`/trains/master`), which EMPTIES the current data and
-// rebuilds it from the master's sheets, and is named apart from „Master-Datei“
-// (`/trains/master-file`), which only takes the customer's workbook in as a file.
+// rebuilds it from the master's sheets — named apart from „Master-Datei“ on the
+// other hub, which only chooses the customer's workbook.
 // „Telematik“ is its own tile beside Wagen: someone after a silent device
 // starts from the devices. Its count and „N stumm“ come from the same view Rust
 // builds for the list (`get_telematik`), reloaded whenever the Wagen-Zustand
@@ -86,7 +85,6 @@ import {
   buildOutline,
   businessOutline,
   cloudUploadOutline,
-  colorWandOutline,
   documentsOutline,
   ellipseOutline,
   gridOutline,
@@ -99,11 +97,7 @@ import {
 } from 'ionicons/icons';
 import { SettingsService } from '../../../@shared/data/settings/settings.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
-import {
-  MasterFileFacade,
-  TelematikListFacade,
-  TrainsFacade,
-} from '../../data';
+import { TelematikListFacade, TrainsFacade } from '../../data';
 import type { ClientReport } from '../../../@shared/model/client.types';
 import type { PartnerRolle } from '../../model/trains.types';
 
@@ -145,19 +139,10 @@ const FULL_ONLY = new Set(['/trains/templates', '/trains/settings']);
 })
 export class TrainsDashboardPage {
   readonly #facade = inject(TrainsFacade);
-  readonly #masterFile = inject(MasterFileFacade);
   readonly #telematik = inject(TelematikListFacade);
   readonly #router = inject(Router);
   readonly #reports = inject(ReportPresenterService);
   protected readonly fullEnabled = inject(SettingsService).fullEnabled;
-
-  protected readonly importTile: DashboardTile = {
-    route: '/trains/clean',
-    label: 'Bereinigen',
-    icon: 'color-wand-outline',
-    description:
-      'Einen Ordner oder Dateien einlesen, erkennen lassen und bereinigen. Ins Schattensystem kommt dabei noch nichts.',
-  };
 
   protected readonly tiles = computed<DashboardTile[]>(() =>
     this.fullEnabled
@@ -174,18 +159,8 @@ export class TrainsDashboardPage {
         label: 'Dokumente',
         icon: 'documents-outline',
         description:
-          'Die bereinigten Dateien — von hier aus ins Schattensystem importieren.',
+          'Die bereinigten Dateien — von hier aus ins ERP importieren.',
         count: loaded ? counts.dokumente : undefined,
-      },
-      {
-        route: '/trains/master-file',
-        label: 'Master-Datei',
-        icon: 'grid-outline',
-        description:
-          'Die Master-Datei wählen und bereinigen. Formeln und Zeilen bleiben unberührt.',
-        subtitle: this.#masterFile.current()?.bereinigtAm
-          ? `Stand ${this.#masterFile.current()?.bereinigtAm}`
-          : 'Noch keine gewählt',
       },
       {
         route: '/trains/wagen',
@@ -277,7 +252,6 @@ export class TrainsDashboardPage {
       buildOutline,
       businessOutline,
       cloudUploadOutline,
-      colorWandOutline,
       documentsOutline,
       ellipseOutline,
       gridOutline,

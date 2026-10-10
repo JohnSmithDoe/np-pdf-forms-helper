@@ -1,6 +1,6 @@
 // ─── why ────────────────────────────────────────────────────────
 // The master update wizard, as shallow as the rest: it reaches its four steps
-// from the document list — offered only while a client master exists — ticks what the backend suggested, renders the cell
+// from the document list — offered only while a client master is chosen — ticks what the backend suggested, renders the cell
 // changes it was sent and keeps Weiter dead while a column is unanswered.
 //
 // Which sheets are suggested, what a structural conflict is and which cells a
@@ -107,8 +107,6 @@ const seed = (
 const step = (page: Page, name: string) => page.locator(`app-page-${name}`);
 
 async function open(page: Page): Promise<void> {
-  // „Master aktualisieren“ is behind the full-app toggle for now.
-  await page.addInitScript(() => localStorage.setItem('npdh.full', 'on'));
   await page.goto('/#/trains/documents');
   await step(page, 'document-list')
     .getByTestId('documents-export-master')
@@ -167,11 +165,17 @@ test.describe('Master aktualisieren', () => {
     await expect(preview.getByTestId('cell-change').first()).toContainText(
       'Neuhof'
     );
-    await preview.getByRole('button', { name: 'Übernehmen' }).click();
+    await preview
+      .getByRole('button', { name: 'In Master-Datei schreiben' })
+      .click();
 
     const result = step(page, 'export-result');
     await expect(result.getByTestId('export-result')).toContainText(
-      'Neue Fassung „Übersicht.xlsx“'
+      '„Übersicht.xlsx“ geschrieben'
+    );
+    // Written into the customer's own file, the old state backed up first.
+    await expect(result.getByTestId('export-result-backup')).toContainText(
+      'Übersicht 2026-10-10 120000.xlsx'
     );
     await expect(result.getByTestId('export-result-sheet')).toContainText(
       '2 Zelle(n) aktualisiert'
@@ -201,10 +205,10 @@ test.describe('Master aktualisieren', () => {
 
     await result.getByRole('button', { name: 'Fertig' }).click();
     await expect(page).toHaveURL(/#\/trains\/documents$/);
-    // The written version is the current master now, named after its document.
+    // Still the same file: the next document goes into it too.
     await expect(
       step(page, 'document-list').getByTestId('documents-master-row')
-    ).toContainText('aktualisiert mit „assets.xlsx“');
+    ).toContainText('C:/Daten/Übersicht.xlsx');
   });
 
   test('leert fehlende Zeilen, wenn es für die Vorlage gemerkt ist', async ({

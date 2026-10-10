@@ -6,124 +6,44 @@
     <ion-title>Master-Datei</ion-title>
     <ion-buttons slot="end">
       <ion-button (click)="onPick()" data-testid="master-file-pick">
-        Master-Datei wählen
+        {{
+          facade.target() ? 'Andere Master-Datei wählen' : 'Master-Datei wählen'
+        }}
       </ion-button>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content class="ion-padding">
-  @if (facade.pending(); as pending) {
-    <ion-card data-testid="master-file-pending">
-      <ion-card-header>
-        <ion-card-title>{{ pending.name }}</ion-card-title>
-        <ion-card-subtitle>
-          Bereinigt am {{ pending.bereinigtAm }} · noch nicht übernommen
-        </ion-card-subtitle>
-      </ion-card-header>
-      <ion-card-content>
-        <app-master-file-report [report]="pending.report" />
-        <p>
-          <ion-button
-            color="success"
-            (click)="onAccept()"
-            data-testid="master-file-accept"
-          >
-            Übernehmen
-          </ion-button>
-          <ion-button
-            fill="outline"
-            color="danger"
-            (click)="onDiscard()"
-            data-testid="master-file-discard"
-          >
-            Verwerfen
-          </ion-button>
-          <ion-button fill="clear" (click)="onOpen(pending.cleaned)">
-            Bereinigte Datei
-          </ion-button>
-          <ion-button fill="clear" (click)="onOpenFolder(pending.folder)">
-            Ordner öffnen
-          </ion-button>
-        </p>
-      </ion-card-content>
-    </ion-card>
-  }
-
-  @if (facade.current(); as current) {
+  @if (facade.target(); as target) {
     <ion-card data-testid="master-file-current">
       <ion-card-header>
-        <ion-card-title>{{ current.name }}</ion-card-title>
-        <ion-card-subtitle>
-          @if (current.quelle) {
-            Aktuelle Fassung · aktualisiert mit „{{ current.quelle }}“ am
-            {{ current.bereinigtAm }}
-          } @else {
-            Aktuelle Fassung · bereinigt am {{ current.bereinigtAm }}
-            @if (current.uebernommenAm) {
-              · übernommen am {{ current.uebernommenAm }}
-            }
-          }
-        </ion-card-subtitle>
+        <ion-card-title>{{ name() }}</ion-card-title>
+        <ion-card-subtitle>{{ target }}</ion-card-subtitle>
       </ion-card-header>
       <ion-card-content>
         <p>
-          <ion-button fill="clear" (click)="onOpenFolder(current.folder)">
+          „In Master übertragen“ in der Dokumentliste schreibt in genau diese
+          Datei. Vor jedem Schreiben legt das Programm eine Sicherung im Ordner
+          „Sicherungen“ daneben an. Die Datei muss dafür in Excel geschlossen
+          sein.
+        </p>
+        <p>
+          <ion-button fill="clear" (click)="onOpen(target)">
+            Datei öffnen
+          </ion-button>
+          <ion-button fill="clear" (click)="onOpenFolder(folder())">
             Ordner öffnen
           </ion-button>
-          @if (current.quelle) {
-            <ion-button fill="clear" (click)="onOpen(current.cleaned)">
-              Datei öffnen
-            </ion-button>
-          } @else {
-            <ion-button fill="clear" (click)="onOpen(current.original)">
-              Original
-            </ion-button>
-            <ion-button fill="clear" (click)="onOpen(current.cleaned)">
-              Bereinigte Datei
-            </ion-button>
-          }
         </p>
-        @if (!current.quelle) {
-          <app-master-file-report [report]="current.report" />
-        }
       </ion-card-content>
     </ion-card>
-  } @else if (!facade.pending()) {
+  } @else {
     <ion-note data-testid="master-file-empty">
-      Noch keine Master-Datei. „Master-Datei wählen“ kopiert sie ins Programm
-      und bereinigt sie: leere Zeilen am Ende, Zahlen und Daten, die als Text
-      gespeichert sind, und Leerzeichen am Rand. Formeln und Zeilen innerhalb
-      der Daten bleiben unberührt; die Datei selbst wird nie verändert.
+      Noch keine Master-Datei. Wählen Sie Ihre Master-Datei (.xlsx) dort, wo sie
+      liegt — sie wird nicht kopiert. Bereinigte Dokumente werden später direkt
+      in sie übertragen, jedes Mal nach einer Sicherung.
     </ion-note>
-  }
-
-  @if (facade.older().length) {
-    <ion-list lines="full" data-testid="master-file-older">
-      <ion-list-header>Frühere Fassungen</ion-list-header>
-      @for (version of facade.older(); track version.id) {
-        <ion-item>
-          <ion-label class="ion-text-wrap">
-            <h2>{{ version.name }}</h2>
-            <p>
-              @if (version.quelle) {
-                aktualisiert mit „{{ version.quelle }}“ am
-                {{ version.bereinigtAm }}
-              } @else {
-                bereinigt am {{ version.bereinigtAm }}
-              }
-            </p>
-          </ion-label>
-          <ion-button
-            slot="end"
-            fill="clear"
-            (click)="onOpenFolder(version.folder)"
-          >
-            Ordner öffnen
-          </ion-button>
-        </ion-item>
-      }
-    </ion-list>
   }
 </ion-content>
 

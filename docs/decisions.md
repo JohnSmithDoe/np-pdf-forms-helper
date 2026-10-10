@@ -1080,3 +1080,38 @@ Entschieden mit Martin am 2026-10-10. Ersetzt die ERP-Arbeitsmappe, die kein ERP
 - **Die Handspalten sind leer** (Bemerkungen/notwendige Aktion, AUSGESETZT, beladen, Auftrag noch zu
   versenden, Notiz) und haben eine eigene Kopffarbe. Kein Export übernimmt sie aus einem früheren.
   Das steht in der Legende in Zeile 2.
+
+## MVP: In die Kunden-Master schreiben, mit Sicherung (appended 2026-10-10)
+
+Entschieden mit Martin am 2026-10-10: „we need to go back to a MVP … only load and sanitize the data
+sheets and then export them to the client's original master file“. Hebt „die Kundendatei wird nie
+geschrieben“ (aus „Die Master-Datei als Datei“) und „schreibt eine neue Fassung“ (aus „Die
+Kunden-Master ist die einzige Master“) auf.
+
+- **Geschrieben wird in die Datei des Kunden, dort wo sie liegt.** „Master-Datei wählen“ merkt nur
+  den Pfad (`MasterFile.pfad`, `pick_master_target`). Nichts wird kopiert, nichts bereinigt.
+  `bindings::follow` nimmt `pfad` vor jeder Fassung. Die Lesekopie (`prepare`) kürzt die Formelschwänze
+  weiter für die Leser; die Kundendatei selbst bleibt bis auf die angekreuzten Blätter unberührt.
+- **Keine Schreibung ohne Sicherung** (`master_file::write_in_place`). Zuerst wird die Datei zum
+  Schreiben geöffnet. Unter Windows schlägt das fehl, solange Excel sie offen hat, und dann wird
+  nichts kopiert. Danach kommt eine Kopie nach `Sicherungen/<Name> <JJJJ-MM-TT hhmmss>.xlsx` neben der
+  Datei (UTC, ohne Doppelpunkt). Erst dann wird über `write_book` ersetzt (Temp-Datei und
+  Umbenennen). Scheitert die Kopie, wird nichts geschrieben. Ein zweiter Lauf in derselben Sekunde
+  bekommt einen freien Namen (`free_path`).
+- **Neben der Kundendatei, nicht in `data/`.** Dort sucht der Kunde nach der Sicherung. Und `data/`
+  liegt nicht unbedingt auf demselben Laufwerk wie die Master.
+- **Eine inzwischen geänderte Datei wird abgelehnt.** Vorschau und Schreiben vergleichen die mtime
+  der Datei mit der des gespeicherten Scans. Ein Stand, den der Kunde in Excel gespeichert hat,
+  während der Assistent offen war, wird also nie ungesehen überschrieben. Nach dem eigenen Schreiben
+  liest `sync` neu ein, damit das nächste Dokument nicht abgewiesen wird. Das ersetzt die Prüfung „eine
+  zwischen Vorschau und Schreiben übernommene Fassung“.
+- **Was umya beim Schreiben verliert** (`customXml`, `calcChain`, siehe footguns.md), trifft jetzt die
+  echte Datei. Erträglich wird das durch die Sicherung.
+- **Das Menü trennt die beiden Aufgaben.** „Dokumente“ (`/trains`, `feature/start`, Startseite der App)
+  enthält Bereinigen, Dokumente und Master-Datei. „ERP“ (`/trains/erp`, das bisherige Dashboard)
+  enthält das Schattensystem. Die Dokumente-Kachel steht in beiden, weil der Import dort beginnt.
+  Nichts wurde gelöscht: Fassungen, Master-Bereinigung und `MasterFileReport` bleiben im Backend und
+  in der Fassade, sind aber über keinen Knopf mehr erreichbar. Sie fallen weg, sobald das MVP beim
+  Kunden bestätigt ist.
+- **„In Master übertragen“ ist ohne Schalter da**, sobald eine Master-Datei gewählt ist. Es löst
+  „Master aktualisieren“ hinter `npdh.full` ab.

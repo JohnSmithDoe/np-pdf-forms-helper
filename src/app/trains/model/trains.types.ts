@@ -236,6 +236,7 @@ export interface MasterExportRun {
   sheets: MasterExportSheetRun[];
   target?: string;
   folder?: string;
+  sicherung?: string;
 }
 export type ReaderKind = 'headerRow' | 'manual';
 export type PartnerRolle = 'halter' | 'eigentuemer' | 'werkstatt';

@@ -49,6 +49,11 @@ Schattensystem.
 
 Gesichert werden muss nur der Ordner `data`. Wer ihn kopiert, hat alles.
 
+Die Master-Datei sichert das Programm selbst. Vor jedem „In Master übertragen“ legt es eine Kopie
+des bisherigen Stands im Ordner `Sicherungen` neben der Master-Datei an, mit Datum und Uhrzeit im
+Namen. Wenn diese Kopie nicht angelegt werden kann, wird nichts geschrieben. Die Master-Datei muss
+dafür in Excel geschlossen sein. Alte Sicherungen löscht das Programm nicht.
+
 ### Optional: Datenordner woanders ablegen
 
 Liegt im Programmordner eine Datei `.npconfig`, gelten die Pfade daraus. Jeder Eintrag ist
