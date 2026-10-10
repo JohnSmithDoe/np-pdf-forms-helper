@@ -1621,7 +1621,7 @@ export function install(seed: FakeSeed): void {
     create_trains_export: () => ({
       message: report(
         'Export wurde erfolgreich erstellt',
-        ['Datei wurde erstellt: erp-import.xlsx'],
+        ['Datei wurde erstellt: Master-Übersicht.xlsx'],
         'data/out/trains-2026-08-16'
       ),
     }),

@@ -1059,3 +1059,24 @@ nach Farbe, eine Textbedingung und eine durchsuchbare Werteliste mit „(Alles a
 - **Gefiltert wird im Frontend**, mit reinen Funktionen (`@shared/util/item-lists/list-filter.ts`).
   Die Listen liegen ohnehin ganz im Store. Die Auswahl einer Spalte kommt, wie in Excel, aus den
   Zeilen, die die Filter der ANDEREN Spalten durchlassen.
+
+## „Export erstellen“ schreibt eine Master-Übersicht (appended 2026-10-10)
+
+Entschieden mit Martin am 2026-10-10. Ersetzt die ERP-Arbeitsmappe, die kein ERP je gelesen hat.
+
+- **Eine neue Datei, `Master-Übersicht.xlsx`, jedes Mal frisch aus dem Schattensystem.** Die Master
+  des Kunden wird dabei nicht angefasst; sie bleibt die Datei, die „Master aktualisieren“ schreibt.
+- **Ein Datenblatt je Entität**: Wagen, Radsätze, Einbauten, Instandhaltungen, Telematik, Schäden,
+  Aufträge, Prüfungen. Die Wagennummer steht immer in Spalte A. Die Blätter des Kunden (eingefügte
+  Portal-Exporte mit ihren Eigenheiten) werden nicht nachgebaut, denn neue Exporte kommen über die App.
+- **Die „Übersicht“ rechnet mit Formeln** (`MINIFS`/`MAXIFS`/`ZÄHLENWENNS` über ganze Spalten der
+  Datenblätter), mit bedingter Formatierung gegen `HEUTE()`: Funkstille über 7 Tage, überfällige
+  P8/Revision rot, offene Schäden und Aufträge orange. Wie beim Dashboard des Kunden bewegt eine Änderung in
+  einem Datenblatt die Übersicht mit. Werte werden nicht zusätzlich geschrieben, denn Excel rechnet die
+  Mappe beim Öffnen neu. Fristen werden gezeigt, wie sie in den Daten stehen, nie berechnet.
+- **Typisierte Zellen**: Datum als Seriennummer, Wagennummer als Zahl in der kompakten Schreibweise
+  (wie in den Portal-Exporten, sonst trifft kein SVERWEIS) und als Text in der gruppierten. Radsatz-,
+  Bestellnummer und Schadcode sind Text.
+- **Die Handspalten sind leer** (Bemerkungen/notwendige Aktion, AUSGESETZT, beladen, Auftrag noch zu
+  versenden, Notiz) und haben eine eigene Kopffarbe. Kein Export übernimmt sie aus einem früheren.
+  Das steht in der Legende in Zeile 2.

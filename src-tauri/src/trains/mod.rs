@@ -15,7 +15,7 @@
 //   stage     all of the above, into a preview that touches NO database
 //   entities  that preview grouped per entity, and the answers back per row
 //   commit    the preview plus the user's decisions, into one batched write
-//   export/   the ERP artefact
+//   export/   the master overview, built fresh from the Schattensystem
 //   master/   the customer's master workbook, exported to from filed documents
 //   master_file/  the master workbook itself, copied in and cleaned, in versions
 //
