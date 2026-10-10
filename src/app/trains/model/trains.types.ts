@@ -249,6 +249,7 @@ export interface MasterExportRun {
   target?: string;
   folder?: string;
   sicherung?: string;
+  archiviert?: string;
 }
 export type ReaderKind = 'headerRow' | 'manual';
 export type PartnerRolle = 'halter' | 'eigentuemer' | 'werkstatt';

@@ -751,7 +751,7 @@ pub fn write_master_export(
 ) -> AppResult<TrainsData> {
     let mut db = state.trains();
     let run = master::export::write(&mut db, &request, &crate::trains::clock::now_stamp())?;
-    Ok(TrainsData::nothing()
+    Ok(listing(&db)
         .master_export(run)
         .master(master::view(db.master()))
         .master_file(db.master_file().clone()))

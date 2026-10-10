@@ -2,7 +2,9 @@
 // The last step: the customer's master file that was written, the backup taken
 // before, and per sheet which rows changed — the summary of the update. Read
 // from the written run rather than the preview, because the write ran the
-// paste again and this is what it did.
+// paste again and this is what it did. The written document is ARCHIVED by the
+// write itself (`master::export::write`); this says so, and where to find it,
+// because it will be missing from the list „Fertig“ leads to.
 //
 // „Fertig“ leads back to the document list, where the next document starts the
 // update; that one builds on this write, because it went into the same file.

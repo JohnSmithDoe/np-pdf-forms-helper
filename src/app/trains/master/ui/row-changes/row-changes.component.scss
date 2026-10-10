@@ -3,6 +3,8 @@
 }
 
 .row-changes {
+  --row-changes-stripe: color-mix(in srgb, currentcolor 8%, transparent);
+
   overflow-x: auto;
 }
 
@@ -29,13 +31,24 @@
   position: sticky;
   inset-inline-start: 0;
   z-index: 1;
-  background: var(
+  background-color: var(
     --ion-card-background,
     var(--ion-item-background, var(--ion-background-color, #fff))
   );
 }
 
-.row-changes__row {
+.row-changes__group:nth-of-type(even) {
+  background: var(--row-changes-stripe);
+}
+
+.row-changes__group:nth-of-type(even) th[scope='row'] {
+  background-image: linear-gradient(
+    var(--row-changes-stripe),
+    var(--row-changes-stripe)
+  );
+}
+
+.row-changes__group {
   border-top: 1px solid var(--ion-color-step-150);
 }
 

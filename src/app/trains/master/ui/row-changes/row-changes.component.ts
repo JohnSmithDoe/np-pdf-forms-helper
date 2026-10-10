@@ -11,7 +11,12 @@
 // changed row opens its OLD values as a second row directly underneath,
 // column for column — never as a list beside the row, which meant scrolling
 // back to the start to read what a cell far right used to hold. The row
-// labels stick to the left edge for the same reason. Only a changed row
+// labels stick to the left edge for the same reason. Each row is its own
+// `<tbody>`, so the zebra stripe covers a row TOGETHER with its opened old
+// row: the pair reads as one, and the eye can follow a row across the full
+// width. The stripe is the text colour mixed thin into the background, so it
+// follows the theme without naming a colour; the sticky label column layers it
+// over its opaque background, or the stripe would break at the left edge. Only a changed row
 // opens: a new row had nothing before, an emptied one already shows its old
 // values. The open rows are this component's own view state, which is why a
 // `ui` component holds a signal.

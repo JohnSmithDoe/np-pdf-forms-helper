@@ -1179,3 +1179,8 @@ bereinigten Datei; was erledigt ist, soll aus dem Blick, ohne verloren zu gehen.
   „Archiviert am …“, sonst sucht der Nutzer es in einer Liste, die es nicht mehr zeigt.
 - **Der Master-Import lässt das Archiv stehen.** `clear_mirror` öffnet jedes Dokument wieder für den
   Import, das Archiv ist ein eigenes Feld und bleibt.
+- **„In Master übertragen“ archiviert das Dokument selbst** (ergänzt 2026-10-10, mit Martin): ein
+  Dokument aktualisiert ein Blatt einmal, danach hat es in der Liste nichts mehr zu tun. Archiviert wird
+  erst, wenn die Master-Datei sicher geschrieben ist, datiert mit dem Stempel des Schreibens — und nie
+  als Fehler: das Schreiben ist schon geschehen, ein Fehler hier läse sich, als wäre es nicht. Die
+  Ergebnisseite sagt es in einer Zeile (`MasterExportRun.archiviert`), samt wo es zu finden ist.

@@ -421,6 +421,8 @@ pub struct MasterExportRun {
     pub folder: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sicherung: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archiviert: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

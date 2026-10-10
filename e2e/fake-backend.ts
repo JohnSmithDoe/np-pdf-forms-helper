@@ -1618,8 +1618,17 @@ export function install(seed: FakeSeed): void {
       const name = target.split(/[\\/]/).pop() ?? target;
       const folder = `${target.slice(0, target.length - name.length - 1)}/Sicherungen`;
       const sicherung = `${folder}/${name.replace(/\.xlsx$/i, '')} 2026-10-10 120000.xlsx`;
+      // Written once, the document is archived (`master::export::write`).
+      const dokument = state.dokumente.find(
+        (entry) => entry.id === request.dokumentId
+      );
+      if (dokument) dokument.archiviertAm ??= '2026-10-10';
+      const archiviert = dokument
+        ? `„${dokument.name}“ wurde archiviert — zu finden unter „Archivierte zeigen“.`
+        : undefined;
       return {
-        masterExport: { ...run, target, folder, sicherung },
+        masterExport: { ...run, target, folder, sicherung, archiviert },
+        ...dokumentLists(),
         ...masterView(),
         masterFile: copy(state.masterFile),
       };

@@ -34,6 +34,13 @@
 // cleaned copy is the source and refused when
 // edited since filing (`source::load`). `.xlsm` is refused: umya has no VBA
 // story.
+//
+// A WRITTEN DOCUMENT IS ARCHIVED: one document updates one sheet once, so once
+// it is in the master it has nothing left to do in the document list. Archived
+// only after the master file is safely written, dated by the write's own
+// stamp, and never as an error — the master write already happened, and an
+// error here would read as if it had not. The outcome is a line on the run
+// (`archiviert`) for the result page.
 // ────────────────────────────────────────────────────────────────
 
 mod diff;
@@ -73,7 +80,10 @@ pub fn write(
                 .collect(),
         ));
     }
-    let template = dokument(db, &request.dokument_id)?.template_id.clone();
+    let (template, name) = {
+        let dokument = dokument(db, &request.dokument_id)?;
+        (dokument.template_id.clone(), dokument.name.clone())
+    };
     let written =
         crate::trains::master_file::write_in_place(&book, Path::new(&request.base), stamp)?;
     drop(book);
@@ -90,6 +100,15 @@ pub fn write(
         .map(|folder| folder.to_string_lossy().into_owned());
     run.target = Some(written.target.to_string_lossy().into_owned());
     run.sicherung = Some(written.sicherung.to_string_lossy().into_owned());
+    let day = stamp.split(' ').next().unwrap_or(stamp);
+    let ids = [request.dokument_id.clone()];
+    run.archiviert = Some(match db.transaction(|tx| Ok(tx.archive(&ids, day))) {
+        Ok(_) => format!("„{name}“ wurde archiviert — zu finden unter „Archivierte zeigen“."),
+        Err(error) => format!(
+            "„{name}“ konnte nicht archiviert werden: {}",
+            error.into_messages().join(" ")
+        ),
+    });
     Ok(run)
 }
 
@@ -616,6 +635,12 @@ mod tests {
         let book = umya_spreadsheet::reader::xlsx::read(&file).unwrap();
         let sheet = book.sheet_by_name("Telematik").unwrap();
         assert_eq!(sheet.cell((4u32, 2u32)).unwrap().value(), "Neuhof");
+
+        // Written once, the document leaves the list — archived, not forgotten.
+        let archived = db.dokument(&wanted.dokument_id).unwrap();
+        assert_eq!(archived.archiviert_am.as_deref(), Some("2026-10-10"));
+        assert!(db.dokumente().iter().all(|d| d.id != wanted.dokument_id));
+        assert!(run.archiviert.unwrap().contains("wurde archiviert"));
 
         // The write re-read the file, so the next export builds on it unrefused.
         let (_, base) = suggest::bases(db.master()).unwrap();

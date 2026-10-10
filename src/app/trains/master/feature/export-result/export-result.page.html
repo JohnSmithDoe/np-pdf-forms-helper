@@ -23,6 +23,13 @@
             </ion-note>
           </p>
         }
+        @if (result.archiviert) {
+          <p>
+            <ion-note data-testid="export-result-archived">{{
+              result.archiviert
+            }}</ion-note>
+          </p>
+        }
         <ion-button fill="outline" (click)="onOpenFile(result.target)">
           <ion-icon slot="start" name="document-outline" aria-hidden="true" />
           Datei öffnen

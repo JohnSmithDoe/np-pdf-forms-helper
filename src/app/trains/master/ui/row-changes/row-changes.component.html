@@ -16,8 +16,8 @@
           }
         </tr>
       </thead>
-      <tbody>
-        @for (row of visible(); track row.row) {
+      @for (row of visible(); track row.row) {
+        <tbody class="row-changes__group">
           @let opens = row.status === 'geaendert';
           @let isOpen = opens && open().has(row.row);
           <tr
@@ -70,8 +70,8 @@
               }
             </tr>
           }
-        }
-      </tbody>
+        </tbody>
+      }
     </table>
   </div>
   @if (shown() < rows().length) {

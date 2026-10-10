@@ -228,8 +228,9 @@ there.
   Nothing on this side writes an entity, and the header chip says „Bereinigen“.
 - **`/trains/documents` is the ledger** and the import's way in, beside the batch summary.
   „Archivieren“ HIDES a Dokument (`archiviertAm`), never deletes it: Rust splits `dokumente` from
-  `archiv`, the bytes stay `vorhanden`, and `clear_mirror` keeps the flag — see decisions.md,
-  „Dokumente archivieren“. „Importieren“ — there and on the batch summary — writes into the Schattensystem and nothing else.
+  `archiv`, the bytes stay `vorhanden`, and `clear_mirror` keeps the flag, and a successful „In Master übertragen“ archives its
+  document itself (`master::export::write`, after the file is written, never as an error) — see
+  decisions.md, „Dokumente archivieren“. „Importieren“ — there and on the batch summary — writes into the Schattensystem and nothing else.
 - **`/trains/import/*` walks ONE document by type** — `partners` → `wagons` → `wheelsets` →
   `entries` → `summary` → `result`, the chip saying „Import ins Schattensystem“. One decision per
   entity group (`entities::group` in Rust), a declined Wagen dropping its rows, nothing written until

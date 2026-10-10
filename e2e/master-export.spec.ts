@@ -219,12 +219,19 @@ test.describe('Master aktualisieren', () => {
     ]);
     expect(request.remember).toBe(true);
 
+    // Written once, the document is archived — said here, gone from the list.
+    await expect(result.getByTestId('export-result-archived')).toContainText(
+      '„assets.xlsx“ wurde archiviert'
+    );
+
     await result.getByRole('button', { name: 'Fertig' }).click();
     await expect(page).toHaveURL(/#\/trains\/documents$/);
+    const list = step(page, 'document-list');
+    await expect(list.getByTestId('documents-row')).toHaveCount(0);
     // Still the same file: the next document goes into it too.
-    await expect(
-      step(page, 'document-list').getByTestId('documents-master-row')
-    ).toContainText('C:/Daten/Übersicht.xlsx');
+    await expect(list.getByTestId('documents-master-row')).toContainText(
+      'C:/Daten/Übersicht.xlsx'
+    );
   });
 
   test('leert fehlende Zeilen, wenn es für die Vorlage gemerkt ist', async ({
