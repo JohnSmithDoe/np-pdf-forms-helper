@@ -156,6 +156,12 @@ function writesOf(row: StagedRow): string[] {
   return writes;
 }
 
+function choices(views: GroupView[]): EntityChoice[] {
+  return views.flatMap((view) =>
+    view.decision ? [{ key: view.group.key, decision: view.decision }] : []
+  );
+}
+
 @Injectable({ providedIn: 'root' })
 export class ImportWalkFacade {
   readonly #backend = inject(TrainsBackend);
@@ -363,10 +369,6 @@ export class ImportWalkFacade {
   async commit(): Promise<void> {
     const staging = this.staging();
     if (!staging) return;
-    const choices = (views: GroupView[]): EntityChoice[] =>
-      views.flatMap((view) =>
-        view.decision ? [{ key: view.group.key, decision: view.decision }] : []
-      );
     const data = await this.#backend.commitDocument(
       {
         stagingId: staging.id,

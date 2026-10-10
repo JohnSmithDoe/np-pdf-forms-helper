@@ -94,20 +94,23 @@ export class DeutungCardComponent {
   protected readonly options = computed<ReadingOption[]>(() => {
     const reading = this.card().reading;
     switch (reading.kind) {
-      case 'decimal':
+      case 'decimal': {
         return [reading.chosen, reading.alternative].map((style) => ({
           value: style,
           label: DECIMAL_LABELS[style],
           short: DECIMAL_SHORT[style],
         }));
-      case 'dateOrder':
+      }
+      case 'dateOrder': {
         return [reading.chosen, reading.alternative].map((order) => ({
           value: order,
           label: DATE_ORDER_LABELS[order],
           short: DATE_ORDER_SHORT[order],
         }));
-      case 'hinweis':
+      }
+      case 'hinweis': {
         return [];
+      }
     }
   });
 
@@ -150,23 +153,26 @@ export class DeutungCardComponent {
   protected onConfirm(): void {
     const { column, reading } = this.card();
     switch (reading.kind) {
-      case 'decimal':
+      case 'decimal': {
         this.confirm.emit({
           kind: 'decimal',
           column,
           style: this.selected() as DecimalStyle,
         });
         return;
-      case 'dateOrder':
+      }
+      case 'dateOrder': {
         this.confirm.emit({
           kind: 'dateOrder',
           column,
           order: this.selected() as DateOrder,
         });
         return;
-      case 'hinweis':
+      }
+      case 'hinweis': {
         this.confirm.emit({ kind: 'hinweis', column });
         return;
+      }
     }
   }
 }

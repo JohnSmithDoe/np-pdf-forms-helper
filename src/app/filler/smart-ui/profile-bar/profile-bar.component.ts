@@ -68,9 +68,9 @@ export class ProfileBarComponent {
   protected async saveProfile(): Promise<void> {
     try {
       await this.#facade.saveProfile();
-    } catch (cause) {
-      if (!(cause instanceof BackendError)) throw cause;
-      this.saveFailed.emit(cause);
+    } catch (error) {
+      if (!(error instanceof BackendError)) throw error;
+      this.saveFailed.emit(error);
     }
   }
 

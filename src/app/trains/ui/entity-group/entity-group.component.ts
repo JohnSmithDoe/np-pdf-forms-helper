@@ -110,16 +110,21 @@ export class EntityGroupComponent {
   protected readonly status = computed(() => {
     const resolution = this.group().resolution;
     switch (resolution.state) {
-      case 'known':
+      case 'known': {
         return `Bekannt als „${resolution.name}“.`;
-      case 'likely':
+      }
+      case 'likely': {
         return `Vermutlich „${resolution.name}“ — ${resolution.hint}`;
-      case 'ambiguous':
+      }
+      case 'ambiguous': {
         return 'Mehrere vorhandene Einträge kommen in Frage. Bitte wählen.';
-      case 'new':
+      }
+      case 'new': {
         return 'Noch nicht im Schattensystem.';
-      case 'missing':
+      }
+      case 'missing': {
         return 'Kein Wert in der Datei.';
+      }
     }
   });
 
@@ -140,7 +145,7 @@ export class EntityGroupComponent {
       decision: { action: 'create' },
     };
     switch (resolution.state) {
-      case 'known':
+      case 'known': {
         return [
           {
             value: `use:${resolution.id}`,
@@ -149,7 +154,8 @@ export class EntityGroupComponent {
           },
           skip,
         ];
-      case 'likely':
+      }
+      case 'likely': {
         return [
           {
             value: `use:${resolution.id}`,
@@ -160,7 +166,8 @@ export class EntityGroupComponent {
           create,
           skip,
         ];
-      case 'ambiguous':
+      }
+      case 'ambiguous': {
         return [
           ...resolution.candidates.map((candidate) => ({
             value: `use:${candidate.id}`,
@@ -171,10 +178,13 @@ export class EntityGroupComponent {
           create,
           skip,
         ];
-      case 'new':
+      }
+      case 'new': {
         return [create, skip];
-      case 'missing':
+      }
+      case 'missing': {
         return [skip];
+      }
     }
   });
 

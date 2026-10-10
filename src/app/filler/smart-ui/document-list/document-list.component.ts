@@ -184,8 +184,11 @@ export class DocumentListComponent {
 
     const { value } = (event as CustomEvent<{ value?: string | string[] }>)
       .detail;
-    if (!value) this.expanded.set([]);
-    else this.expanded.set(Array.isArray(value) ? value : [value]);
+    if (value) {
+      this.expanded.set(Array.isArray(value) ? value : [value]);
+    } else {
+      this.expanded.set([]);
+    }
   }
 
   protected onAddDocument(): void {
@@ -246,9 +249,9 @@ export class DocumentListComponent {
   async #run(command: Promise<void>): Promise<void> {
     try {
       await command;
-    } catch (cause) {
-      if (!(cause instanceof BackendError)) throw cause;
-      this.failed.emit(cause);
+    } catch (error) {
+      if (!(error instanceof BackendError)) throw error;
+      this.failed.emit(error);
     }
   }
 }

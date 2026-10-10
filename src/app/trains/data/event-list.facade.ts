@@ -53,7 +53,7 @@ export class EventListFacade implements ListPageFacade {
     sortDirection: 'desc',
   });
 
-  readonly sort = this.#sort.asReadonly();
+  readonly activeSort = this.#sort.asReadonly();
   readonly total = this.#store.eventTotal;
   readonly sortOptions = signal<readonly ItemListSortOption[]>([
     { key: 'datum', label: 'Datum' },
@@ -62,7 +62,7 @@ export class EventListFacade implements ListPageFacade {
 
   readonly #rows = computed<EventRow[] | undefined>(() => {
     const events = this.#store.events();
-    if (!events) return undefined;
+    if (!events) return;
     const wagenById = this.#store.wagenById();
     const partners = this.#store.partnerById();
     return events.map((event) => {
@@ -95,7 +95,7 @@ export class EventListFacade implements ListPageFacade {
 
   readonly items = computed<BaseItem[] | undefined>(() => {
     const rows = this.#rows();
-    if (!rows) return undefined;
+    if (!rows) return;
     const found = this.searchResult()?.items ?? rows;
     return sortList(found, this.#sort(), (row, key) =>
       key === 'betrag' ? row.amount.replace(',', '.') : row.date

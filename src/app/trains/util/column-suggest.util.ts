@@ -22,11 +22,11 @@ import type { ColumnBinding, FieldKind } from '../model/trains.types';
 export function normaliseHeader(header: string): string {
   return header
     .toLowerCase()
-    .replace(/ä/g, 'ae')
-    .replace(/ö/g, 'oe')
-    .replace(/ü/g, 'ue')
-    .replace(/ß/g, 'ss')
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replaceAll('ä', 'ae')
+    .replaceAll('ö', 'oe')
+    .replaceAll('ü', 'ue')
+    .replaceAll('ß', 'ss')
+    .replaceAll(/[^a-z0-9]+/g, ' ')
     .trim();
 }
 
@@ -39,7 +39,7 @@ const ALIASES: readonly { field: FieldKind; needle: string; length: number }[] =
           needle: normaliseHeader(alias),
           length: alias.length,
         }))
-  ).sort((left, right) => right.length - left.length);
+  ).toSorted((left, right) => right.length - left.length);
 
 export function suggestField(header: string, taken: FieldKind[]): FieldKind {
   const needle = normaliseHeader(header);

@@ -42,7 +42,7 @@ export function sortList<T extends BaseItem>(
   const direction = sort.sortDirection === 'desc' ? -1 : 1;
   const top = (item: T): number =>
     sort.farbe && item.farbe === sort.farbe ? 0 : 1;
-  return [...items].sort(
+  return items.toSorted(
     (left, right) =>
       top(left) - top(right) ||
       direction *

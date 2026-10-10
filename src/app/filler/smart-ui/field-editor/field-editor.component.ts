@@ -70,9 +70,9 @@ export class FieldEditorComponent {
   async #run(command: Promise<void>): Promise<void> {
     try {
       await command;
-    } catch (cause) {
-      if (!(cause instanceof BackendError)) throw cause;
-      this.failed.emit(cause);
+    } catch (error) {
+      if (!(error instanceof BackendError)) throw error;
+      this.failed.emit(error);
     }
   }
 }

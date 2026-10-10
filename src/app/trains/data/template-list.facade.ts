@@ -39,14 +39,14 @@ export class TemplateListFacade implements ListPageFacade {
     sortDirection: 'asc',
   });
 
-  readonly sort = this.#sort.asReadonly();
+  readonly activeSort = this.#sort.asReadonly();
   readonly sortOptions = signal<readonly ItemListSortOption[]>([
     { key: 'name', label: 'Name' },
   ]).asReadonly();
 
   readonly #rows = computed<TemplateRow[] | undefined>(() => {
     const templates = this.#store.templates();
-    if (!templates) return undefined;
+    if (!templates) return;
     return templates.map((template) => ({
       id: template.id,
       name: template.name,
@@ -68,7 +68,7 @@ export class TemplateListFacade implements ListPageFacade {
 
   readonly items = computed<BaseItem[] | undefined>(() => {
     const rows = this.#rows();
-    if (!rows) return undefined;
+    if (!rows) return;
     const found = this.searchResult()?.items ?? rows;
     return sortList(found, this.#sort(), (row) => row.name);
   });

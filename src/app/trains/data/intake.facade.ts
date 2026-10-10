@@ -69,11 +69,11 @@ export interface SummaryRow {
 
 const CREATE = 'create';
 const SKIP = 'skip';
-const UNSELECTABLE: readonly ScanStatus[] = [
+const UNSELECTABLE: ReadonlySet<ScanStatus> = new Set([
   'nichtUnterstuetzt',
   'unlesbar',
   'vorhanden',
-];
+]);
 
 function optionsOf(file: ScanFile): PickOption[] {
   const named = file.sheets.length > 1;
@@ -100,7 +100,7 @@ function valueOf(
     (match) =>
       match.templateId === pick.templateId && match.sheet === pick.sheet
   );
-  return index >= 0 ? `match:${index}` : undefined;
+  return index === -1 ? undefined : `match:${index}`;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -124,7 +124,7 @@ export class IntakeFacade {
     const results = this.#store.results();
     return (this.scan() ?? []).map((file) => ({
       file,
-      selectable: !UNSELECTABLE.includes(file.status),
+      selectable: !UNSELECTABLE.has(file.status),
       options: optionsOf(file),
       value: valueOf(file, picks[file.path]),
       result: results[file.path],
@@ -264,11 +264,11 @@ export class IntakeFacade {
       );
       this.#store.begin(row.file.path, data.cleaning);
       return 'clean';
-    } catch (cause) {
-      if (cause instanceof BackendError) {
+    } catch (error) {
+      if (error instanceof BackendError) {
         this.#store.setResult(row.file.path, { outcome: 'fehlgeschlagen' });
       }
-      throw cause;
+      throw error;
     }
   }
 

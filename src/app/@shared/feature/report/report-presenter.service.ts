@@ -72,9 +72,9 @@ export class ReportPresenterService {
     try {
       await action();
       return true;
-    } catch (cause) {
-      if (!(cause instanceof BackendError)) throw cause;
-      await this.showError(cause);
+    } catch (error) {
+      if (!(error instanceof BackendError)) throw error;
+      await this.showError(error);
       return false;
     }
   }

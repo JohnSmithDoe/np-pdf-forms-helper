@@ -245,7 +245,7 @@ export class TrainsDashboardPage {
   constructor() {
     effect(() => {
       this.#facade.zustand();
-      untracked(() => void this.#telematik.load().catch(() => undefined));
+      untracked(() => void this.#telematik.load().catch(() => {}));
     });
     addIcons({
       albumsOutline,

@@ -135,7 +135,7 @@ export class FieldDialog {
   );
 
   protected readonly valid = computed(() => {
-    if (!this.origId() || !this.mappedName().length) return false;
+    if (!this.origId() || this.mappedName().length === 0) return false;
     return this.type() === 'pdf' || !this.duplicate();
   });
 
@@ -174,7 +174,7 @@ export class FieldDialog {
 
   protected onColumnInput(event: Event): void {
     const input = event.target as HTMLInputElement;
-    const column = input.value.replace(/[^a-zA-Z]/g, '').toUpperCase();
+    const column = input.value.replaceAll(/[^a-zA-Z]/g, '').toUpperCase();
     input.value = column;
     this.column.set(column);
   }

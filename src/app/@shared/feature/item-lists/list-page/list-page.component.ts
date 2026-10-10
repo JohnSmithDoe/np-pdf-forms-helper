@@ -125,7 +125,7 @@ export class ListPageComponent {
   protected readonly dialog = computed(() => {
     const key = this.openColumn();
     const column = this.facade.columns?.().find((entry) => entry.key === key);
-    if (!column || !this.facade.columnChoices) return undefined;
+    if (!column || !this.facade.columnChoices) return;
     return {
       key: column.key,
       label: column.label,
@@ -162,12 +162,12 @@ export class ListPageComponent {
 
   protected columnIcon(key: string): string {
     if (this.isFiltered(key)) return 'funnel';
-    if (this.facade.sort()?.sortBy === key) return this.sortIcon(key);
+    if (this.facade.activeSort()?.sortBy === key) return this.sortIcon(key);
     return 'caret-down-outline';
   }
 
   protected sortIcon(key: string): string {
-    const sort = this.facade.sort();
+    const sort = this.facade.activeSort();
     if (sort?.sortBy !== key) return 'arrow-down-outline';
     return sort.sortDirection === 'asc'
       ? 'arrow-up-outline'

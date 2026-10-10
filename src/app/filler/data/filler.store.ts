@@ -125,7 +125,7 @@ function sortByName(
   documents: AnyDocument[],
   direction: SortDirection
 ): AnyDocument[] {
-  return [...documents].sort((a, b) =>
+  return documents.toSorted((a, b) =>
     direction === 'aufsteigend'
       ? a.name.localeCompare(b.name)
       : b.name.localeCompare(a.name)
@@ -136,12 +136,12 @@ function withoutDuplicates(ids: string[]): string[] {
   return [...new Set(ids)];
 }
 
-const UNSAFE_IN_FOLDER_NAME = /[<>:"/\\|?*\u0000-\u001f]/g;
+const UNSAFE_IN_FOLDER_NAME = /[<>:"/\\|?*\u0000-\u001F]/g;
 
 function safeSuffix(suffix: string): string {
   return suffix
-    .replace(UNSAFE_IN_FOLDER_NAME, '')
-    .replace(/^[\s.]+|[\s.]+$/g, '');
+    .replaceAll(UNSAFE_IN_FOLDER_NAME, '')
+    .replaceAll(/^[\s.]+|[\s.]+$/g, '');
 }
 
 export const FillerStore = signalStore(
@@ -244,9 +244,8 @@ export const FillerStore = signalStore(
       const selectedDocumentIds = store.selectedDocumentIds();
       const selectedFieldIds = store.selectedFieldIds();
       const profiles = store.profiles().map((profile) =>
-        profile.id !== selectedProfileId
-          ? profile
-          : {
+        profile.id === selectedProfileId
+          ? {
               ...profile,
               documentIds: documents
                 .filter((document) => selectedDocumentIds.includes(document.id))
@@ -256,6 +255,7 @@ export const FillerStore = signalStore(
                 .filter((field) => selectedFieldIds.includes(field.origId))
                 .map((field) => field.origId),
             }
+          : profile
       );
       patchState(store, { profiles });
       return profiles;

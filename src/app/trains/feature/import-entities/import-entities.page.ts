@@ -137,12 +137,15 @@ export class ImportEntitiesPage {
 
   protected readonly views = computed(() => {
     switch (this.kind) {
-      case 'partner':
+      case 'partner': {
         return this.facade.partner();
-      case 'wagen':
+      }
+      case 'wagen': {
         return this.facade.wagen();
-      case 'radsatz':
+      }
+      case 'radsatz': {
         return this.facade.radsaetze();
+      }
     }
   });
 

@@ -106,7 +106,7 @@ export class ColumnFilterComponent {
   readonly label = input.required<string>();
   readonly choices = input.required<ColumnChoices>();
   readonly filter = input<ColumnFilter>();
-  readonly sort = input<ItemListSort>();
+  readonly activeSort = input<ItemListSort>();
 
   readonly sortChange = output<ItemListSort>();
   readonly filterChange = output<ColumnFilter | undefined>();
@@ -123,7 +123,7 @@ export class ColumnFilterComponent {
   protected readonly op = signal<FilterOp>('enthaelt');
 
   protected readonly sortedHere = computed(() =>
-    this.sort()?.sortBy === this.column() ? this.sort() : undefined
+    this.activeSort()?.sortBy === this.column() ? this.activeSort() : undefined
   );
   protected readonly searching = computed(() => !!this.term().trim());
   protected readonly visible = computed(() =>
@@ -217,7 +217,7 @@ export class ColumnFilterComponent {
       return;
     }
     const found = this.visible();
-    if (found.length) this.#setValues(new Set(found));
+    if (found.length > 0) this.#setValues(new Set(found));
   }
 
   #setValues(ticked: Set<string>): void {

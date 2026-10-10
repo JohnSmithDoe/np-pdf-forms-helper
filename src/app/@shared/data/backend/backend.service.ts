@@ -50,7 +50,7 @@
 import { computed, Injectable, Signal, signal } from '@angular/core';
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { Observable, Subject } from 'rxjs';
+import { Observable, Subject, Subscriber, TeardownLogic } from 'rxjs';
 import { ClientReport } from '../../model/client.types';
 
 const UNKNOWN_ERROR = 'Es ist ein unbekannter Fehler aufgetreten.';
@@ -101,6 +101,33 @@ function reportOf(result: unknown): ClientReport | undefined {
   return (result as BackendResponse).message ?? undefined;
 }
 
+function listenForDrops(subscriber: Subscriber<FileDrop>): TeardownLogic {
+  if (!isTauri()) return;
+  let unlisten: (() => void) | undefined;
+  let closed = false;
+  try {
+    getCurrentWebview()
+      .onDragDropEvent(({ payload }) => {
+        if (payload.type === 'drop') {
+          subscriber.next({ type: 'drop', paths: payload.paths });
+        } else if (payload.type !== 'over') {
+          subscriber.next({ type: payload.type });
+        }
+      })
+      .then((stop) => {
+        if (closed) stop();
+        else unlisten = stop;
+      })
+      .catch(() => {});
+  } catch {
+    return;
+  }
+  return () => {
+    closed = true;
+    unlisten?.();
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class BackendService {
   readonly #pending = signal(0);
@@ -109,32 +136,7 @@ export class BackendService {
 
   readonly report$ = new Subject<ClientReport>();
 
-  readonly fileDrops$ = new Observable<FileDrop>((subscriber) => {
-    if (!isTauri()) return undefined;
-    let unlisten: (() => void) | undefined;
-    let closed = false;
-    try {
-      getCurrentWebview()
-        .onDragDropEvent(({ payload }) => {
-          if (payload.type === 'drop') {
-            subscriber.next({ type: 'drop', paths: payload.paths });
-          } else if (payload.type !== 'over') {
-            subscriber.next({ type: payload.type });
-          }
-        })
-        .then((stop) => {
-          if (closed) stop();
-          else unlisten = stop;
-        })
-        .catch(() => undefined);
-    } catch {
-      return undefined;
-    }
-    return () => {
-      closed = true;
-      unlisten?.();
-    };
-  });
+  readonly fileDrops$ = new Observable<FileDrop>(listenForDrops);
 
   async #send<T>({ command, payload }: BackendRequest): Promise<T> {
     if (!isTauri()) throw new BackendError([NO_DESKTOP]);
@@ -151,8 +153,8 @@ export class BackendService {
       const report = reportOf(result);
       if (report && !silent) this.report$.next(report);
       return result;
-    } catch (cause) {
-      throw toBackendError(cause);
+    } catch (error) {
+      throw toBackendError(error);
     } finally {
       this.#pending.update((count) => count - 1);
     }

@@ -64,7 +64,7 @@ export class RadsatzListFacade implements ListPageFacade {
 
   readonly #filters = signal<ColumnFilters>({});
 
-  readonly sort = this.#sort.asReadonly();
+  readonly activeSort = this.#sort.asReadonly();
   readonly filters = this.#filters.asReadonly();
   readonly columns = signal<readonly ListColumn[]>([
     { key: 'number', label: 'Radsatznummer' },
@@ -74,7 +74,7 @@ export class RadsatzListFacade implements ListPageFacade {
 
   readonly #rows = computed<RadsatzRow[] | undefined>(() => {
     const radsaetze = this.#store.radsaetze();
-    if (!radsaetze) return undefined;
+    if (!radsaetze) return;
     const einbauten = this.#store.einbauten() ?? [];
     const wagenById = this.#store.wagenById();
     const markierungen = this.#store.markierungen();
@@ -97,7 +97,7 @@ export class RadsatzListFacade implements ListPageFacade {
         systemId: radsatz.systemId ?? '',
         fittedTo: open ? wagenLabel(open.wagenId) : '',
         since: open?.eingebautAm ? formatIsoDate(open.eingebautAm) : '',
-        history: [...own].sort(byNewest).map((einbau) => ({
+        history: own.toSorted(byNewest).map((einbau) => ({
           wagen: wagenLabel(einbau.wagenId),
           installed: einbau.eingebautAm
             ? formatIsoDate(einbau.eingebautAm)
@@ -122,7 +122,7 @@ export class RadsatzListFacade implements ListPageFacade {
   );
 
   readonly items = computed<BaseItem[] | undefined>(() => {
-    if (!this.#rows()) return undefined;
+    if (!this.#rows()) return;
     return sortList(
       filterList(this.#found(), this.#filters(), valueOf),
       this.#sort(),
@@ -153,12 +153,15 @@ export class RadsatzListFacade implements ListPageFacade {
 
 function valueOf(row: RadsatzRow, key: string): string {
   switch (key) {
-    case 'kind':
+    case 'kind': {
       return row.kind;
-    case 'fittedTo':
+    }
+    case 'fittedTo': {
       return row.fittedTo;
-    default:
+    }
+    default: {
       return row.number;
+    }
   }
 }
 

@@ -302,7 +302,7 @@ export class TrainsMasterPage {
       sheets = await this.facade.startMasterImport();
       await this.#walk.startMaster(sheets);
     });
-    if (ok && sheets.length) {
+    if (ok && sheets.length > 0) {
       await this.#router.navigate(['/trains/import/partners']);
     }
   }
@@ -322,7 +322,7 @@ export class TrainsMasterPage {
   protected async onContinue(): Promise<void> {
     const sheets = this.open();
     const ok = await this.#reports.run(() => this.#walk.startMaster(sheets));
-    if (ok && sheets.length) {
+    if (ok && sheets.length > 0) {
       await this.#router.navigate(['/trains/import/partners']);
     }
   }

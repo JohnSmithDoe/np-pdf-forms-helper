@@ -79,7 +79,7 @@ export class WagenListFacade implements ListPageFacade {
 
   readonly #filters = signal<ColumnFilters>({});
 
-  readonly sort = this.#sort.asReadonly();
+  readonly activeSort = this.#sort.asReadonly();
   readonly filters = this.#filters.asReadonly();
   readonly columns = signal<readonly ListColumn[]>([
     { key: 'wagennummer', label: 'Wagennummer' },
@@ -90,7 +90,7 @@ export class WagenListFacade implements ListPageFacade {
 
   readonly #rows = computed<WagenRow[] | undefined>(() => {
     const wagen = this.#store.wagen();
-    if (!wagen) return undefined;
+    if (!wagen) return;
     const partners = this.#store.partnerById();
     const radsaetze = this.#store.radsatzById();
     const zustand = indexZustand(this.#store.zustand());
@@ -115,8 +115,8 @@ export class WagenListFacade implements ListPageFacade {
         owner,
         kind: wagen.bauart ?? '',
         summary: [wagen.bauart, owner].filter(Boolean).join(' · '),
-        fitted: [...(open.get(wagen.id) ?? [])]
-          .sort(byPosition)
+        fitted: (open.get(wagen.id) ?? [])
+          .toSorted(byPosition)
           .map((einbau) => ({
             radsatz: radsaetze.get(einbau.radsatzId)?.nummer ?? '',
             position: einbau.position ?? '',
@@ -146,7 +146,7 @@ export class WagenListFacade implements ListPageFacade {
   );
 
   readonly items = computed<BaseItem[] | undefined>(() => {
-    if (!this.#rows()) return undefined;
+    if (!this.#rows()) return;
     return sortList(
       filterList(this.#found(), this.#filters(), valueOf),
       this.#sort(),
@@ -177,14 +177,18 @@ export class WagenListFacade implements ListPageFacade {
 
 function valueOf(row: WagenRow, key: string): string {
   switch (key) {
-    case 'bauart':
+    case 'bauart': {
       return row.kind;
-    case 'halter':
+    }
+    case 'halter': {
       return row.owner;
-    case 'standort':
+    }
+    case 'standort': {
       return row.zustand.standort;
-    default:
+    }
+    default: {
       return row.nummer;
+    }
   }
 }
 

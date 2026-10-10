@@ -80,9 +80,9 @@ export class InfoPage {
   async #load(): Promise<void> {
     try {
       this.info.set(await this.#backend.appInfo());
-    } catch (cause) {
-      if (!(cause instanceof BackendError)) throw cause;
-      this.unavailable.set(cause.messages[0] ?? null);
+    } catch (error) {
+      if (!(error instanceof BackendError)) throw error;
+      this.unavailable.set(error.messages[0] ?? null);
     }
   }
 }

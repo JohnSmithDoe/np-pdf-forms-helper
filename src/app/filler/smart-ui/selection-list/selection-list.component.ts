@@ -110,8 +110,11 @@ export class SelectionListComponent {
 
     const { value } = (event as CustomEvent<{ value?: string | string[] }>)
       .detail;
-    if (!value) this.expanded.set([]);
-    else this.expanded.set(Array.isArray(value) ? value : [value]);
+    if (value) {
+      this.expanded.set(Array.isArray(value) ? value : [value]);
+    } else {
+      this.expanded.set([]);
+    }
   }
 
   protected onDocumentSelected(

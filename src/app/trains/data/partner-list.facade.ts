@@ -38,14 +38,14 @@ export class PartnerListFacade implements ListPageFacade {
   readonly #role = signal<PartnerRolle>('werkstatt');
 
   readonly role = this.#role.asReadonly();
-  readonly sort = this.#sort.asReadonly();
+  readonly activeSort = this.#sort.asReadonly();
   readonly sortOptions = signal<readonly ItemListSortOption[]>([
     { key: 'name', label: 'Name' },
   ]).asReadonly();
 
   readonly #rows = computed<PartnerRow[] | undefined>(() => {
     const partners = this.#store.partners();
-    if (!partners) return undefined;
+    if (!partners) return;
     const role = this.#role();
     return partners
       .filter((partner) => partner.rollen.includes(role))
@@ -63,7 +63,7 @@ export class PartnerListFacade implements ListPageFacade {
 
   readonly items = computed<BaseItem[] | undefined>(() => {
     const rows = this.#rows();
-    if (!rows) return undefined;
+    if (!rows) return;
     const found = this.searchResult()?.items ?? rows;
     return sortList(found, this.#sort(), (row) => row.name);
   });

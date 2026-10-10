@@ -34,7 +34,7 @@ export function filterList<T extends BaseItem>(
   const active = Object.entries(filters).filter(
     ([key, filter]) => key !== except && isFiltered(filter)
   );
-  if (!active.length) return [...items];
+  if (active.length === 0) return [...items];
   return items.filter((item) =>
     active.every(([key, filter]) => passes(item, valueOf(item, key), filter))
   );
@@ -50,7 +50,7 @@ export function columnChoices<T extends BaseItem>(
   const values = [...new Set(rows.map((row) => valueOf(row, key).trim()))];
   const farben = new Set(rows.map((row) => row.farbe));
   return {
-    values: values.sort(compareValues),
+    values: values.toSorted(compareValues),
     farben: FARBEN.filter((farbe) => farben.has(farbe)),
     ohneFarbe: farben.has(undefined),
   };
@@ -91,17 +91,23 @@ export function matches(value: string, op: FilterOp, term: string): boolean {
   if (!text) return true;
   const haystack = value.toLowerCase();
   switch (op) {
-    case 'gleich':
+    case 'gleich': {
       return haystack === text;
-    case 'ungleich':
+    }
+    case 'ungleich': {
       return haystack !== text;
-    case 'beginnt':
+    }
+    case 'beginnt': {
       return haystack.startsWith(text);
-    case 'endet':
+    }
+    case 'endet': {
       return haystack.endsWith(text);
-    case 'enthaelt':
+    }
+    case 'enthaelt': {
       return haystack.includes(text);
-    case 'enthaeltNicht':
+    }
+    case 'enthaeltNicht': {
       return !haystack.includes(text);
+    }
   }
 }

@@ -29,7 +29,7 @@ import type {
 export interface ListPageFacade {
   readonly items: Signal<BaseItem[] | undefined>;
   readonly searchResult: Signal<SearchResult<BaseItem> | undefined>;
-  readonly sort: Signal<ItemListSort | undefined>;
+  readonly activeSort: Signal<ItemListSort | undefined>;
   readonly sortOptions?: Signal<readonly ItemListSortOption[]>;
   readonly total?: Signal<number>;
   readonly columns?: Signal<readonly ListColumn[]>;

@@ -25,7 +25,7 @@ import { CanActivateFn, Router, UrlTree } from '@angular/router';
 import { ImportWalkFacade, IntakeFacade, MasterExportFacade } from '../data';
 
 function guard<T>(
-  facade: new (...args: never[]) => T,
+  facade: new (...parameters: never[]) => T,
   loaded: (facade: T) => boolean,
   reached: (facade: T) => boolean,
   redirect: string

@@ -90,7 +90,7 @@ export class DocumentListPage {
   );
 
   protected readonly dokumente = computed(() =>
-    [...(this.trains.dokumente() ?? [])].sort(
+    (this.trains.dokumente() ?? []).toSorted(
       (a, b) =>
         b.bereinigtAm.localeCompare(a.bereinigtAm) ||
         a.name.localeCompare(b.name)

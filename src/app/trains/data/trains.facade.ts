@@ -141,7 +141,8 @@ export class TrainsFacade {
     kind: EntityRef,
     id: string
   ): Promise<EntityDetail | undefined> {
-    return (await this.#backend.getEntityDetail(kind, id)).entityDetail;
+    const { entityDetail } = await this.#backend.getEntityDetail(kind, id);
+    return entityDetail;
   }
 
   async setFarbe(
@@ -153,11 +154,13 @@ export class TrainsFacade {
   }
 
   async telematik(): Promise<TelematikView | undefined> {
-    return (await this.#backend.getTelematik()).telematik;
+    const { telematik } = await this.#backend.getTelematik();
+    return telematik;
   }
 
   async masterSheet(sheet: string): Promise<MasterSheetView | undefined> {
-    return (await this.#backend.getMasterSheet(sheet)).masterSheet;
+    const { masterSheet } = await this.#backend.getMasterSheet(sheet);
+    return masterSheet;
   }
 
   async createExport(): Promise<ClientReport | undefined> {

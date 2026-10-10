@@ -109,7 +109,7 @@ function ort(meldung: TelematikMeldung): string {
 function naechste(pruefungen: Pruefung[]): Pruefung[] {
   const offen = pruefungen
     .filter((pruefung) => !pruefung.durchgefuehrtAm && pruefung.faelligAm)
-    .sort((left, right) =>
+    .toSorted((left, right) =>
       (left.faelligAm ?? '').localeCompare(right.faelligAm ?? '')
     );
   const seen = new Set<string>();

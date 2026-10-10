@@ -135,7 +135,7 @@ export class ColumnMapperComponent {
   );
 
   protected readonly missing = computed(() =>
-    this.facade.missingRequired().map(labelOf)
+    this.facade.missingRequired().map((field) => labelOf(field))
   );
 
   protected readonly rows = computed<MapperRow[]>(() => {

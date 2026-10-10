@@ -31,10 +31,10 @@ export const trainsDataResolver: ResolveFn<boolean> = async () => {
   try {
     await facade.load();
     return true;
-  } catch (cause) {
+  } catch (error) {
     const messages =
-      cause instanceof BackendError
-        ? cause.messages
+      error instanceof BackendError
+        ? error.messages
         : ['Es ist ein unbekannter Fehler aufgetreten.'];
     await toasts.show({
       header: 'Es ist ein Problem aufgetreten',

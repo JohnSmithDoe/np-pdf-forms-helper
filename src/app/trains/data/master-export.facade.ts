@@ -78,7 +78,7 @@ export class MasterExportFacade {
 
   readonly request = computed<MasterExportRequest | undefined>(() => {
     const start = this.start();
-    if (!start) return undefined;
+    if (!start) return;
     const choices = this.#store.choices();
     return {
       dokumentId: start.dokumentId,

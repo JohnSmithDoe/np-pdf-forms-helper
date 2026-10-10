@@ -575,6 +575,11 @@ bodies may comment inline, because a test's reason for existing is not visible i
 This is a rule about WHERE, not about how much: a long header is fine, a two-word comment on line 40
 is not. What the header cannot hold belongs in this file or in `docs/decisions.md`.
 
+**`eslint-plugin-unicorn` runs `all` on TypeScript** (`recommended` on JS), as in np-commlink; every
+exception is named with its reason in `eslint.config.js`, never as an `eslint-disable` in source. It
+matches on call shape, which is why the list facades' sort signal is `activeSort`: `this.sort()` is
+indistinguishable from `Array#sort()`.
+
 **One dependency list.** The root `package.json` is the whole Node story; a Rust dependency goes in
 `src-tauri/Cargo.toml`. There is no second manifest and no second lockfile — that was Electron's
 packaging contract and it went with it. `pnpm-workspace.yaml` exists only to hold `allowBuilds`,

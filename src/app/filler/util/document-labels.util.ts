@@ -20,7 +20,7 @@ export function documentMeta(document: FillerDocument): string {
 
   const kind = document.type === 'pdf' ? 'PDF-Formular' : 'Excel-Tabelle';
   const fields = document.mapped;
-  if (!fields.length) return `${kind} · noch kein Feld zugeordnet`;
+  if (fields.length === 0) return `${kind} · noch kein Feld zugeordnet`;
 
   const selected = fields.filter((field) => field.selected).length;
   return `${kind} · ${selected} von ${fields.length} Feldern angehakt`;

@@ -28,7 +28,9 @@ export class TelematikListFacade implements ListPageFacade {
   readonly #view = signal<TelematikView | undefined>(undefined);
   readonly #term = signal<string | undefined>(undefined);
 
-  readonly sort = signal<ItemListSort | undefined>(undefined).asReadonly();
+  readonly activeSort = signal<ItemListSort | undefined>(
+    undefined
+  ).asReadonly();
   readonly stumm = computed(() => this.#view()?.stumm);
   readonly count = computed(() => this.#view()?.rows.length);
 
@@ -50,7 +52,7 @@ export class TelematikListFacade implements ListPageFacade {
 
   readonly items = computed<BaseItem[] | undefined>(() => {
     const rows = this.#rows();
-    if (!rows) return undefined;
+    if (!rows) return;
     return this.searchResult()?.items ?? rows;
   });
 

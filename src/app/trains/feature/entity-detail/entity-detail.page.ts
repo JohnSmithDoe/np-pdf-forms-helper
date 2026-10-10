@@ -151,8 +151,9 @@ export class EntityDetailPage {
           ? farbeOf(markierungen, 'radsaetze', radsatz.matchKey)
           : undefined;
       }
-      case 'partner':
-        return undefined;
+      case 'partner': {
+        return;
+      }
     }
   });
 
@@ -195,12 +196,15 @@ export class EntityDetailPage {
 
   #remove(detail: EntityDetail): Promise<void> {
     switch (detail.kind) {
-      case 'wagen':
+      case 'wagen': {
         return this.#trains.removeWagen(detail.id);
-      case 'radsatz':
+      }
+      case 'radsatz': {
         return this.#trains.removeRadsatz(detail.id);
-      case 'partner':
+      }
+      case 'partner': {
         return this.#trains.removePartner(detail.id);
+      }
     }
   }
 
@@ -216,11 +220,14 @@ export class EntityDetailPage {
 
 function question(detail: EntityDetail): string {
   switch (detail.kind) {
-    case 'wagen':
+    case 'wagen': {
       return `Wagen ${detail.title} wirklich entfernen? Seine Wartungen, Einbauten und sein Wagen-Zustand werden mit entfernt.`;
-    case 'radsatz':
+    }
+    case 'radsatz': {
       return `Radsatz ${detail.title} wirklich entfernen? Die Ein- und Ausbau-Historie wird mit entfernt.`;
-    case 'partner':
+    }
+    case 'partner': {
       return `${detail.title} wirklich entfernen? Wagen und Wartungen bleiben erhalten und verlieren die Zuordnung.`;
+    }
   }
 }

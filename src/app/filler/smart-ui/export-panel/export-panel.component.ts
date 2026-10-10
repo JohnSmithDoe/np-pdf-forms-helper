@@ -103,7 +103,7 @@ export class ExportPanelComponent {
     const documentPart = `${documents} ${documents === 1 ? 'Vorlage' : 'Vorlagen'} ausgewählt`;
 
     const fields = this.exportFields();
-    if (!fields.length) return documentPart;
+    if (fields.length === 0) return documentPart;
 
     const filled = fields.filter((field) => field.value.trim()).length;
     return `${documentPart} · ${filled} von ${fields.length} Werten gefüllt`;
@@ -126,9 +126,9 @@ export class ExportPanelComponent {
   }
 
   #run(command: Promise<void>): void {
-    void command.catch((cause: unknown) => {
-      if (!(cause instanceof BackendError)) throw cause;
-      this.failed.emit(cause);
+    void command.catch((error: unknown) => {
+      if (!(error instanceof BackendError)) throw error;
+      this.failed.emit(error);
     });
   }
 }

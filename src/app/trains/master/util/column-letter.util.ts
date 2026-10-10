@@ -8,7 +8,7 @@
 export function columnLetter(index: number): string {
   let letter = '';
   for (let rest = index; rest > 0; rest = Math.floor((rest - 1) / 26)) {
-    letter = String.fromCharCode(65 + ((rest - 1) % 26)) + letter;
+    letter = String.fromCodePoint(65 + ((rest - 1) % 26)) + letter;
   }
   return letter;
 }

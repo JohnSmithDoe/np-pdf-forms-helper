@@ -58,7 +58,9 @@
       <ion-buttons slot="start">
         @for (option of options; track option.key) {
           <ion-button
-            [fill]="facade.sort()?.sortBy === option.key ? 'solid' : 'clear'"
+            [fill]="
+              facade.activeSort()?.sortBy === option.key ? 'solid' : 'clear'
+            "
             (click)="facade.setSortMode(option.key)"
             [attr.data-testid]="'list-sort-' + option.key"
           >
@@ -125,7 +127,7 @@
             [label]="dialog.label"
             [choices]="dialog.choices"
             [filter]="dialog.filter"
-            [sort]="facade.sort()"
+            [activeSort]="facade.activeSort()"
             (sortChange)="facade.setSort?.($event)"
             (filterChange)="facade.setFilter?.(dialog.key, $event)"
             (closed)="openColumn.set(undefined)"
