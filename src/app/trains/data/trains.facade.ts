@@ -19,7 +19,7 @@ import type { ClientReport } from '../../@shared/model/client.types';
 import type { Farbe } from '../../@shared/model/farbe.types';
 import type {
   EntityDetail,
-  EntityReference,
+  EntityRef,
   MasterSettings,
   MasterSheetView,
   Partner,
@@ -138,7 +138,7 @@ export class TrainsFacade {
   }
 
   async entityDetail(
-    kind: EntityReference,
+    kind: EntityRef,
     id: string
   ): Promise<EntityDetail | undefined> {
     const { entityDetail } = await this.#backend.getEntityDetail(kind, id);
@@ -146,7 +146,7 @@ export class TrainsFacade {
   }
 
   async setFarbe(
-    kind: EntityReference,
+    kind: EntityRef,
     id: string,
     farbe: Farbe | undefined
   ): Promise<void> {

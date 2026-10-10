@@ -77,13 +77,21 @@ module.exports = defineConfig(
           custom: { regex: '^(I|T)[A-Z][a-z]', match: false },
         },
       ],
-      // Unicorn's `all` rules over house preference. The one exception: every
-      // file opens with a hand-wrapped `─── why ───` block, prettier never
-      // reflows a comment, and the rule's fix glues the banner onto the text.
-      'unicorn/no-manually-wrapped-comments': 'off',
-      // Angular's `signal()` requires its initial value, so the argument
-      // fix makes `signal<T | undefined>(undefined)` stop compiling.
+      // Unicorn's `all` with the rules np-commlink and np-debt-growth use.
+      'unicorn/no-null': 'off',
+      'unicorn/prevent-abbreviations': [
+        'error',
+        {
+          allowList: { utils: true, prod: true },
+          ignore: ['e2e', 'Ref', 'componentProps'],
+        },
+      ],
       'unicorn/no-useless-undefined': ['error', { checkArguments: false }],
+      'unicorn/prefer-export-from': ['error', { checkUsedVariables: false }],
+      // The one difference from the siblings: they write `/* */` headers, this
+      // repo keeps `//`, and the rule only reads line comments — its fix glues
+      // the `─── why ───` banner onto the text.
+      'unicorn/no-manually-wrapped-comments': 'off',
       // A published subpath is fine — `@ionic/angular/standalone` and
       // `rxjs/operators` are the supported way in. A path into a package's
       // BUILD OUTPUT is not, and neither resolution nor tsc will say so:
@@ -140,15 +148,21 @@ module.exports = defineConfig(
     plugins: { unicorn },
     extends: ['unicorn/recommended'],
     rules: {
-      'unicorn/no-manually-wrapped-comments': 'off',
-    },
-  },
-  {
-    // stylelint turns a rule off with `null` and nothing else; `undefined`
-    // reads as "not set" and the preset's value comes back.
-    files: ['stylelint.config.mjs'],
-    rules: {
+      'unicorn/prefer-module': 'off',
       'unicorn/no-null': 'off',
+      'unicorn/prevent-abbreviations': [
+        'error',
+        {
+          allowList: { utils: true, prod: true },
+          ignore: ['e2e', 'Ref', 'componentProps', 'dir', 'rel', 'doc'],
+        },
+      ],
+      'unicorn/no-useless-undefined': ['error', { checkArguments: false }],
+      'unicorn/import-style': [
+        'error',
+        { styles: { 'node:path': { named: true } } },
+      ],
+      'unicorn/no-manually-wrapped-comments': 'off',
     },
   },
   {

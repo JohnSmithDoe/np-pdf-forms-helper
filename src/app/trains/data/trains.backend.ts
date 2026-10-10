@@ -22,7 +22,7 @@ import {
 import type {
   CleanDecisions,
   EntityDecisions,
-  EntityReference,
+  EntityRef,
   ImportPlan,
   MasterExportRequest,
   MasterSettings,
@@ -73,12 +73,12 @@ export type TrainsCommand =
   | { command: 'get_master_sheet'; payload: { sheet: string } }
   | {
       command: 'get_entity_detail';
-      payload: { kind: EntityReference; id: string };
+      payload: { kind: EntityRef; id: string };
     }
   | { command: 'get_telematik'; payload: Record<string, never> }
   | {
       command: 'set_farbe';
-      payload: { kind: EntityReference; id: string; farbe: Farbe | undefined };
+      payload: { kind: EntityRef; id: string; farbe: Farbe | undefined };
     }
   | { command: 'start_master_import'; payload: Record<string, never> }
   | { command: 'import_master_all'; payload: Record<string, never> }
@@ -105,12 +105,12 @@ export type TrainsCommand =
 export class TrainsBackend {
   readonly #backend = inject(BackendService);
 
-  getEntityDetail(kind: EntityReference, id: string): Promise<TrainsData> {
+  getEntityDetail(kind: EntityRef, id: string): Promise<TrainsData> {
     return this.#call({ command: 'get_entity_detail', payload: { kind, id } });
   }
 
   setFarbe(
-    kind: EntityReference,
+    kind: EntityRef,
     id: string,
     farbe: Farbe | undefined
   ): Promise<TrainsData> {

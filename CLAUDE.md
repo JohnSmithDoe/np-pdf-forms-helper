@@ -575,12 +575,12 @@ bodies may comment inline, because a test's reason for existing is not visible i
 This is a rule about WHERE, not about how much: a long header is fine, a two-word comment on line 40
 is not. What the header cannot hold belongs in this file or in `docs/decisions.md`.
 
-**`eslint-plugin-unicorn` rules over house preference** — `all` on TypeScript, `recommended` on JS,
-pinned to an EXACT version because `all` grows with every release. Hence `undefined` rather than
-`null`, `*.utility.ts` rather than `*.util.ts`, and `activeSort` on the list facades (the rule takes
-`this.sort()` for `Array#sort()`). Only three exceptions, each argued in `eslint.config.js`: the
-wrapped header comments, `undefined` as an argument (Angular's `signal()` needs it), and `null` in
-`stylelint.config.mjs` (stylelint's only "off"). Never an `eslint-disable` in source.
+**`eslint-plugin-unicorn` runs the same rules as np-commlink and np-debt-growth** — `all` on
+TypeScript, `recommended` on JS, their overrides verbatim — pinned to an EXACT version because `all`
+grows with every release. Hence `*.utility.ts` rather than `*.util.ts`, and `activeSort` on the list
+facades (the rule takes `this.sort()` for `Array#sort()`). The one difference from the siblings:
+`no-manually-wrapped-comments` is off, because they write `/* */` headers and this repo keeps `//`.
+Never an `eslint-disable` in source.
 
 **One dependency list.** The root `package.json` is the whole Node story; a Rust dependency goes in
 `src-tauri/Cargo.toml`. There is no second manifest and no second lockfile — that was Electron's

@@ -409,9 +409,9 @@ export interface Pruefung {
   source: Provenance;
 }
 
-export type EntityReference = 'wagen' | 'radsatz' | 'partner';
+export type EntityRef = 'wagen' | 'radsatz' | 'partner';
 
-export type DetailLinkKind = EntityReference | 'telematik';
+export type DetailLinkKind = EntityRef | 'telematik';
 
 export interface DetailLink {
   kind: DetailLinkKind;
@@ -440,7 +440,7 @@ export interface DetailSection {
 }
 
 export interface EntityDetail {
-  kind: EntityReference;
+  kind: EntityRef;
   id: string;
   title: string;
   subtitle?: string;
