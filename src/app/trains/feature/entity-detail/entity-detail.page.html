@@ -25,6 +25,38 @@
       <ion-note data-testid="detail-subtitle">{{ view.subtitle }}</ion-note>
     }
 
+    @if (markierung(); as stand) {
+      <div class="entity-detail__farbe" data-testid="detail-farbe">
+        <ion-note>Markierung</ion-note>
+        <div>
+          <ion-chip
+            [outline]="!!stand.hand"
+            (click)="onFarbe(undefined)"
+            data-testid="detail-farbe-keine"
+          >
+            Keine
+          </ion-chip>
+          @for (farbe of farben; track farbe) {
+            <ion-chip
+              [color]="farbeColor[farbe]"
+              [outline]="stand.hand !== farbe"
+              (click)="onFarbe(farbe)"
+              [attr.data-testid]="'detail-farbe-' + farbe"
+            >
+              {{ farbeLabel[farbe] }}
+            </ion-chip>
+          }
+        </div>
+        @if (stand.master; as master) {
+          <ion-note data-testid="detail-farbe-master">
+            In der Master-Datei {{ farbeLabel[master] }} markiert{{
+              stand.hand ? ' — die Markierung hier geht vor.' : '.'
+            }}
+          </ion-note>
+        }
+      </div>
+    }
+
     @if (view.fields.length) {
       <ion-list lines="full" data-testid="detail-fields">
         @for (field of view.fields; track field.label) {

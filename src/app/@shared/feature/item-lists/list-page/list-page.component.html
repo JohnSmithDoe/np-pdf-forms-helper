@@ -30,8 +30,30 @@
     />
   </ion-toolbar>
 
+  @let columns = facade.columns?.() ?? [];
   @let options = facade.sortOptions?.() ?? [];
-  @if (options.length) {
+  @if (columns.length) {
+    <ion-toolbar>
+      <ion-buttons slot="start" class="list-page__columns">
+        @for (column of columns; track column.key) {
+          @let filtered = isFiltered(column.key);
+          <ion-button
+            [fill]="filtered ? 'solid' : 'outline'"
+            (click)="openColumn.set(column.key)"
+            [attr.aria-label]="column.label + ' filtern und sortieren'"
+            [attr.data-testid]="'list-column-' + column.key"
+          >
+            {{ column.label }}
+            <ion-icon
+              slot="end"
+              [name]="columnIcon(column.key)"
+              aria-hidden="true"
+            />
+          </ion-button>
+        }
+      </ion-buttons>
+    </ion-toolbar>
+  } @else if (options.length) {
     <ion-toolbar>
       <ion-buttons slot="start">
         @for (option of options; track option.key) {
@@ -88,6 +110,30 @@
     [createLabel]="canCreate ? createLabel() : undefined"
     (createRequested)="onCreate()"
   />
+
+  @if (canFilter) {
+    <ion-modal
+      class="list-page__filter"
+      [isOpen]="!!openColumn()"
+      (didDismiss)="openColumn.set(undefined)"
+    >
+      <ng-template>
+        @if (dialog(); as dialog) {
+          <app-column-filter
+            class="ion-page"
+            [column]="dialog.key"
+            [label]="dialog.label"
+            [choices]="dialog.choices"
+            [filter]="dialog.filter"
+            [sort]="facade.sort()"
+            (sortChange)="facade.setSort?.($event)"
+            (filterChange)="facade.setFilter?.(dialog.key, $event)"
+            (closed)="openColumn.set(undefined)"
+          />
+        }
+      </ng-template>
+    </ion-modal>
+  }
 
   @if (canLoadMore) {
     <ion-infinite-scroll (ionInfinite)="onLoadMore($event)">

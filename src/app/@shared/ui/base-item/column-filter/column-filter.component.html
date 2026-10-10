@@ -1,0 +1,173 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>{{ label() }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="closed.emit()" data-testid="column-filter-close">
+        Schließen
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-list>
+    <ion-list-header>Sortieren</ion-list-header>
+    <div class="column-filter__block column-filter__sort">
+      @let sorted = sortedHere();
+      <ion-button
+        [fill]="sorted?.sortDirection === 'asc' ? 'solid' : 'outline'"
+        (click)="onSort('asc')"
+        data-testid="column-sort-asc"
+      >
+        <ion-icon slot="start" name="arrow-up-outline" aria-hidden="true" />
+        Aufsteigend
+      </ion-button>
+      <ion-button
+        [fill]="sorted?.sortDirection === 'desc' ? 'solid' : 'outline'"
+        (click)="onSort('desc')"
+        data-testid="column-sort-desc"
+      >
+        <ion-icon slot="start" name="arrow-down-outline" aria-hidden="true" />
+        Absteigend
+      </ion-button>
+    </div>
+    @if (choices().farben.length) {
+      <div class="column-filter__block">
+        <ion-label>Nach Farbe</ion-label>
+        <div class="column-filter__chips">
+          <ion-chip
+            [outline]="!!sorted?.farbe"
+            (click)="onSortFarbe(undefined)"
+          >
+            Ohne
+          </ion-chip>
+          @for (farbe of choices().farben; track farbe) {
+            <ion-chip
+              [color]="farbeColor[farbe]"
+              [outline]="sorted?.farbe !== farbe"
+              (click)="onSortFarbe(farbe)"
+              [attr.data-testid]="'column-sort-farbe-' + farbe"
+            >
+              {{ farbeLabel[farbe] }}
+            </ion-chip>
+          }
+        </div>
+      </div>
+    }
+
+    <ion-list-header>Filter</ion-list-header>
+    @if (choices().farben.length) {
+      @let chosen = farbe();
+      <div class="column-filter__block">
+        <ion-label>Nach Farbe</ion-label>
+        <div class="column-filter__chips">
+          <ion-chip [outline]="!!chosen" (click)="onFarbe(undefined)">
+            Ohne
+          </ion-chip>
+          @for (farbe of choices().farben; track farbe) {
+            <ion-chip
+              [color]="farbeColor[farbe]"
+              [outline]="chosen !== farbe"
+              (click)="onFarbe(farbe)"
+              [attr.data-testid]="'column-filter-farbe-' + farbe"
+            >
+              {{ farbeLabel[farbe] }}
+            </ion-chip>
+          }
+          @if (choices().ohneFarbe) {
+            <ion-chip
+              [outline]="chosen !== 'keine'"
+              (click)="onFarbe('keine')"
+              data-testid="column-filter-farbe-keine"
+            >
+              Keine Farbe
+            </ion-chip>
+          }
+        </div>
+      </div>
+    }
+
+    <div class="column-filter__block">
+      <ion-select
+        label="Suche"
+        labelPlacement="start"
+        interface="popover"
+        [value]="op()"
+        (ionChange)="onOp($event)"
+      >
+        @for (option of ops; track option.op) {
+          <ion-select-option [value]="option.op">{{
+            option.label
+          }}</ion-select-option>
+        }
+      </ion-select>
+    </div>
+
+    <ion-searchbar
+      placeholder="Suchen"
+      [value]="term()"
+      [debounce]="150"
+      (ionInput)="onSearch($event)"
+      data-testid="column-filter-search"
+    />
+
+    <ion-item lines="none">
+      <ion-checkbox
+        justify="start"
+        labelPlacement="end"
+        [checked]="allTicked()"
+        [indeterminate]="someTicked()"
+        (ionChange)="onToggleAll()"
+        data-testid="column-filter-all"
+      >
+        {{
+          searching() ? '(Alle Suchergebnisse auswählen)' : '(Alles auswählen)'
+        }}
+      </ion-checkbox>
+    </ion-item>
+    @for (value of visible(); track value) {
+      <ion-item lines="none">
+        <ion-checkbox
+          justify="start"
+          labelPlacement="end"
+          [checked]="isTicked(value)"
+          (ionChange)="onToggle(value)"
+          data-testid="column-filter-value"
+        >
+          {{ value || '(Leer)' }}
+        </ion-checkbox>
+      </ion-item>
+    }
+  </ion-list>
+</ion-content>
+
+<ion-footer>
+  <ion-toolbar>
+    <ion-checkbox
+      slot="start"
+      class="column-filter__auto"
+      justify="start"
+      labelPlacement="end"
+      [checked]="auto()"
+      (ionChange)="onAuto($event)"
+    >
+      Automatisch anwenden
+    </ion-checkbox>
+    <ion-buttons slot="end">
+      <ion-button
+        [disabled]="auto()"
+        (click)="onApply()"
+        data-testid="column-filter-apply"
+      >
+        Filter anwenden
+      </ion-button>
+      <ion-button
+        color="danger"
+        (click)="onClear()"
+        data-testid="column-filter-clear"
+      >
+        Filter entfernen
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-footer>

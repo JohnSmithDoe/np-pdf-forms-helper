@@ -1,10 +1,14 @@
 <ion-card
   class="entity-card"
   [button]="true"
-  [attr.aria-label]="title()"
+  [attr.aria-label]="ariaLabel()"
+  [attr.data-farbe]="farbe()"
   (click)="open.emit()"
   data-testid="list-row"
 >
+  @if (stripe(); as stripe) {
+    <div class="entity-card__farbe" [class]="stripe" aria-hidden="true"></div>
+  }
   <ion-card-header>
     <div class="entity-card__head">
       @let name = icon();

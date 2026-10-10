@@ -26,7 +26,11 @@
 // The IMPORT runs the other way: every binding with an „Inhalt“ (its sheet
 // kind) is read into the Schattensystem, sheet by sheet through the import
 // walk, after the facts are emptied — the Schattensystem mirrors the master.
-// That empties data, so it asks first and says what stays. A run that was
+// That empties data, so it asks first and says what stays. „Alles
+// importieren“ is the same run in one backend call (`import_master_all`): it
+// still asks that one question, because it still empties, and then nothing
+// else — Rust answers every group the way „alle neuen anlegen“ would and the
+// page shows its report afterwards. A run that was
 // left before its last sheet is INCOMPLETE and says so, with „Fortsetzen“
 // walking only the sheets still open; checking a partial mirror against the
 // customer as if it were whole is the mistake the banner exists to prevent.
@@ -78,6 +82,7 @@ import {
   chevronUpOutline,
   cloudDownloadOutline,
   createOutline,
+  flashOutline,
   eyeOutline,
   folderOpenOutline,
   refreshOutline,
@@ -86,6 +91,7 @@ import {
 } from 'ionicons/icons';
 import { OverlayService } from '../../../@shared/data/overlays/overlay.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
+import type { ClientReport } from '../../../@shared/model/client.types';
 import { BusyOverlayComponent } from '../../../@shared/ui/busy-overlay/busy-overlay.component';
 import { ImportWalkFacade, MasterFileFacade, TrainsFacade } from '../../data';
 import type {
@@ -183,6 +189,7 @@ export class TrainsMasterPage {
       cloudDownloadOutline,
       createOutline,
       eyeOutline,
+      flashOutline,
       folderOpenOutline,
       refreshOutline,
       trashOutline,
@@ -298,6 +305,18 @@ export class TrainsMasterPage {
     if (ok && sheets.length) {
       await this.#router.navigate(['/trains/import/partners']);
     }
+  }
+
+  protected async onImportAll(): Promise<void> {
+    const confirmed = await this.#overlays.confirm(
+      'Ganze Master-Datei ohne Rückfragen importieren? Die aktuellen Daten im Schattensystem — Wagen, Radsätze, Einbauten, Instandhaltungen und der Wagen-Zustand — werden geleert und aus allen Blättern neu aufgebaut. Neues wird angelegt; was nur ähnlich oder mehrdeutig ist, bleibt unverknüpft. Partner, Vorlagen und Dokumente bleiben.'
+    );
+    if (!confirmed) return;
+    let report: ClientReport | undefined;
+    const ok = await this.#reports.run(async () => {
+      report = await this.facade.importMasterAll();
+    });
+    if (ok && report) await this.#reports.show(report);
   }
 
   protected async onContinue(): Promise<void> {

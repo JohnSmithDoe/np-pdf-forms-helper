@@ -25,7 +25,7 @@ mod wagen;
 use super::db::TrainsDb;
 use super::model::{
     DetailField, DetailLink, DetailRow, DetailSection, DetailTone, EntityDetail, EntityRef,
-    Instandhaltung,
+    Instandhaltung, LinkKind,
 };
 use super::sanitise::format;
 use crate::error::{AppError, AppResult};
@@ -47,9 +47,9 @@ pub fn build(db: &TrainsDb, kind: EntityRef, id: &str) -> AppResult<EntityDetail
     })
 }
 
-fn link(kind: EntityRef, id: &str) -> Option<DetailLink> {
+fn link(kind: impl Into<LinkKind>, id: &str) -> Option<DetailLink> {
     Some(DetailLink {
-        kind,
+        kind: kind.into(),
         id: id.to_string(),
     })
 }
@@ -104,7 +104,7 @@ fn labelled(label: &str, value: String) -> String {
     }
 }
 
-fn moment(iso: &str) -> String {
+pub(super) fn moment(iso: &str) -> String {
     let (day, time) = iso.split_once('T').unwrap_or((iso, ""));
     let time: String = time.chars().take(5).collect();
     format!("{} {time}", format::iso_date(day))
@@ -326,6 +326,8 @@ mod tests {
         let telematik = section_of(&detail, "Telematik");
         assert_eq!(telematik.rows[0].title, "Letzte Meldung 05.10.2026 08:15");
         assert!(telematik.rows[0].lines.contains(&"227734 km".to_string()));
+        // Telematik has no page per Wagen, so its rows open the list on this one.
+        assert_eq!(telematik.rows[0].link, link(LinkKind::Telematik, "w1"));
 
         let schaden = &section_of(&detail, "Schadensmeldungen").rows[0];
         assert_eq!(schaden.tone, Some(DetailTone::Warning));

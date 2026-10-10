@@ -247,6 +247,14 @@ const pages: Routes = [
       ),
   },
   {
+    path: 'telematik',
+    title: 'Telematik',
+    loadComponent: () =>
+      import('../feature/telematik-list/telematik-list.page').then(
+        (m) => m.TelematikListPage
+      ),
+  },
+  {
     path: 'wagen/:id',
     title: 'Wagen',
     data: { kind: 'wagen' },

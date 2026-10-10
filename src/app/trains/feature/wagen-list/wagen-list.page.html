@@ -12,6 +12,7 @@
     [title]="row.nummer"
     [note]="row.summary"
     icon="train-outline"
+    [farbe]="row.farbe"
     (open)="onOpen(row.id)"
   >
     @if (row.zustand.standort || row.zustand.funk) {

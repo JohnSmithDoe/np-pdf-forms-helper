@@ -4,7 +4,8 @@
 // (Schäden, Aufträge, Prüfungen), then the history (past fittings, work done).
 // Open Schadensmeldungen come before closed ones and carry `warning` — the
 // orange row of the customer's dashboard; an open Auftrag (no Ausgang) is
-// `medium`. Rows that name a Radsatz or a Partner link to it. Fitted Radsätze
+// `medium`. Rows that name a Radsatz or a Partner link to it; a Telematik row
+// links to the Telematik list, which has no page per Wagen. Fitted Radsätze
 // go by position, „ohne Position“ LAST — a master sheet without positions adds
 // such fittings beside the placed ones, and they are the odd ones out.
 // ────────────────────────────────────────────────────────────────
@@ -15,7 +16,8 @@ use super::{
 };
 use crate::trains::db::TrainsDb;
 use crate::trains::model::{
-    DetailField, DetailRow, DetailSection, DetailTone, Einbau, EntityDetail, EntityRef, Wagen,
+    DetailField, DetailRow, DetailSection, DetailTone, Einbau, EntityDetail, EntityRef, LinkKind,
+    Wagen,
 };
 
 pub fn detail(db: &TrainsDb, id: &str) -> Option<EntityDetail> {
@@ -122,6 +124,9 @@ fn telematik(db: &TrainsDb, id: &str) -> DetailSection {
                 )
             }),
     );
+    for row in &mut rows {
+        row.link = link(LinkKind::Telematik, id);
+    }
     section("Telematik", "Keine Telematik-Meldung.", rows)
 }
 

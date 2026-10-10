@@ -9,7 +9,8 @@
 //
 // `silent` is taken by the commands whose report the caller presents itself —
 // `write_clean` (the cleaning's batch summary), `commit_document` (the
-// import's result) and `create_trains_export` (the dashboard) — the same
+// import's result), `create_trains_export` (the dashboard) and
+// `import_master_all` (the master page) — the same
 // opt-in per call that `FillerBackend` uses.
 // ────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,7 @@ import type {
   Wagen,
   Radsatz,
 } from '../model/trains.types';
+import type { Farbe } from '../../@shared/model/farbe.types';
 
 export type TrainsCommand =
   | { command: 'get_trains_data'; payload: Record<string, never> }
@@ -70,7 +72,13 @@ export type TrainsCommand =
     }
   | { command: 'get_master_sheet'; payload: { sheet: string } }
   | { command: 'get_entity_detail'; payload: { kind: EntityRef; id: string } }
+  | { command: 'get_telematik'; payload: Record<string, never> }
+  | {
+      command: 'set_farbe';
+      payload: { kind: EntityRef; id: string; farbe: Farbe | null };
+    }
   | { command: 'start_master_import'; payload: Record<string, never> }
+  | { command: 'import_master_all'; payload: Record<string, never> }
   | { command: 'stage_master_sheet'; payload: { sheet: string } }
   | { command: 'get_master_file'; payload: Record<string, never> }
   | { command: 'clean_master_file'; payload: Record<string, never> }
@@ -95,6 +103,21 @@ export class TrainsBackend {
 
   getEntityDetail(kind: EntityRef, id: string): Promise<TrainsData> {
     return this.#call({ command: 'get_entity_detail', payload: { kind, id } });
+  }
+
+  setFarbe(
+    kind: EntityRef,
+    id: string,
+    farbe: Farbe | undefined
+  ): Promise<TrainsData> {
+    return this.#call({
+      command: 'set_farbe',
+      payload: { kind, id, farbe: farbe ?? null },
+    });
+  }
+
+  getTelematik(): Promise<TrainsData> {
+    return this.#call({ command: 'get_telematik', payload: {} });
   }
 
   getMasterSheet(sheet: string): Promise<TrainsData> {
@@ -277,6 +300,10 @@ export class TrainsBackend {
 
   startMasterImport(): Promise<TrainsData> {
     return this.#call({ command: 'start_master_import', payload: {} });
+  }
+
+  importMasterAll(options?: CallOptions): Promise<TrainsData> {
+    return this.#call({ command: 'import_master_all', payload: {} }, options);
   }
 
   stageMasterSheet(sheet: string): Promise<TrainsData> {

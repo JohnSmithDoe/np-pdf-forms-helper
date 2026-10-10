@@ -14,14 +14,27 @@
 // The Wagen-Zustand rides on the row as `zustand` — where it is, when it last
 // reported, what is open — built by `util/wagen-zustand` from the store's one
 // `WagenZustand`, so the list and its search read the same text.
+//
+// Filtering is Excel's, per column (`columns`), and replaces the sort bar. The
+// owner column is labelled Halter: it reads `halterId`, and the Halter is not
+// the Eigentümer (docs/fachdomaene.md). Each row carries its Farbe —
+// `util/farbe` — so the colour filter and sort work on every column.
 // ────────────────────────────────────────────────────────────────
 
 import { computed, inject, Injectable, signal } from '@angular/core';
 import type {
   BaseItem,
+  ColumnChoices,
+  ColumnFilter,
+  ColumnFilters,
   ItemListSort,
-  ItemListSortOption,
+  ListColumn,
 } from '../../@shared/model/item-list.types';
+import {
+  columnChoices,
+  filterList,
+  withFilter,
+} from '../../@shared/util/item-lists/list-filter';
 import type { ListPageFacade } from '../../@shared/util/item-lists/list-page.facade';
 import {
   searchList,
@@ -29,6 +42,7 @@ import {
   toggleSort,
 } from '../../@shared/util/item-lists/list.selector';
 import type { Einbau } from '../model/trains.types';
+import { farbeOf } from '../util/farbe.util';
 import { formatIsoDate, formatUic } from '../util/uic.util';
 import {
   indexZustand,
@@ -63,10 +77,15 @@ export class WagenListFacade implements ListPageFacade {
     sortDirection: 'asc',
   });
 
+  readonly #filters = signal<ColumnFilters>({});
+
   readonly sort = this.#sort.asReadonly();
-  readonly sortOptions = signal<readonly ItemListSortOption[]>([
-    { key: 'wagennummer', label: 'Nummer' },
-    { key: 'halter', label: 'Eigentümer' },
+  readonly filters = this.#filters.asReadonly();
+  readonly columns = signal<readonly ListColumn[]>([
+    { key: 'wagennummer', label: 'Wagennummer' },
+    { key: 'bauart', label: 'Bauart' },
+    { key: 'halter', label: 'Halter' },
+    { key: 'standort', label: 'Standort' },
   ]).asReadonly();
 
   readonly #rows = computed<WagenRow[] | undefined>(() => {
@@ -75,6 +94,7 @@ export class WagenListFacade implements ListPageFacade {
     const partners = this.#store.partnerById();
     const radsaetze = this.#store.radsatzById();
     const zustand = indexZustand(this.#store.zustand());
+    const markierungen = this.#store.markierungen();
     const now = new Date();
     const open = new Map<string, Einbau[]>();
     for (const einbau of this.#store.einbauten() ?? []) {
@@ -89,6 +109,7 @@ export class WagenListFacade implements ListPageFacade {
       return {
         id: wagen.id,
         name: uic,
+        farbe: farbeOf(markierungen, 'wagen', wagen.nummer).farbe,
         nummer: uic,
         digits: wagen.nummer,
         owner,
@@ -120,12 +141,16 @@ export class WagenListFacade implements ListPageFacade {
     )
   );
 
+  readonly #found = computed(
+    () => this.searchResult()?.items ?? this.#rows() ?? []
+  );
+
   readonly items = computed<BaseItem[] | undefined>(() => {
-    const rows = this.#rows();
-    if (!rows) return undefined;
-    const found = this.searchResult()?.items ?? rows;
-    return sortList(found, this.#sort(), (row, key) =>
-      key === 'halter' ? row.owner : row.nummer
+    if (!this.#rows()) return undefined;
+    return sortList(
+      filterList(this.#found(), this.#filters(), valueOf),
+      this.#sort(),
+      valueOf
     );
   });
 
@@ -135,6 +160,31 @@ export class WagenListFacade implements ListPageFacade {
 
   setSortMode(key: string): void {
     this.#sort.set(toggleSort(this.#sort(), key));
+  }
+
+  setSort(sort: ItemListSort): void {
+    this.#sort.set(sort);
+  }
+
+  columnChoices(key: string): ColumnChoices {
+    return columnChoices(this.#found(), this.#filters(), key, valueOf);
+  }
+
+  setFilter(key: string, filter: ColumnFilter | undefined): void {
+    this.#filters.set(withFilter(this.#filters(), key, filter));
+  }
+}
+
+function valueOf(row: WagenRow, key: string): string {
+  switch (key) {
+    case 'bauart':
+      return row.kind;
+    case 'halter':
+      return row.owner;
+    case 'standort':
+      return row.zustand.standort;
+    default:
+      return row.nummer;
   }
 }
 

@@ -1,0 +1,32 @@
+<app-list-page
+  class="ion-page"
+  backHref="/trains"
+  heading="Telematik"
+  layout="cards"
+  emptyText="Noch keine Telematik — sie kommt mit dem Import eines Telematik-Exports herein."
+  [itemTemplate]="telematikCard"
+/>
+
+<ng-template #telematikCard let-row>
+  <app-entity-card
+    [title]="row.title"
+    [note]="row.geraet ? 'Gerät ' + row.geraet : ''"
+    icon="radio-outline"
+    (open)="onOpen(row.id)"
+  >
+    <ion-note
+      class="telematik-list__line"
+      [color]="row.stumm ? 'danger' : 'medium'"
+      data-testid="telematik-funk"
+    >
+      {{ row.standort }}
+      @if (row.standort && row.funk) {
+        ·
+      }
+      {{ row.funk }}
+    </ion-note>
+    @for (line of row.lines; track $index) {
+      <ion-note class="telematik-list__line">{{ line }}</ion-note>
+    }
+  </app-entity-card>
+</ng-template>

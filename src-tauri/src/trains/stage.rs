@@ -81,8 +81,8 @@ use std::collections::HashSet;
 use super::db::TrainsDb;
 use super::hash;
 use super::model::{
-    CellIssue, ColumnBinding, FieldKind, ImportPlan, Resolution, RowStatus, Severity, StagedCell,
-    StagedImport, StagedRow, StagedSummary, StagingOrigin,
+    CellIssue, ColumnBinding, Farben, FieldKind, ImportPlan, Resolution, RowStatus, Severity,
+    StagedCell, StagedImport, StagedRow, StagedSummary, StagingOrigin,
 };
 use super::reading::{read_column, reads_a_date, Confirmed, Interpretation, Question};
 use super::resolve;
@@ -125,6 +125,7 @@ pub struct HeldImport {
     pub grid: Grid,
     pub wire: StagedImport,
     pub values: Vec<RowValues>,
+    pub farben: Farben,
 }
 
 pub struct StageInput<'a> {

@@ -7,6 +7,14 @@
     <ion-buttons slot="end">
       <ion-button
         [disabled]="!importReady()"
+        (click)="onImportAll()"
+        data-testid="master-import-all"
+      >
+        <ion-icon slot="start" name="flash-outline" aria-hidden="true" />
+        Alles importieren
+      </ion-button>
+      <ion-button
+        [disabled]="!importReady()"
         (click)="onImport()"
         data-testid="master-import"
       >
@@ -29,6 +37,11 @@
     Werkstattaufträge, Prüfungen) — und aus der Master-Datei neu aufgebaut,
     Blatt für Blatt. Partner, Vorlagen und Dokumente bleiben; die Dokumente
     lassen sich danach erneut importieren.
+  </p>
+  <p>
+    „Alles importieren“ liest die ganze Datei ohne Rückfragen: Bekanntes wird
+    zugeordnet, Neues angelegt. Was nur ähnlich oder mehrdeutig ist, bleibt
+    unverknüpft und steht im Bericht, der danach erscheint.
   </p>
   <p>
     Jedes Blatt lässt sich hier auch ansehen: so, wie das Schattensystem es

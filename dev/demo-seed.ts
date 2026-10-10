@@ -69,6 +69,10 @@
 // readings are dated relative to NOW (`vorTagen`), or „funkte vor N Tagen“
 // would grow every day the seed is not touched.
 //
+// THE TELEMATIK LIST is hand-written to match those readings, in Rust's order:
+// the device on wg-4 that never reported, then the silent wg-2, then the rest.
+// The order and the silence rule are `trains::telematik`'s.
+//
 // THE DETAIL PAGES are hand-written for wg-1, its Radsatz rs-1 and the
 // Werkstatt Schienenbein, linked to each other, so the walk Wagen → Radsatz →
 // Werkstatt → Wagen can be clicked through; building them is `trains::detail`'s.
@@ -95,6 +99,7 @@ import type {
   FakeScanFile,
   FakeSeed,
   FakeStaging,
+  FakeTelematikView,
   FakeTemplate,
   FakeWagenZustand,
   FakeWaggon,
@@ -292,6 +297,13 @@ const zustand: FakeWagenZustand = {
       angebautAm: '2024-09-05',
       source: quelle('Telematik.xlsx', 3),
     },
+    {
+      id: 'tg-3',
+      kennung: 'PI1709904',
+      wagenId: 'wg-4',
+      angebautAm: '2026-09-30',
+      source: quelle('Telematik.xlsx', 5),
+    },
   ],
   meldungen: [
     {
@@ -391,6 +403,60 @@ const zustand: FakeWagenZustand = {
   ],
 };
 
+function gemeldet(tage: number, stunde: number): string {
+  const [day = '', time = ''] = vorTagen(tage, stunde).split('T');
+  const [year, month, date] = day.split('-');
+  return `letzte Meldung ${date}.${month}.${year} ${time.slice(0, 5)}`;
+}
+
+const telematik: FakeTelematikView = {
+  stumm: 2,
+  rows: [
+    {
+      wagenId: 'wg-4',
+      title: '238566234569',
+      nummer: '238566234569',
+      geraet: 'PI1709904',
+      standort: '',
+      funk: 'noch keine Meldung',
+      stumm: true,
+      lines: [],
+    },
+    {
+      wagenId: 'wg-2',
+      title: '338080123452',
+      nummer: '338080123452',
+      geraet: '1102914295',
+      standort: 'BAD HERSFELD-EICHHOF, DE',
+      funk: 'funkte vor 12 Tagen',
+      stumm: true,
+      tage: 12,
+      lines: [gemeldet(12, 17), 'STILLSTAND', '168973 km', 'Energie 41 %'],
+    },
+    {
+      wagenId: 'wg-1',
+      title: '218124712173',
+      nummer: '218124712173',
+      geraet: 'PI1703372',
+      standort: 'Neuhof (Kr Fulda), DE',
+      funk: 'funkte vor 1 Tag',
+      stumm: false,
+      tage: 1,
+      lines: [gemeldet(1, 8), 'BEWEGUNG', '227734 km', 'Energie 98 %'],
+    },
+    {
+      wagenId: 'wg-3',
+      title: '378045567815',
+      nummer: '378045567815',
+      standort: 'Altenburg, DE',
+      funk: 'funkte heute',
+      stumm: false,
+      tage: 0,
+      lines: [gemeldet(0, 6)],
+    },
+  ],
+};
+
 const entityDetails: Record<string, FakeEntityDetail> = {
   'wagen:wg-1': {
     kind: 'wagen',
@@ -424,8 +490,13 @@ const entityDetails: Record<string, FakeEntityDetail> = {
               '227734 km',
               'Energie 98 %',
             ],
+            link: { kind: 'telematik', id: 'wg-1' },
           },
-          { title: 'Gerät PI1703372', lines: ['angebaut am 15.04.2024'] },
+          {
+            title: 'Gerät PI1703372',
+            lines: ['angebaut am 15.04.2024'],
+            link: { kind: 'telematik', id: 'wg-1' },
+          },
         ],
       },
       {
@@ -1742,6 +1813,16 @@ export const DEMO_SEED: FakeSeed = {
   radsaetze,
   einbauten,
   zustand,
+  // One hand mark beside two from the master, and one Wagen marked both ways,
+  // so the colour filter and the detail page's „geht vor“ have something to show.
+  markierungen: {
+    hand: { wagen: { '218124712173': 'gruen' }, radsaetze: {} },
+    master: {
+      wagen: { '218124712173': 'rot', '338080123452': 'rot' },
+      radsaetze: { '4711b': 'gelb' },
+    },
+  },
+  telematik,
   entityDetails,
   events,
   templates,

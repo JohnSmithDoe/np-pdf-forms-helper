@@ -17,6 +17,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
   installFakeBackend,
+  recordedCalls,
   type FakeSeed,
   type FakeStaging,
 } from './fake-backend';
@@ -174,11 +175,11 @@ test.describe('Zug-Import', () => {
     await expect(
       dashboard.getByRole('button', { name: 'Bereinigen', exact: true })
     ).toBeVisible();
-    await expect(dashboard.locator('ion-card')).toHaveCount(10);
+    await expect(dashboard.locator('ion-card')).toHaveCount(11);
     await expect(
       dashboard.getByRole('button', { name: 'Dokumente', exact: true })
     ).toBeVisible();
-    for (const name of ['Wagen', 'Radsätze', 'Master-Import']) {
+    for (const name of ['Wagen', 'Telematik', 'Radsätze', 'Master-Import']) {
       await expect(
         dashboard.getByRole('button', { name, exact: true })
       ).toBeVisible();
@@ -241,6 +242,45 @@ test.describe('Master-Datei', () => {
     await expect(
       screen.getByTestId('master-binding').getByText('Telematik').first()
     ).toBeVisible();
+  });
+
+  // One question — it still empties — and then the report; the automatic
+  // answers themselves are cargo test's (`master::import_all`).
+  test('„Alles importieren“ fragt einmal und zeigt danach den Bericht', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      ...master,
+      master: {
+        file: 'C:/Daten/Übersicht.xlsx',
+        bindings: [
+          {
+            sheet: 'Überblick',
+            templateId: '',
+            kind: 'wagenliste',
+            aliases: [],
+          },
+          {
+            sheet: 'Telematik',
+            templateId: 't-telematik',
+            aliases: [],
+          },
+        ],
+      },
+    });
+    await page.goto('/#/trains/master');
+    const screen = page.locator('app-page-trains-master');
+    await screen.getByTestId('master-import-all').click();
+    await page
+      .locator('ion-alert')
+      .getByRole('button', { name: 'Bestätigen' })
+      .click();
+
+    await expect(
+      page.getByText('Master-Datei vollständig importiert')
+    ).toBeVisible();
+    await expect(page.getByText('„Überblick“: übernommen.')).toBeVisible();
+    await expect(page).toHaveURL(/#\/trains\/master$/);
   });
 
   test('ohne Datei lässt sich nichts importieren', async ({ page }) => {
@@ -310,6 +350,86 @@ test.describe('Zug-Listen', () => {
     await page.goto('/#/trains/wagen');
     await page.getByTestId('list-search').locator('input').fill('3180');
     await expect(page.getByTestId('list-row')).toHaveCount(1);
+  });
+
+  // Excel's AutoFilter per column. Which Farbe a fill becomes is Rust's
+  // (`farbe::from_argb`); here only that a hand mark wins over the master's,
+  // and that the dialog narrows the list and „Filter entfernen“ undoes it.
+  test('der Spaltenfilter filtert nach Farbe und nach Wert', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      wagen,
+      partners,
+      markierungen: {
+        hand: { wagen: { '218124712173': 'gruen' }, radsaetze: {} },
+        master: {
+          wagen: { '218124712173': 'rot', '318047401234': 'rot' },
+          radsaetze: {},
+        },
+      },
+    });
+    await page.goto('/#/trains/wagen');
+    const rows = page.getByTestId('list-row');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toHaveAttribute('data-farbe', 'gruen');
+
+    await page.getByTestId('list-column-wagennummer').click();
+    const dialog = page.locator('app-column-filter');
+    await dialog.getByTestId('column-filter-farbe-rot').click();
+    await expect(rows).toHaveCount(1);
+    await expect(page.getByTestId('list-row-title')).toHaveText('318047401234');
+
+    await dialog.getByTestId('column-filter-clear').click();
+    await expect(rows).toHaveCount(2);
+
+    // The search IS the filter: what it finds is ticked and applied.
+    await dialog
+      .getByTestId('column-filter-search')
+      .locator('input')
+      .fill('3180');
+    await expect(rows).toHaveCount(1);
+    await expect(dialog.getByTestId('column-filter-value')).toHaveCount(1);
+    // Emptying the search ticks everything again — nothing stays unticked.
+    await dialog.getByTestId('column-filter-search').locator('input').fill('');
+    await expect(rows).toHaveCount(2);
+    await expect(dialog.getByTestId('column-filter-value')).toHaveCount(2);
+    for (const box of await dialog.getByTestId('column-filter-value').all()) {
+      await expect(box).toHaveJSProperty('checked', true);
+    }
+    await dialog.getByTestId('column-filter-clear').click();
+    await expect(rows).toHaveCount(2);
+
+    await dialog.getByTestId('column-filter-value').first().click();
+    await expect(rows).toHaveCount(1);
+    await dialog.getByTestId('column-filter-close').click();
+    await expect(page.getByTestId('list-column-wagennummer')).toHaveAttribute(
+      'fill',
+      'solid'
+    );
+  });
+
+  test('die Detailseite setzt eine Markierung und nennt die der Master-Datei', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      wagen,
+      partners,
+      markierungen: {
+        master: { wagen: { '318047401234': 'rot' }, radsaetze: {} },
+      },
+    });
+    await page.goto('/#/trains/wagen/w2');
+    const farbe = page.getByTestId('detail-farbe');
+    await expect(farbe.getByTestId('detail-farbe-master')).toContainText('Rot');
+    await farbe.getByTestId('detail-farbe-blau').click();
+    await expect(farbe.getByTestId('detail-farbe-master')).toContainText(
+      'geht vor'
+    );
+    const calls = await recordedCalls(page);
+    expect(
+      calls.filter((call) => call.command === 'set_farbe').map((c) => c.args)
+    ).toEqual([{ kind: 'wagen', id: 'w2', farbe: 'blau' }]);
   });
 
   // The Wagen-Zustand renders what the backend holds: where the Wagen is, that
@@ -392,6 +512,64 @@ test.describe('Zug-Listen', () => {
       'Müller GmbH'
     );
     await expect(page.getByText('1 bekannte Schreibweise(n)')).toBeVisible();
+  });
+
+  // The Telematik list is its own way in: it starts from the devices, in the
+  // order Rust built (`trains::telematik`), and the dashboard tile counts the
+  // same view. The silence rule itself is cargo test's.
+  test('die Telematik-Kachel zählt die stummen Wagen und öffnet die Liste', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      wagen,
+      partners,
+      telematik: {
+        stumm: 1,
+        rows: [
+          {
+            wagenId: 'w2',
+            title: '318047401234',
+            nummer: '318047401234',
+            geraet: 'PTR-17',
+            standort: 'Neuhof, DE',
+            funk: 'funkte vor 12 Tagen',
+            stumm: true,
+            tage: 12,
+            lines: ['letzte Meldung 26.09.2026 23:59'],
+          },
+          {
+            wagenId: 'w1',
+            title: '218124712173',
+            nummer: '218124712173',
+            standort: 'Altenburg, DE',
+            funk: 'funkte heute',
+            stumm: false,
+            tage: 0,
+            lines: [],
+          },
+        ],
+      },
+    });
+    await page.goto('/#/trains');
+    const dashboard = page.locator('app-page-trains-dashboard');
+    await expect(dashboard.getByText('2 Wagen · 1 stumm')).toBeVisible();
+    await dashboard
+      .getByRole('button', { name: 'Telematik', exact: true })
+      .click();
+
+    const list = page.locator('app-page-telematik-list');
+    await expect(list.getByTestId('list-row-title')).toHaveText([
+      '318047401234',
+      '218124712173',
+    ]);
+    await expect(list.getByTestId('telematik-funk').first()).toHaveAttribute(
+      'color',
+      'danger'
+    );
+    await expect(list.getByText('Gerät PTR-17')).toBeVisible();
+
+    await list.getByTestId('list-row').first().click();
+    await expect(page).toHaveURL(/#\/trains\/wagen\/w2$/);
   });
 });
 
@@ -526,6 +704,70 @@ test.describe('Radsätze', () => {
     await expect(
       page.locator('app-page-entity-detail').last().getByTestId('detail-title')
     ).toHaveText('RS4711');
+  });
+
+  // Telematik has no page per Wagen: a Telematik row opens the list, searched
+  // for this Wagen's number.
+  test('eine Telematik-Zeile öffnet die Telematik-Liste auf diesem Wagen', async ({
+    page,
+  }) => {
+    await installFakeBackend(page, {
+      wagen,
+      entityDetails: {
+        'wagen:w1': {
+          kind: 'wagen',
+          id: 'w1',
+          title: '218124712173',
+          fields: [],
+          sections: [
+            {
+              title: 'Telematik',
+              empty: 'Keine Telematik-Meldung.',
+              rows: [
+                {
+                  title: 'Letzte Meldung 06.10.2026 08:15',
+                  lines: ['Neuhof (Kr Fulda), DE'],
+                  link: { kind: 'telematik', id: 'w1' },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      telematik: {
+        stumm: 0,
+        rows: [
+          {
+            wagenId: 'w1',
+            title: '218124712173',
+            nummer: '218124712173',
+            standort: 'Neuhof (Kr Fulda), DE',
+            funk: 'funkte heute',
+            stumm: false,
+            tage: 0,
+            lines: [],
+          },
+          {
+            wagenId: 'w2',
+            title: '338080123452',
+            nummer: '338080123452',
+            standort: 'Altenburg, DE',
+            funk: 'funkte heute',
+            stumm: false,
+            tage: 0,
+            lines: [],
+          },
+        ],
+      },
+    });
+    await page.goto('/#/trains/wagen/w1');
+    const wagenPage = page.locator('app-page-entity-detail').last();
+    await wagenPage.getByTestId('detail-row').first().click();
+
+    await expect(page).toHaveURL(/#\/trains\/telematik\?wagen=w1$/);
+    const list = page.locator('app-page-telematik-list');
+    await expect(list.getByText('218124712173')).toBeVisible();
+    await expect(list.getByText('338080123452')).toHaveCount(0);
   });
 
   test('ein Radsatz ohne offenen Einbau gilt als ausgebaut', async ({

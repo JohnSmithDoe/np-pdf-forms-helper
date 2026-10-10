@@ -7,13 +7,21 @@
 //
 // A row or field with a `link` is a button that opens that entity's page, which
 // is what makes the information hub navigable: Wagen → its Radsatz → the other
-// Wagen it ran in → the Werkstatt that worked on it.
+// Wagen it ran in → the Werkstatt that worked on it. A `telematik` link names a
+// Wagen too, but opens the Telematik list searched for it: there is no
+// Telematik page per Wagen.
 //
 // Removing lives here, not on the list: a list row is a card, and the card is
 // the button that opens this page. After removing, the page goes back to the
 // kind's list — the entity it showed no longer exists.
 //
 // A row's `tone` becomes an icon in Ionic's colour, never a CSS colour.
+//
+// A Wagen or Radsatz can be MARKED here with a Farbe, the Handfarbe the users
+// set in Excel. The mark comes from the store, not from the detail Rust built:
+// it is a user's note on the entity rather than a fact about it, and keeping it
+// out of `EntityDetail` means setting one needs no reload. „Keine“ removes the
+// hand mark, and the master's colour — named under the chips — shows again.
 // ────────────────────────────────────────────────────────────────
 
 import {
@@ -31,6 +39,7 @@ import {
   IonBackButton,
   IonButton,
   IonButtons,
+  IonChip,
   IonContent,
   IonHeader,
   IonIcon,
@@ -51,18 +60,27 @@ import {
 } from 'ionicons/icons';
 import { OverlayService } from '../../../@shared/data/overlays/overlay.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
+import type { Farbe } from '../../../@shared/model/farbe.types';
+import {
+  FARBE_COLOR,
+  FARBE_LABEL,
+  FARBEN,
+} from '../../../@shared/util/farbe.util';
 import { TrainsFacade } from '../../data';
 import type {
   DetailLink,
+  DetailLinkKind,
   DetailTone,
   EntityDetail,
   EntityRef,
 } from '../../model/trains.types';
+import { farbeOf, type FarbStand } from '../../util/farbe.util';
 
-const ROUTES: Record<EntityRef, string> = {
+const ROUTES: Record<DetailLinkKind, string> = {
   wagen: '/trains/wagen',
   radsatz: '/trains/radsaetze',
   partner: '/trains/partner',
+  telematik: '/trains/telematik',
 };
 
 const LISTS: Record<EntityRef, string> = {
@@ -87,6 +105,7 @@ const TONE_ICONS: Record<DetailTone, string> = {
     IonBackButton,
     IonButton,
     IonButtons,
+    IonChip,
     IonContent,
     IonHeader,
     IonIcon,
@@ -115,6 +134,27 @@ export class EntityDetailPage {
   protected readonly detail = signal<EntityDetail | undefined>(undefined);
   protected readonly backHref = computed(() => LISTS[this.kind()]);
   protected readonly toneIcons = TONE_ICONS;
+  protected readonly farben = FARBEN;
+  protected readonly farbeLabel = FARBE_LABEL;
+  protected readonly farbeColor = FARBE_COLOR;
+  protected readonly markierung = computed<FarbStand | undefined>(() => {
+    const id = this.id();
+    const markierungen = this.#trains.markierungen();
+    switch (this.kind()) {
+      case 'wagen': {
+        const wagen = this.#trains.wagenById().get(id);
+        return wagen ? farbeOf(markierungen, 'wagen', wagen.nummer) : undefined;
+      }
+      case 'radsatz': {
+        const radsatz = this.#trains.radsaetze()?.find((r) => r.id === id);
+        return radsatz
+          ? farbeOf(markierungen, 'radsaetze', radsatz.matchKey)
+          : undefined;
+      }
+      case 'partner':
+        return undefined;
+    }
+  });
 
   constructor() {
     addIcons({ alertCircleOutline, timeOutline, trashOutline, warningOutline });
@@ -127,7 +167,19 @@ export class EntityDetailPage {
 
   protected onOpen(link: DetailLink | undefined): void {
     if (!link) return;
+    if (link.kind === 'telematik') {
+      void this.#router.navigate([ROUTES.telematik], {
+        queryParams: { wagen: link.id },
+      });
+      return;
+    }
     void this.#router.navigate([ROUTES[link.kind], link.id]);
+  }
+
+  protected async onFarbe(farbe: Farbe | undefined): Promise<void> {
+    const kind = this.kind();
+    const id = this.id();
+    await this.#reports.run(() => this.#trains.setFarbe(kind, id, farbe));
   }
 
   protected async onRemove(): Promise<void> {

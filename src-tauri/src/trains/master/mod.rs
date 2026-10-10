@@ -15,6 +15,8 @@
 // second master picked anywhere else.
 //   mirror    master → Schattensystem: every bound sheet imported, the facts
 //             rebuilt from scratch each run, for checking against the customer.
+//   import_all  the same run in one go, every question answered the way
+//             „alle neuen anlegen“ does, reported afterwards.
 //
 // What a sheet IS decides how it is read and whether it is written back, and
 // that lives in `kinds/`, one module per kind. The customer's sheet NAMES live
@@ -33,6 +35,7 @@
 pub mod bindings;
 mod book;
 pub mod export;
+pub mod import_all;
 pub mod kinds;
 pub mod mirror;
 mod paste;

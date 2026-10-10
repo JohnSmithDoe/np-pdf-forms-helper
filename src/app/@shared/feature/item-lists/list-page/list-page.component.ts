@@ -26,6 +26,13 @@
 // up. Two controls in the same slot would offer both readings of where the page
 // sits. `ion-back-button` falls back to the href only when there is no history,
 // so a cold deep link still lands on the hub.
+//
+// A facade with `columns` gets one button per column instead of the sort bar,
+// each opening Excel's filter dialog (`ui/base-item/column-filter`) in an
+// `ion-modal`. A filtered column's button is solid with a funnel, the sorted
+// one carries the arrow — Excel's header glyphs, so a narrowed list says so.
+// The modal is only rendered for such a facade: an idle inline `ion-modal` is
+// still an element, and a page with none should not grow one.
 // ────────────────────────────────────────────────────────────────
 
 import { NgTemplateOutlet } from '@angular/common';
@@ -35,6 +42,7 @@ import {
   computed,
   inject,
   input,
+  signal,
   TemplateRef,
   viewChild,
 } from '@angular/core';
@@ -48,15 +56,24 @@ import {
   IonInfiniteScrollContent,
   IonList,
   IonMenuButton,
+  IonModal,
   IonTitle,
   IonToolbar,
   IonButton,
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { addOutline, arrowDownOutline, arrowUpOutline } from 'ionicons/icons';
+import {
+  addOutline,
+  arrowDownOutline,
+  arrowUpOutline,
+  caretDownOutline,
+  funnel,
+} from 'ionicons/icons';
 import type { BaseItem } from '../../../model/item-list.types';
+import { ColumnFilterComponent } from '../../../ui/base-item/column-filter/column-filter.component';
 import { ItemListEmptyComponent } from '../../../ui/base-item/item-list-empty/item-list-empty.component';
 import { ItemListSearchbarComponent } from '../../../ui/base-item/item-list-searchbar/item-list-searchbar.component';
+import { isFiltered } from '../../../util/item-lists/list-filter';
 import { LIST_FACADE } from '../../../util/item-lists/list-page.facade';
 
 export interface ListRowContext {
@@ -70,6 +87,7 @@ export interface ListRowContext {
   styleUrls: ['list-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    ColumnFilterComponent,
     IonBackButton,
     IonButton,
     IonButtons,
@@ -80,6 +98,7 @@ export interface ListRowContext {
     IonInfiniteScrollContent,
     IonList,
     IonMenuButton,
+    IonModal,
     IonTitle,
     IonToolbar,
     ItemListEmptyComponent,
@@ -101,12 +120,31 @@ export class ListPageComponent {
 
   protected readonly canCreate = !!this.facade.create;
   protected readonly canLoadMore = !!this.facade.loadMore;
+  protected readonly canFilter = !!this.facade.columns;
+  protected readonly openColumn = signal<string | undefined>(undefined);
+  protected readonly dialog = computed(() => {
+    const key = this.openColumn();
+    const column = this.facade.columns?.().find((entry) => entry.key === key);
+    if (!column || !this.facade.columnChoices) return undefined;
+    return {
+      key: column.key,
+      label: column.label,
+      choices: this.facade.columnChoices(column.key),
+      filter: this.facade.filters?.()[column.key],
+    };
+  });
   protected readonly isKnownEmpty = computed(
     () => this.facade.items()?.length === 0
   );
 
   constructor() {
-    addIcons({ addOutline, arrowDownOutline, arrowUpOutline });
+    addIcons({
+      addOutline,
+      arrowDownOutline,
+      arrowUpOutline,
+      caretDownOutline,
+      funnel,
+    });
   }
 
   protected onCreate(): void {
@@ -116,6 +154,16 @@ export class ListPageComponent {
   protected onLoadMore(event: Event): void {
     this.facade.loadMore?.();
     void (event.target as HTMLIonInfiniteScrollElement).complete();
+  }
+
+  protected isFiltered(key: string): boolean {
+    return isFiltered(this.facade.filters?.()[key]);
+  }
+
+  protected columnIcon(key: string): string {
+    if (this.isFiltered(key)) return 'funnel';
+    if (this.facade.sort()?.sortBy === key) return this.sortIcon(key);
+    return 'caret-down-outline';
   }
 
   protected sortIcon(key: string): string {

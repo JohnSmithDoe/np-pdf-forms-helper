@@ -996,3 +996,66 @@ die Entitätenlisten der zweite Blick auf die Daten.
   zweite Aktion darin wäre ein verschachteltes Bedienelement.
 - **Lange Listen eines Partners werden auf 50 Zeilen gekürzt**, mit einer Zeile, die den Rest nennt.
   Eingebaute Radsätze stehen nach Position, die ohne Position zuletzt.
+
+## Telematik als eigener Einstieg (appended 2026-10-08)
+
+Entschieden mit Martin am 2026-10-08: Verschiedene Aufgaben brauchen verschiedene Zugänge zu den
+Daten. Wer nach der Telematik sieht, fängt bei der Telematik an und nicht bei den Wagen.
+
+- **Eine eigene Kachel „Telematik“ und eine eigene Liste** (`/trains/telematik`). Kein Filter auf der
+  Wagenliste: Die Wagenliste ist der Zugang über den Wagen, die Telematik-Liste der über die Geräte.
+- **Eine Karte je Wagen mit Gerät oder Meldung**, die am längsten stummen zuerst. Ein Gerät, das sich
+  nie gemeldet hat, gilt als stumm und steht ganz oben. Ein Klick öffnet die Detailseite des Wagens.
+- **Gebaut in Rust** (`trains/telematik.rs`, `get_telematik`), Backend for Frontend. Die Kachel zählt
+  aus derselben Antwort, damit Kachel und Liste nie verschieden zählen.
+- **Gezählt wird in Kalendertagen**, so wie das Kundenblatt Daten abzieht; rot ab mehr als 7 Tagen.
+  Die Wagenkarte rechnet ihre Funkstille noch selbst, in TypeScript, mit derselben Schwelle. Kurz nach
+  Mitternacht kann sie deshalb um einen Tag von der Liste abweichen. Ändert sich die Schwelle,
+  müssen beide Stellen geändert werden.
+
+## Master-Import ohne Rückfragen (appended 2026-10-08)
+
+Entschieden mit Martin am 2026-10-08. Ergänzt „Blatt für Blatt, der Nutzer entscheidet Konflikte“,
+ersetzt es nicht: Der blattweise Weg bleibt.
+
+- **„Alles importieren“ liest die ganze Master-Datei in einem Lauf** (`master/import_all.rs`,
+  `import_master_all`) und zeigt danach einen Bericht, eine Zeile je Blatt. Gefragt wird nur einmal,
+  vorher, weil der Lauf die Fakten leert.
+- **Es ist derselbe Lauf wie der blattweise**: `mirror::start`, je Blatt `stage_sheet` und `commit`
+  mit allen Prüfungen, `done`. Ein Blatt, das scheitert, steht im Bericht und bleibt im Lauf offen.
+- **Geantwortet wird wie mit „alle neuen anlegen“**: Bekanntes wird zugeordnet, Neues angelegt. Was nur
+  ähnlich oder mehrdeutig ist, wird NICHT zugeordnet, sondern im Bericht genannt. Eine
+  Radsatznummer entscheidet nie allein, auch nicht ohne Rückfrage. Ein strittiges Einbaudatum
+  behält das gespeicherte; Dubletten und abgelehnte Zeilen bleiben draußen.
+
+## Farben und der Spaltenfilter wie in Excel (appended 2026-10-10)
+
+Entschieden mit Martin am 2026-10-10. Die Nutzer arbeiten in Excel und kennen dessen AutoFilter. Wagen-
+und Radsatzliste bekommen deshalb je Spalte denselben Dialog: Sortieren (auf/ab, nach Farbe), Filter
+nach Farbe, eine Textbedingung und eine durchsuchbare Werteliste mit „(Alles auswählen)“ sowie
+„Automatisch anwenden“. Andere Listen bekommen ihn erst, wenn sie ihn brauchen. Eine Fassade, die
+`columns` nennt, bekommt den Dialog statt der Sortierleiste.
+
+- **Das ist eine Ausnahme von „Der Wagen-Zustand ist typisiert“.** Dort wurden die Handfarben bewusst
+  nicht nachgebaut. Eine Farbe ist aber eine **Markierung**, keine Tatsache: Sie hält fest, was noch
+  kein Feld hat („nachfragen“, „Montag prüfen“). Was eine Farbe heute im Kundenblatt bedeutet und was
+  das Programm selbst beurteilen kann (Funkstille, offene Schäden, Fristen), wird weiter typisiert.
+- **Sechs Farben, jede eine Ionic-Farbrolle** (Rot, Gelb, Grün, Blau, Lila, Grau). Ein beliebiger
+  RGB-Wert würde die Regel „eine Komponente nennt nie eine Farbe“ brechen und im Dunkelmodus
+  unlesbar werden. Orange fällt mit Gelb zusammen, weil Ionic für beides nur `warning` hat.
+- **Beide Quellen, die Hand geht vor.** `markierungen.json` hat zwei Hälften. `hand` wird in der App
+  gesetzt, auf der Detailseite. `master` ist die Füllfarbe der Schlüsselzelle in der Master-Datei:
+  die Wagennummer auf einer Wagenliste, die Radsatznummer auf einer Radsatzliste. Das ist die Zelle,
+  auf die Excels „Nach Farbe“ filtert. Zuerst gilt die Handfarbe, sonst die aus dem Master. „Keine“
+  löscht also nur die Handfarbe.
+- **Geschlüsselt nach Wagennummer und Radsatz-`match_key`, nicht nach id**, denn der Master-Import
+  vergibt die ids neu. `clear_mirror` leert nur die Master-Hälfte, `reset` beide. Bewusst in Kauf
+  genommen: Haben zwei Radsätze verschiedener Absender dieselbe Nummer, tragen beide dieselbe
+  Markierung. Zusammengeführt wird dabei nichts; eine Markierung ist eine Notiz fürs Auge.
+- **Die Master-Farbe wird beim Stagen gelesen und erst beim Commit gespeichert**
+  (`farbe::merge_master`). Ein abgebrochener Gang hinterlässt keine Farbe. Das erste Blatt, das einen
+  Schlüssel färbt, gewinnt. Bedingte Formatierung wird nicht gelesen: Sie ist eine Regel über Werte,
+  und die Werte stehen schon im Schattensystem.
+- **Gefiltert wird im Frontend**, mit reinen Funktionen (`@shared/util/item-lists/list-filter.ts`).
+  Die Listen liegen ohnehin ganz im Store. Die Auswahl einer Spalte kommt, wie in Excel, aus den
+  Zeilen, die die Filter der ANDEREN Spalten durchlassen.

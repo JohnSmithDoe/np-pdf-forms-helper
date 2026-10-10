@@ -9,14 +9,25 @@
 // The row shows where it is NOW, derived from its open einbau — a radsatz is
 // under at most one wagen, so "no open einbau" reads as ausgebaut rather than
 // as missing data.
+//
+// Filtering is Excel's, per column, as on the Wagen list; the Farbe is looked
+// up by match key, which is how a hand mark outlives the master import.
 // ────────────────────────────────────────────────────────────────
 
 import { computed, inject, Injectable, signal } from '@angular/core';
 import type {
   BaseItem,
+  ColumnChoices,
+  ColumnFilter,
+  ColumnFilters,
   ItemListSort,
-  ItemListSortOption,
+  ListColumn,
 } from '../../@shared/model/item-list.types';
+import {
+  columnChoices,
+  filterList,
+  withFilter,
+} from '../../@shared/util/item-lists/list-filter';
 import type { ListPageFacade } from '../../@shared/util/item-lists/list-page.facade';
 import {
   searchList,
@@ -24,11 +35,13 @@ import {
   toggleSort,
 } from '../../@shared/util/item-lists/list.selector';
 import type { Einbau } from '../model/trains.types';
+import { farbeOf } from '../util/farbe.util';
 import { formatIsoDate, formatUic } from '../util/uic.util';
 import { TrainsStore } from './trains.store';
 
 export interface RadsatzRow extends BaseItem {
   number: string;
+  kind: string;
   systemId: string;
   fittedTo: string;
   since: string;
@@ -49,9 +62,13 @@ export class RadsatzListFacade implements ListPageFacade {
     sortDirection: 'asc',
   });
 
+  readonly #filters = signal<ColumnFilters>({});
+
   readonly sort = this.#sort.asReadonly();
-  readonly sortOptions = signal<readonly ItemListSortOption[]>([
-    { key: 'number', label: 'Nummer' },
+  readonly filters = this.#filters.asReadonly();
+  readonly columns = signal<readonly ListColumn[]>([
+    { key: 'number', label: 'Radsatznummer' },
+    { key: 'kind', label: 'Bauart' },
     { key: 'fittedTo', label: 'Wagen' },
   ]).asReadonly();
 
@@ -60,6 +77,7 @@ export class RadsatzListFacade implements ListPageFacade {
     if (!radsaetze) return undefined;
     const einbauten = this.#store.einbauten() ?? [];
     const wagenById = this.#store.wagenById();
+    const markierungen = this.#store.markierungen();
     const wagenLabel = (id: string): string => {
       const wagen = wagenById.get(id);
       return wagen
@@ -73,7 +91,9 @@ export class RadsatzListFacade implements ListPageFacade {
       return {
         id: radsatz.id,
         name: radsatz.nummer,
+        farbe: farbeOf(markierungen, 'radsaetze', radsatz.matchKey).farbe,
         number: radsatz.nummer,
+        kind: radsatz.bauart ?? '',
         systemId: radsatz.systemId ?? '',
         fittedTo: open ? wagenLabel(open.wagenId) : '',
         since: open?.eingebautAm ? formatIsoDate(open.eingebautAm) : '',
@@ -97,12 +117,16 @@ export class RadsatzListFacade implements ListPageFacade {
     )
   );
 
+  readonly #found = computed(
+    () => this.searchResult()?.items ?? this.#rows() ?? []
+  );
+
   readonly items = computed<BaseItem[] | undefined>(() => {
-    const rows = this.#rows();
-    if (!rows) return undefined;
-    const found = this.searchResult()?.items ?? rows;
-    return sortList(found, this.#sort(), (row, key) =>
-      key === 'fittedTo' ? row.fittedTo : row.number
+    if (!this.#rows()) return undefined;
+    return sortList(
+      filterList(this.#found(), this.#filters(), valueOf),
+      this.#sort(),
+      valueOf
     );
   });
 
@@ -112,6 +136,29 @@ export class RadsatzListFacade implements ListPageFacade {
 
   setSortMode(key: string): void {
     this.#sort.set(toggleSort(this.#sort(), key));
+  }
+
+  setSort(sort: ItemListSort): void {
+    this.#sort.set(sort);
+  }
+
+  columnChoices(key: string): ColumnChoices {
+    return columnChoices(this.#found(), this.#filters(), key, valueOf);
+  }
+
+  setFilter(key: string, filter: ColumnFilter | undefined): void {
+    this.#filters.set(withFilter(this.#filters(), key, filter));
+  }
+}
+
+function valueOf(row: RadsatzRow, key: string): string {
+  switch (key) {
+    case 'kind':
+      return row.kind;
+    case 'fittedTo':
+      return row.fittedTo;
+    default:
+      return row.number;
   }
 }
 

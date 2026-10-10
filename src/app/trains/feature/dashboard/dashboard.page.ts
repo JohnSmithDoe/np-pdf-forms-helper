@@ -43,6 +43,12 @@
 // „Master-Import“ (`/trains/master`), which EMPTIES the current data and
 // rebuilds it from the master's sheets, and is named apart from „Master-Datei“
 // (`/trains/master-file`), which only takes the customer's workbook in as a file.
+// „Telematik“ is its own tile beside Wagen: someone after a silent device
+// starts from the devices. Its count and „N stumm“ come from the same view Rust
+// builds for the list (`get_telematik`), reloaded whenever the Wagen-Zustand
+// changes, so the tile and the list cannot disagree about who is silent. A
+// failed load leaves the tile at „wird geladen …“ rather than raising a toast
+// on every visit to the hub.
 // Without `fullEnabled` only Vorlagen, Einstellungen and „Export erstellen“ are
 // hidden, not removed.
 // ────────────────────────────────────────────────────────────────
@@ -51,7 +57,9 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
+  untracked,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import {
@@ -83,6 +91,7 @@ import {
   ellipseOutline,
   gridOutline,
   peopleOutline,
+  radioOutline,
   ribbonOutline,
   settingsOutline,
   trainOutline,
@@ -90,7 +99,11 @@ import {
 } from 'ionicons/icons';
 import { SettingsService } from '../../../@shared/data/settings/settings.service';
 import { ReportPresenterService } from '../../../@shared/feature/report/report-presenter.service';
-import { MasterFileFacade, TrainsFacade } from '../../data';
+import {
+  MasterFileFacade,
+  TelematikListFacade,
+  TrainsFacade,
+} from '../../data';
 import type { ClientReport } from '../../../@shared/model/client.types';
 import type { PartnerRolle } from '../../model/trains.types';
 
@@ -133,6 +146,7 @@ const FULL_ONLY = new Set(['/trains/templates', '/trains/settings']);
 export class TrainsDashboardPage {
   readonly #facade = inject(TrainsFacade);
   readonly #masterFile = inject(MasterFileFacade);
+  readonly #telematik = inject(TelematikListFacade);
   readonly #router = inject(Router);
   readonly #reports = inject(ReportPresenterService);
   protected readonly fullEnabled = inject(SettingsService).fullEnabled;
@@ -179,6 +193,14 @@ export class TrainsDashboardPage {
         icon: 'train-outline',
         description: 'Die Güterwagen, erkannt an ihrer Wagennummer.',
         count: loaded ? counts.wagen : undefined,
+      },
+      {
+        route: '/trains/telematik',
+        label: 'Telematik',
+        icon: 'radio-outline',
+        description:
+          'Wo die Wagen stehen und welche sich lange nicht gemeldet haben.',
+        subtitle: this.#telematikSubtitle(),
       },
       {
         route: '/trains/radsaetze',
@@ -246,6 +268,10 @@ export class TrainsDashboardPage {
   });
 
   constructor() {
+    effect(() => {
+      this.#facade.zustand();
+      untracked(() => void this.#telematik.load().catch(() => undefined));
+    });
     addIcons({
       albumsOutline,
       buildOutline,
@@ -256,6 +282,7 @@ export class TrainsDashboardPage {
       ellipseOutline,
       gridOutline,
       peopleOutline,
+      radioOutline,
       ribbonOutline,
       settingsOutline,
       trainOutline,
@@ -284,6 +311,14 @@ export class TrainsDashboardPage {
     if (!ok || !report) return;
     const folder = await this.#reports.show(report);
     if (folder) await this.#reports.run(() => this.#facade.openFolder(folder));
+  }
+
+  #telematikSubtitle(): string | undefined {
+    const count = this.#telematik.count();
+    if (count === undefined) return undefined;
+    const stumm = this.#telematik.stumm() ?? 0;
+    const wagen = count === 1 ? '1 Wagen' : `${count} Wagen`;
+    return stumm ? `${wagen} · ${stumm} stumm` : wagen;
   }
 
   #partnerCount(role: PartnerRolle): number | undefined {

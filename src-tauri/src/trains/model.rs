@@ -64,7 +64,8 @@
 // An `EntityDetail` is one Wagen, Radsatz or Partner as its detail page shows
 // it — backend for frontend: header fields and sections of rows, every string
 // already formatted, a row's `link` naming the entity it opens. Angular renders
-// it and decides nothing; `detail/` builds it.
+// it and decides nothing; `detail/` builds it. A `TelematikView` is the
+// Telematik list the same way, built by `telematik`.
 //
 // `TrainsData` follows `ClientData`'s presence rule — a list that is THERE is the
 // whole current one, and absent means the command could not have changed it —
@@ -136,8 +137,16 @@
 // partner list as `partners`, and the counts as `partners` and `events`. They had
 // drifted apart unnoticed — the e2e fake speaks the frontend's names — so a test
 // now pins the serialised keys.
+//
+// A `Farbe` is a MARK, not a fact — the Handfarbe a user puts on a row in Excel.
+// Six of them, each one Ionic colour role, so no component ever names a hex
+// value. `Markierungen` holds two halves keyed by what survives the master
+// import's wipe — the Wagennummer's digits and the Radsatz match key, never an
+// id: `hand` is set in the app and wins, `master` is read off the master's key
+// cell and rebuilt with the mirror.
 // ────────────────────────────────────────────────────────────────
 
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use super::sheet::layout::{Candidate, LayoutHint};
@@ -645,10 +654,64 @@ pub enum EntityRef {
     Partner,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Farbe {
+    Rot,
+    Gelb,
+    Gruen,
+    Blau,
+    Lila,
+    Grau,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Farben {
+    #[serde(default)]
+    pub wagen: IndexMap<String, Farbe>,
+    #[serde(default)]
+    pub radsaetze: IndexMap<String, Farbe>,
+}
+
+impl Farben {
+    pub fn is_empty(&self) -> bool {
+        self.wagen.is_empty() && self.radsaetze.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Markierungen {
+    #[serde(default)]
+    pub hand: Farben,
+    #[serde(default)]
+    pub master: Farben,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LinkKind {
+    Wagen,
+    Radsatz,
+    Partner,
+    Telematik,
+}
+
+impl From<EntityRef> for LinkKind {
+    fn from(kind: EntityRef) -> Self {
+        match kind {
+            EntityRef::Wagen => LinkKind::Wagen,
+            EntityRef::Radsatz => LinkKind::Radsatz,
+            EntityRef::Partner => LinkKind::Partner,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DetailLink {
-    pub kind: EntityRef,
+    pub kind: LinkKind,
     pub id: String,
 }
 
@@ -698,6 +761,29 @@ pub struct EntityDetail {
     pub subtitle: Option<String>,
     pub fields: Vec<DetailField>,
     pub sections: Vec<DetailSection>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TelematikRow {
+    pub wagen_id: String,
+    pub title: String,
+    pub nummer: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub geraet: Option<String>,
+    pub standort: String,
+    pub funk: String,
+    pub stumm: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tage: Option<i64>,
+    pub lines: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TelematikView {
+    pub rows: Vec<TelematikRow>,
+    pub stumm: u32,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1485,6 +1571,8 @@ pub struct TrainsData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entity_detail: Option<EntityDetail>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub telematik: Option<TelematikView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub master_import_run: Option<MasterImportRun>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub master_export_start: Option<MasterExportStart>,
@@ -1492,6 +1580,8 @@ pub struct TrainsData {
     pub master_export: Option<MasterExportRun>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub master_file: Option<MasterFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub markierungen: Option<Markierungen>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<crate::model::ClientReport>,
 }
@@ -1528,6 +1618,11 @@ impl TrainsData {
 
     pub fn zustand(mut self, zustand: WagenZustand) -> Self {
         self.zustand = Some(zustand);
+        self
+    }
+
+    pub fn markierungen(mut self, markierungen: Markierungen) -> Self {
+        self.markierungen = Some(markierungen);
         self
     }
 
@@ -1573,6 +1668,11 @@ impl TrainsData {
 
     pub fn master_import_run(mut self, run: Option<MasterImportRun>) -> Self {
         self.master_import_run = run.filter(MasterImportRun::is_open);
+        self
+    }
+
+    pub fn telematik(mut self, view: TelematikView) -> Self {
+        self.telematik = Some(view);
         self
     }
 

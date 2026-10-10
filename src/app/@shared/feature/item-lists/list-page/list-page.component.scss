@@ -4,3 +4,13 @@
   gap: 12px;
   padding: 12px;
 }
+
+.list-page__columns {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.list-page__filter {
+  --width: 420px;
+  --height: 80vh;
+}

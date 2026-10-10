@@ -8,7 +8,7 @@
 // the entities and echoes the list back, so an optimistic write would be
 // overwritten on success and stranded on failure.
 //
-// `masterSheet` and `entityDetail` are the exceptions: they RETURN the view and
+// `masterSheet`, `entityDetail` and `telematik` are the exceptions: they RETURN the view and
 // store nothing. A view belongs to the one page that shows it, and up to 1,700
 // rows of display strings would otherwise outlive it in the store.
 // ────────────────────────────────────────────────────────────────
@@ -16,12 +16,14 @@
 import { inject, Injectable } from '@angular/core';
 import { BackendService } from '../../@shared/data/backend/backend.service';
 import type { ClientReport } from '../../@shared/model/client.types';
+import type { Farbe } from '../../@shared/model/farbe.types';
 import type {
   EntityDetail,
   EntityRef,
   MasterSettings,
   MasterSheetView,
   Partner,
+  TelematikView,
   TrainsSettings,
   Wagen,
 } from '../model/trains.types';
@@ -41,6 +43,8 @@ export class TrainsFacade {
 
   readonly loaded = this.#store.loaded;
   readonly wagen = this.#store.wagen;
+  readonly zustand = this.#store.zustand;
+  readonly markierungen = this.#store.markierungen;
   readonly radsaetze = this.#store.radsaetze;
   readonly einbauten = this.#store.einbauten;
   readonly partners = this.#store.partners;
@@ -127,11 +131,29 @@ export class TrainsFacade {
     return data.master?.settings.importRun?.sheets ?? [];
   }
 
+  async importMasterAll(): Promise<ClientReport | undefined> {
+    const data = await this.#backend.importMasterAll({ silent: true });
+    this.#store.applyTrainsData(data);
+    return data.message;
+  }
+
   async entityDetail(
     kind: EntityRef,
     id: string
   ): Promise<EntityDetail | undefined> {
     return (await this.#backend.getEntityDetail(kind, id)).entityDetail;
+  }
+
+  async setFarbe(
+    kind: EntityRef,
+    id: string,
+    farbe: Farbe | undefined
+  ): Promise<void> {
+    this.#store.applyTrainsData(await this.#backend.setFarbe(kind, id, farbe));
+  }
+
+  async telematik(): Promise<TelematikView | undefined> {
+    return (await this.#backend.getTelematik()).telematik;
   }
 
   async masterSheet(sheet: string): Promise<MasterSheetView | undefined> {

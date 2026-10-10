@@ -37,6 +37,7 @@ import type {
   Dokument,
   ImportTemplate,
   Instandhaltung,
+  Markierungen,
   Einbau,
   MasterImportRun,
   MasterView,
@@ -58,6 +59,7 @@ type TrainsState = {
   radsaetze: Radsatz[] | undefined;
   einbauten: Einbau[] | undefined;
   zustand: WagenZustand;
+  markierungen: Markierungen;
   events: Instandhaltung[] | undefined;
   eventTotal: number;
   dokumente: Dokument[] | undefined;
@@ -81,6 +83,10 @@ const initial: TrainsState = {
     schaeden: [],
     auftraege: [],
     pruefungen: [],
+  },
+  markierungen: {
+    hand: { wagen: {}, radsaetze: {} },
+    master: { wagen: {}, radsaetze: {} },
   },
   events: undefined,
   eventTotal: 0,
@@ -132,6 +138,7 @@ export const TrainsStore = signalStore(
       if (data.radsaetze) next.radsaetze = data.radsaetze;
       if (data.einbauten) next.einbauten = data.einbauten;
       if (data.zustand) next.zustand = data.zustand;
+      if (data.markierungen) next.markierungen = data.markierungen;
       if (data.dokumente) next.dokumente = data.dokumente;
       if (data.settings) next.settings = data.settings;
       if (data.master) next.master = data.master;

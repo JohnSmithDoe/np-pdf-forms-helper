@@ -51,7 +51,7 @@ use crate::trains::sheet::grid::{self, Grid};
 use crate::trains::sheet::layout::LayoutHint;
 use crate::trains::sheet::readers::ReaderKind;
 use crate::trains::stage::{stage, HeldImport, StageInput};
-use crate::trains::{entities, recognise};
+use crate::trains::{entities, farbe, recognise};
 
 pub fn start(db: &mut TrainsDb, today: &str) -> AppResult<MasterImportRun> {
     master_file(db.master())?;
@@ -144,10 +144,20 @@ pub fn stage_sheet(db: &TrainsDb, sheet: &str) -> AppResult<HeldImport> {
     groups.einbauten = entities::einbau_konflikte(db, &staged.wire, &staged.values);
     staged.wire.entities = Some(groups);
 
+    let farben = farbe::read_master(&farbe::MasterSheet {
+        book: &workbook,
+        worksheet: &workbook.sheet_collection_no_check()[index],
+        kind,
+        plan: &plan,
+        grid: &grid,
+        values: &staged.values,
+    });
+
     Ok(HeldImport {
         grid,
         wire: staged.wire,
         values: staged.values,
+        farben,
     })
 }
 
@@ -220,6 +230,7 @@ pub(super) mod tests {
     use super::*;
     use crate::testing::{workbook, TempDir};
     use crate::trains::commit;
+    use crate::trains::model::Farbe;
     use crate::trains::model::{
         EinbauChoice, EntityChoice, EntityDecision, EntityDecisions, EntityGroup, Resolution,
         RowStatus, SheetKind,
@@ -524,6 +535,39 @@ pub(super) mod tests {
 
         let held = stage_sheet(&db, "Bestand").unwrap();
         assert_eq!(held.wire.file, "Master.xlsx");
+    }
+
+    #[test]
+    fn a_filled_key_cell_colours_its_entity_only_once_committed() {
+        let folder = TempDir::new("mirror-farbe");
+        let mut db = bound(&folder);
+        // Excel's „hellrot“ on W1's Wagennummer and on RS3 in the stock.
+        let file = std::path::PathBuf::from(&db.master_file().versions[0].cleaned);
+        let mut book = umya_spreadsheet::reader::xlsx::read(&file).unwrap();
+        for (sheet, col) in [("Übersicht", 1), ("Bestand", 2)] {
+            let row = if sheet == "Bestand" { 4 } else { 2 };
+            book.sheet_by_name_mut(sheet)
+                .unwrap()
+                .style_mut((col, row))
+                .set_background_color("FFFFC7CE");
+        }
+        umya_spreadsheet::writer::xlsx::write(&book, &file).unwrap();
+        crate::trains::db::remove_folder(&db.master_folder()).unwrap();
+        super::super::bindings::sync(&mut db, false).unwrap();
+
+        start(&mut db, "2026-10-04").unwrap();
+        let held = stage_sheet(&db, "Übersicht").unwrap();
+        assert_eq!(held.farben.wagen.get(W1), Some(&Farbe::Rot));
+        assert!(!held.farben.wagen.contains_key(W2));
+        // Staged is not committed: a cancelled walk leaves no colour.
+        assert!(db.markierungen().master.is_empty());
+
+        crate::trains::master::import_all::run(&mut db, "2026-10-04").unwrap();
+        let master = &db.markierungen().master;
+        assert_eq!(master.wagen.get(W1), Some(&Farbe::Rot));
+        assert_eq!(master.radsaetze.get("RS3"), Some(&Farbe::Rot));
+        // The stock also names a Wagen; a Radsatz list colours Radsätze only.
+        assert_eq!(master.wagen.len(), 1);
     }
 
     #[test]

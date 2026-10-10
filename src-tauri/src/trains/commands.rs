@@ -46,12 +46,15 @@ use crate::state::AppState;
 use crate::trains::db::TrainsDb;
 use crate::trains::dokument::{self, Cleaning, Filed};
 use crate::trains::model::{
-    CleanDecisions, EntityDecisions, EntityRef, ImportPlan, MasterExportRequest, MasterSettings,
-    Partner, Radsatz, StagingOrigin, TrainsData, TrainsSettings, Vorhanden, Wagen,
+    CleanDecisions, EntityDecisions, EntityRef, Farbe, Farben, ImportPlan, MasterExportRequest,
+    MasterSettings, Partner, Radsatz, StagingOrigin, TrainsData, TrainsSettings, Vorhanden, Wagen,
 };
 use crate::trains::sheet::grid;
 use crate::trains::stage::{stage, HeldImport, StageInput};
-use crate::trains::{clean, commit, detail, entities, export, master, recognise, scan, template};
+use crate::trains::{
+    clean, clock, commit, detail, entities, export, farbe, master, recognise, scan, telematik,
+    template,
+};
 
 fn everything(db: &TrainsDb) -> TrainsData {
     TrainsData::nothing()
@@ -60,6 +63,7 @@ fn everything(db: &TrainsDb) -> TrainsData {
         .radsaetze(db.radsaetze())
         .einbauten(db.einbauten())
         .zustand(db.zustand().clone())
+        .markierungen(db.markierungen().clone())
         .templates(db.templates())
         .dokumente(db.dokumente())
         .settings(db.settings())
@@ -184,6 +188,7 @@ fn stage_owned(id: &str, state: &AppState) -> AppResult<TrainsData> {
         grid: source.grid,
         wire: staged.wire,
         values: staged.values,
+        farben: Farben::default(),
     });
     Ok(TrainsData::nothing()
         .staging(wire)
@@ -210,6 +215,7 @@ fn commit_owned(decisions: &EntityDecisions, state: &AppState) -> AppResult<Trai
     let mut db = state.trains();
     let report = commit::commit(&mut db, &staging.wire, &staging.values, &rows)?.report();
     if let StagingOrigin::Master { sheet } = &staging.wire.origin {
+        farbe::merge_master(&mut db, &staging.farben)?;
         master::mirror::done(&mut db, sheet)?;
     }
     *held = None;
@@ -601,12 +607,40 @@ pub fn get_entity_detail(
     Ok(TrainsData::nothing().entity_detail(detail::build(&db, kind, &id)?))
 }
 
+#[tauri::command]
+pub fn set_farbe(
+    kind: EntityRef,
+    id: String,
+    farbe: Option<Farbe>,
+    state: State<'_, AppState>,
+) -> AppResult<TrainsData> {
+    let mut db = state.trains();
+    farbe::set(&mut db, kind, &id, farbe)?;
+    Ok(TrainsData::nothing().markierungen(db.markierungen().clone()))
+}
+
+#[tauri::command]
+pub fn get_telematik(state: State<'_, AppState>) -> AppResult<TrainsData> {
+    let db = state.trains();
+    Ok(TrainsData::nothing().telematik(telematik::view(&db, clock::today())))
+}
+
 #[tauri::command(async)]
 pub fn start_master_import(state: State<'_, AppState>) -> AppResult<TrainsData> {
     *state.staging() = None;
     let mut db = state.trains();
     master::mirror::start(&mut db, &crate::trains::clock::today_iso())?;
     Ok(everything(&db).master(master::view(db.master())))
+}
+
+#[tauri::command(async)]
+pub fn import_master_all(state: State<'_, AppState>) -> AppResult<TrainsData> {
+    *state.staging() = None;
+    let mut db = state.trains();
+    let report = master::import_all::run(&mut db, &crate::trains::clock::today_iso())?;
+    Ok(everything(&db)
+        .master(master::view(db.master()))
+        .report(report))
 }
 
 #[tauri::command(async)]
@@ -685,6 +719,7 @@ fn stage_source(
         grid: source.grid,
         wire: staged.wire,
         values: staged.values,
+        farben: Farben::default(),
     });
     Ok(TrainsData::nothing()
         .staging(wire)

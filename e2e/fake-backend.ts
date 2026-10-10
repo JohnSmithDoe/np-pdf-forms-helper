@@ -66,12 +66,19 @@
 // `stage_master_sheet` serves `seed.masterStaging` (else `seed.document`, else
 // `seed.staging`) stamped with the sheet as its origin, Einbau conflicts and
 // all — finding them is `entities::einbau_konflikte`'s; `commit_document` ticks
-// the sheet off. Every whole-list answer carries `masterImportRun` while a sheet
+// the sheet off. `import_master_all` empties the same way, ticks every sheet off
+// at once and answers a one-line-per-sheet report; it creates nothing — the
+// automatic answers and the commit are `master::import_all`'s. Every whole-list answer carries `masterImportRun` while a sheet
 // is still open and drops it after the last, as `everything()` does — the
 // store reads that absence as "closed". `get_master_sheet` answers `seed.masterSheetViews[sheet]`,
 // else the bound sheet's headers with no rows: building the view is Rust's.
 // `get_entity_detail` likewise answers `seed.entityDetails['kind:id']`, else the
 // entity's bare title with no sections, and rejects an id the state lacks.
+// `get_telematik` answers `seed.telematik`, else an empty list: the order and
+// the silence rule are `trains::telematik`'s, and a copy here would drift.
+// `set_farbe` writes the HAND half of `seed.markierungen`, keyed like Rust's
+// `farbe::set` (Wagennummer digits, Radsatz match key); the master half is only
+// ever seeded, because reading it off a fill is `farbe::read_master`'s.
 //
 // The master FILE is `seed.masterFile`, and `seed.masterFilePick` is the
 // cleaned version `clean_master_file` answers in place of picker + cleaning —
@@ -296,6 +303,19 @@ export interface FakeInstandhaltung {
   bemerkung?: string;
   dedupeKey: string;
   source: FakeProvenance;
+}
+
+export type FakeFarbe = 'rot' | 'gelb' | 'gruen' | 'blau' | 'lila' | 'grau';
+
+export interface FakeFarben {
+  wagen: Record<string, FakeFarbe>;
+  radsaetze: Record<string, FakeFarbe>;
+}
+
+/** Rust's `markierungen.json`: hand marks win over the master's. */
+export interface FakeMarkierungen {
+  hand: FakeFarben;
+  master: FakeFarben;
 }
 
 /** The Wagen-Zustand, one object like Rust's `zustand.db`. Only the latest
@@ -613,10 +633,29 @@ export interface FakeEntityDetail {
     rows: {
       title: string;
       lines: string[];
-      link?: { kind: 'wagen' | 'radsatz' | 'partner'; id: string };
+      link?: {
+        kind: 'wagen' | 'radsatz' | 'partner' | 'telematik';
+        id: string;
+      };
       tone?: 'danger' | 'warning' | 'medium';
     }[];
   }[];
+}
+
+/** The Telematik list as `trains::telematik` builds it — hand-written. */
+export interface FakeTelematikView {
+  rows: {
+    wagenId: string;
+    title: string;
+    nummer: string;
+    geraet?: string;
+    standort: string;
+    funk: string;
+    stumm: boolean;
+    tage?: number;
+    lines: string[];
+  }[];
+  stumm: number;
 }
 
 export interface FakeMasterSheetView {
@@ -636,6 +675,7 @@ export interface FakeSeed {
   radsaetze?: FakeRadsatz[];
   einbauten?: FakeEinbau[];
   zustand?: Partial<FakeWagenZustand>;
+  markierungen?: Partial<FakeMarkierungen>;
   events?: FakeInstandhaltung[];
   templates?: FakeTemplate[];
   /** What `stage_import` and `stage_import_path` hand back. `null` = the picker was cancelled. */
@@ -664,6 +704,8 @@ export interface FakeSeed {
   masterSheetViews?: Record<string, FakeMasterSheetView>;
   /** What `get_entity_detail` answers per `kind:id`. */
   entityDetails?: Record<string, FakeEntityDetail>;
+  /** What `get_telematik` answers. */
+  telematik?: FakeTelematikView;
   /** What the master export's dry run and write answer per sheet name. */
   masterExport?: Record<string, FakeExportSheetRun>;
   /** The master file's versions and its untaken pick. */
@@ -719,6 +761,7 @@ export function install(seed: FakeSeed): void {
     radsaetze: FakeRadsatz[];
     einbauten: FakeEinbau[];
     zustand: FakeWagenZustand;
+    markierungen: FakeMarkierungen;
     events: FakeInstandhaltung[];
     templates: FakeTemplate[];
     staging: FakeStaging | null;
@@ -734,6 +777,7 @@ export function install(seed: FakeSeed): void {
     masterStaging: FakeStaging | null;
     masterSheetViews: Record<string, FakeMasterSheetView>;
     entityDetails: Record<string, FakeEntityDetail>;
+    telematik: FakeTelematikView;
     masterExport: Record<string, FakeExportSheetRun>;
     masterFile: FakeMasterFile;
     masterFilePick: FakeMasterFileVersion | null;
@@ -757,6 +801,10 @@ export function install(seed: FakeSeed): void {
       auftraege: seed.zustand?.auftraege ?? [],
       pruefungen: seed.zustand?.pruefungen ?? [],
     },
+    markierungen: {
+      hand: seed.markierungen?.hand ?? { wagen: {}, radsaetze: {} },
+      master: seed.markierungen?.master ?? { wagen: {}, radsaetze: {} },
+    },
     events: seed.events ?? [],
     templates: seed.templates ?? [],
     staging: seed.staging ?? null,
@@ -772,6 +820,7 @@ export function install(seed: FakeSeed): void {
     masterStaging: seed.masterStaging ?? null,
     masterSheetViews: seed.masterSheetViews ?? {},
     entityDetails: seed.entityDetails ?? {},
+    telematik: seed.telematik ?? { rows: [], stumm: 0 },
     masterExport: seed.masterExport ?? {},
     masterFile: seed.masterFile ?? { versions: [] },
     masterFilePick: seed.masterFilePick ?? null,
@@ -811,6 +860,7 @@ export function install(seed: FakeSeed): void {
     radsaetze: copy(state.radsaetze),
     einbauten: copy(state.einbauten),
     zustand: copy(state.zustand),
+    markierungen: copy(state.markierungen),
     templates: copy(state.templates),
     dokumente: copy(state.dokumente),
     settings: copy(state.settings),
@@ -1286,6 +1336,29 @@ export function install(seed: FakeSeed): void {
       return masterView();
     },
 
+    get_telematik: () => ({ telematik: copy(state.telematik) }),
+
+    set_farbe: (args) => {
+      const id = String(args['id']);
+      const farbe = args['farbe'] as unknown as FakeFarbe | null;
+      const hand = state.markierungen.hand;
+      const [map, key] =
+        args['kind'] === 'wagen'
+          ? [hand.wagen, state.wagen.find((w) => w.id === id)?.nummer]
+          : [
+              hand.radsaetze,
+              state.radsaetze.find((r) => r.id === id)?.matchKey,
+            ];
+      if (key === undefined) {
+        return Promise.reject({
+          messages: ['Der Eintrag ist nicht mehr vorhanden.'],
+        });
+      }
+      if (farbe) map[key] = farbe;
+      else delete map[key];
+      return { markierungen: copy(state.markierungen) };
+    },
+
     get_entity_detail: (args) => {
       const kind = String(args['kind']) as FakeEntityDetail['kind'];
       const id = String(args['id']);
@@ -1359,6 +1432,40 @@ export function install(seed: FakeSeed): void {
         importRun: { startedAt: '2026-10-04', sheets, done: [] },
       };
       return { ...trainsLists(), ...masterView() };
+    },
+
+    import_master_all: () => {
+      const sheets = state.master.bindings
+        .filter((entry) => entry.kind)
+        .map((entry) => entry.sheet);
+      if (!state.master.file || sheets.length === 0) {
+        return Promise.reject({
+          messages: [
+            'Es ist noch keinem Blatt der Master-Datei eine Art zugeordnet.',
+          ],
+        });
+      }
+      state.wagen = [];
+      state.radsaetze = [];
+      state.einbauten = [];
+      state.events = [];
+      state.staging = null;
+      state.dokumente = state.dokumente.map((entry) => ({
+        ...entry,
+        importiertAm: undefined,
+      }));
+      state.master = {
+        ...state.master,
+        importRun: { startedAt: '2026-10-04', sheets, done: [...sheets] },
+      };
+      return {
+        ...trainsLists(),
+        ...masterView(),
+        message: {
+          headline: 'Master-Datei vollständig importiert',
+          messages: sheets.map((sheet) => `„${sheet}“: übernommen.`),
+        },
+      };
     },
 
     stage_master_sheet: (args) => {

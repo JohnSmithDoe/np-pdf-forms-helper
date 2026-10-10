@@ -1,6 +1,15 @@
 .entity-card {
+  position: relative;
   height: 100%;
   margin: 0;
+}
+
+.entity-card__farbe {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 6px;
+  background: var(--ion-color-base);
 }
 
 .entity-card__head {

@@ -7,6 +7,9 @@
 // (which is correct for ISO, and the reason the wire carries dates as strings),
 // and everything else compares with `localeCompare` so `Ä` lands beside `A`
 // instead of after `Z`.
+//
+// A sort with a `farbe` is Excel's „Nach Farbe sortieren“: rows of that colour
+// first, and the column's order inside both halves.
 // ────────────────────────────────────────────────────────────────
 
 import type {
@@ -37,10 +40,13 @@ export function sortList<T extends BaseItem>(
 ): T[] {
   if (!sort) return items;
   const direction = sort.sortDirection === 'desc' ? -1 : 1;
+  const top = (item: T): number =>
+    sort.farbe && item.farbe === sort.farbe ? 0 : 1;
   return [...items].sort(
     (left, right) =>
+      top(left) - top(right) ||
       direction *
-      compare(valueOf(left, sort.sortBy), valueOf(right, sort.sortBy))
+        compareValues(valueOf(left, sort.sortBy), valueOf(right, sort.sortBy))
   );
 }
 
@@ -55,7 +61,7 @@ export function toggleSort(
   };
 }
 
-function compare(left: string, right: string): number {
+export function compareValues(left: string, right: string): number {
   if (!left) return right ? 1 : 0;
   if (!right) return -1;
   const numbers = Number(left.replace(',', '.'));

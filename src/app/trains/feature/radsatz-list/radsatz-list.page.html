@@ -12,6 +12,7 @@
     [title]="row.number"
     [note]="row.fittedTo ? 'eingebaut in ' + row.fittedTo : 'ausgebaut'"
     icon="ellipse-outline"
+    [farbe]="row.farbe"
     (open)="onOpen(row.id)"
   >
     @if (row.since) {

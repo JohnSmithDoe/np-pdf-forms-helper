@@ -77,6 +77,7 @@
 // ────────────────────────────────────────────────────────────────
 
 import type { ClientReport } from '../../@shared/model/client.types';
+import type { Farbe } from '../../@shared/model/farbe.types';
 import type { MasterFile } from './master-file';
 
 export type DecimalStyle = 'german' | 'english';
@@ -409,8 +410,10 @@ export interface Pruefung {
 
 export type EntityRef = 'wagen' | 'radsatz' | 'partner';
 
+export type DetailLinkKind = EntityRef | 'telematik';
+
 export interface DetailLink {
-  kind: EntityRef;
+  kind: DetailLinkKind;
   id: string;
 }
 
@@ -442,6 +445,33 @@ export interface EntityDetail {
   subtitle?: string;
   fields: DetailField[];
   sections: DetailSection[];
+}
+
+export interface TelematikRow {
+  wagenId: string;
+  title: string;
+  nummer: string;
+  geraet?: string;
+  standort: string;
+  funk: string;
+  stumm: boolean;
+  tage?: number;
+  lines: string[];
+}
+
+export interface Farben {
+  wagen: Record<string, Farbe>;
+  radsaetze: Record<string, Farbe>;
+}
+
+export interface Markierungen {
+  hand: Farben;
+  master: Farben;
+}
+
+export interface TelematikView {
+  rows: TelematikRow[];
+  stumm: number;
 }
 
 export interface WagenZustand {
@@ -806,9 +836,11 @@ export interface TrainsData {
   master?: MasterView;
   masterSheet?: MasterSheetView;
   entityDetail?: EntityDetail;
+  telematik?: TelematikView;
   masterImportRun?: MasterImportRun;
   masterExportStart?: MasterExportStart;
   masterExport?: MasterExportRun;
   masterFile?: MasterFile;
+  markierungen?: Markierungen;
   message?: ClientReport;
 }

@@ -348,7 +348,7 @@ und prüft und korrigiert die Rechnungen. Die Master-Datei nennt dafür diese wi
 | **P8** | **Jährliche Inspektion** je Wagen (Martin, 2026-10-07), mit festem Leistungsumfang und vereinbarten Preisen; erste P8 ein Jahr nach der Revision. Im Modell eine `Pruefung` mit `art` „P8“ | Wagen |
 | **KP-P** | Kesselprüfung; in der Rechnungsaufteilung zusammen mit P8 abgerechnet | Wagen |
 | **RID-Frist** | Prüffrist für Gefahrgutwagen (RID); im Bestand des ersten Kunden leer, das Modell muss sie trotzdem tragen | Wagen |
-| **AL-RS 2 Jahre** | Ein Radsatz mit „AL“-Nummer braucht innerhalb von zwei Jahren nach Einbau eine IS2/3 | Radsatz |
+| **AL-RS 2 Jahre** | Ein Radsatz mit „AL“-Nummer braucht innerhalb von zwei Jahren nach Einbau eine IS2/3; danach **3 Monate Kulanz** (Martin, 2026-10-09), also hart nach 27 Monaten | Radsatz |
 | **IS-13-Jahre-Limit** | Zeitgrenze für die Radsatz-Instandsetzung | Radsatz |
 | **Status G / A** | Bestellstand einer Frist im Portal-Export: **G = geplant** (noch keine Bestellung), **A = aktuell** (bestellt, Bestellnummer und Erfassungsdatum vorhanden) | Frist |
 

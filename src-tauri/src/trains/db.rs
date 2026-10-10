@@ -72,6 +72,12 @@
 // removed like the owned documents: it is derived, and `master::bindings::sync`
 // rebuilds it on the next read because the copy is missing.
 //
+// `markierungen.json` is the same shape again — the Farben, one object, written
+// alone. Its `hand` half is the user's and `clear_mirror` keeps it, which is why
+// it is keyed by Wagennummer and Radsatz match key and not by an id the mirror
+// mints afresh; its `master` half is the master's and goes with the facts.
+// `reset` empties both.
+//
 // `masterdatei.json` holds the customer's master FILE — its cleaned versions,
 // owned under `masterdatei/` like the Dokumente under `dokumente/`. It is data
 // the user brought in, not configuration, so `reset` removes it with its files.
@@ -95,8 +101,9 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use crate::config::AppConfig;
 use crate::error::{AppError, AppResult};
 use crate::trains::model::{
-    Dokument, Einbau, ImportTemplate, Instandhaltung, MasterFile, MasterSettings, Partner,
-    PartnerRolle, Radsatz, RadsatzAlias, TrainsCounts, TrainsSettings, Wagen, WagenZustand,
+    Dokument, Einbau, ImportTemplate, Instandhaltung, Markierungen, MasterFile, MasterSettings,
+    Partner, PartnerRolle, Radsatz, RadsatzAlias, TrainsCounts, TrainsSettings, Wagen,
+    WagenZustand,
 };
 
 const VERSION: u32 = 1;
@@ -104,6 +111,7 @@ const SETTINGS: &str = "einstellungen.json";
 const MASTER: &str = "master.json";
 const MASTER_FILE: &str = "masterdatei.json";
 const ZUSTAND: &str = "zustand.db";
+const MARKIERUNGEN: &str = "markierungen.json";
 
 pub fn remove_folder(folder: &Path) -> AppResult<()> {
     match std::fs::remove_dir_all(folder) {
@@ -149,6 +157,7 @@ pub struct TrainsDb {
     settings: TrainsSettings,
     master: MasterSettings,
     master_file: MasterFile,
+    markierungen: Markierungen,
     by_wagennummer: HashMap<String, String>,
     by_match_key: HashMap<String, String>,
     by_dedupe: HashSet<String>,
@@ -190,6 +199,7 @@ impl TrainsDb {
             settings: read_or_default(&folder.join(SETTINGS))?,
             master: read_or_default(&folder.join(MASTER))?,
             master_file: read_or_default(&folder.join(MASTER_FILE))?,
+            markierungen: read_or_default(&folder.join(MARKIERUNGEN))?,
             folder,
             by_wagennummer: HashMap::new(),
             by_match_key: HashMap::new(),
@@ -372,6 +382,16 @@ impl TrainsDb {
         Ok(())
     }
 
+    pub fn markierungen(&self) -> &Markierungen {
+        &self.markierungen
+    }
+
+    pub fn save_markierungen(&mut self, markierungen: Markierungen) -> AppResult<()> {
+        write_whole(&self.folder.join(MARKIERUNGEN), &markierungen)?;
+        self.markierungen = markierungen;
+        Ok(())
+    }
+
     pub fn master_file_folder(&self) -> PathBuf {
         self.folder.join("masterdatei")
     }
@@ -542,6 +562,7 @@ impl TrainsDb {
         remove_folder(&self.dokumente_folder())?;
         remove_folder(&self.master_folder())?;
         self.save_master_file(MasterFile::default())?;
+        self.save_markierungen(Markierungen::default())?;
         remove_folder(&self.master_file_folder())
     }
 }
@@ -560,7 +581,10 @@ impl TrainsDb {
             Ok(())
         })?;
         self.reindex();
-        Ok(())
+        self.save_markierungen(Markierungen {
+            master: Default::default(),
+            ..self.markierungen.clone()
+        })
     }
 }
 

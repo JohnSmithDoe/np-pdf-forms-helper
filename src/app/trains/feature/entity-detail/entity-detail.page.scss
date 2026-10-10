@@ -3,3 +3,10 @@
   grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
   gap: 16px;
 }
+
+.entity-detail__farbe {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-block: 8px;
+}

@@ -1,0 +1,19 @@
+.column-filter__block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 16px 8px;
+}
+
+.column-filter__sort {
+  flex-flow: row wrap;
+}
+
+.column-filter__chips {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.column-filter__auto {
+  padding-inline-start: 16px;
+}
