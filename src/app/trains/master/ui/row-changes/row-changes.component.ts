@@ -15,7 +15,12 @@
 // `--ion-color-base` in the stylesheet), as `entity-card` does it: the
 // colour comes from the theme, dark mode included, and nothing here names one.
 //
-// Rust sends a CAPPED list and the full count; the rest is said in a line.
+// Rust sends EVERY row, uncapped — the preview is what will be written. Only
+// the rendering is paged: `PAGE` rows at first, more as the user scrolls
+// (`ion-infinite-scroll`, loading from memory, nothing fetched). No virtual
+// scrolling: rows once shown stay in the DOM, so an opened row stays open and
+// the browser's own find (Ctrl+F) reaches everything shown. A new dry run
+// replaces `rows` and starts the paging over (`linkedSignal`).
 // A plain `<table>` for the same reason as `sheet-table`: a sheet is a grid.
 // ────────────────────────────────────────────────────────────────
 
@@ -24,15 +29,22 @@ import {
   Component,
   computed,
   input,
+  linkedSignal,
   signal,
 } from '@angular/core';
-import { IonNote } from '@ionic/angular/standalone';
+import {
+  IonInfiniteScroll,
+  IonInfiniteScrollContent,
+  IonNote,
+} from '@ionic/angular/standalone';
 import type {
   ChangeColumn,
   RowChange,
   RowChangeStatus,
 } from '../../../model/trains.types';
 import { columnLetter } from '../../util/column-letter.utility';
+
+const PAGE = 100;
 
 const STATUS: Record<RowChangeStatus, { label: string; color: string }> = {
   geaendert: { label: 'geändert', color: 'warning' },
@@ -45,17 +57,26 @@ const STATUS: Record<RowChangeStatus, { label: string; color: string }> = {
   templateUrl: 'row-changes.component.html',
   styleUrls: ['row-changes.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [IonNote],
+  imports: [IonInfiniteScroll, IonInfiniteScrollContent, IonNote],
 })
 export class RowChangesComponent {
   readonly columns = input.required<ChangeColumn[]>();
   readonly rows = input.required<RowChange[]>();
-  readonly total = input.required<number>();
 
   protected readonly letter = columnLetter;
   protected readonly status = STATUS;
   protected readonly open = signal<ReadonlySet<number>>(new Set());
-  protected readonly more = computed(() => this.total() - this.rows().length);
+  protected readonly shown = linkedSignal(() =>
+    Math.min(PAGE, this.rows().length)
+  );
+  protected readonly visible = computed(() =>
+    this.rows().slice(0, this.shown())
+  );
+
+  protected onMore(event: Event): void {
+    this.shown.update((shown) => shown + PAGE);
+    void (event.target as HTMLIonInfiniteScrollElement).complete();
+  }
 
   protected toggle(row: number): void {
     this.open.update((open) => {

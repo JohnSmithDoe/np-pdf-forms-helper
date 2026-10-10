@@ -23,8 +23,10 @@
 //
 // A cell is compared as the user SEES it — a date-formatted serial as
 // `dd.mm.yyyy`, everything else as its text — so a value whose type alone moved
-// (text `180028676` to the number) is not a change worth listing. The rows are
-// capped; `total` still counts every one.
+// (text `180028676` to the number) is not a change worth listing. Every row is
+// sent, uncapped: the preview is what will be written, and a row the user
+// cannot open is a change approved unseen. How many are RENDERED at once is
+// the frontend's concern (`ui/row-changes`), not a reason to withhold data.
 // ────────────────────────────────────────────────────────────────
 
 use std::collections::HashSet;
@@ -33,12 +35,9 @@ use crate::trains::model::{CellChange, ChangeColumn, RowCell, RowChange, RowChan
 use crate::trains::sanitise::{date, format};
 use crate::trains::sheet::grid::{Grid, RawCell};
 
-pub const SHOWN: usize = 200;
-
 #[derive(Debug, Default)]
 pub struct Rows {
     pub cells: u32,
-    pub total: u32,
     pub columns: Vec<ChangeColumn>,
     pub rows: Vec<RowChange>,
 }
@@ -76,10 +75,6 @@ pub fn rows(
         let gone = removed.contains(&row);
         if !gone {
             out.cells += differs.len() as u32;
-        }
-        out.total += 1;
-        if out.rows.len() >= SHOWN {
-            continue;
         }
         let existed = written
             .iter()
@@ -192,7 +187,7 @@ mod tests {
         );
         // Column 3 is not one the paste wrote, so row 2's change there is not a change.
         let diff = rows(&before, &after, &[1, 2], Some(1), &[]);
-        assert_eq!((diff.cells, diff.total), (3, 2));
+        assert_eq!((diff.cells, diff.rows.len()), (3, 2));
         assert_eq!(diff.columns.len(), 3);
         assert_eq!(diff.columns[1].header, "Stadt");
 
@@ -255,7 +250,7 @@ mod tests {
         );
         let after = Grid::from_text("Blatt", &[&["Wagen", "Stadt"], &["", ""], &["2", "Neu"]]);
         let diff = rows(&before, &after, &[1, 2], Some(1), &[2]);
-        assert_eq!((diff.cells, diff.total), (1, 2));
+        assert_eq!((diff.cells, diff.rows.len()), (1, 2));
         let emptied = &diff.rows[0];
         assert_eq!(emptied.status, RowChangeStatus::Geleert);
         assert_eq!(emptied.key, "1");
@@ -265,19 +260,5 @@ mod tests {
             .map(|cell| cell.text.as_str())
             .collect();
         assert_eq!(texts, ["1", "Alt"]);
-    }
-
-    #[test]
-    fn the_list_is_capped_but_every_row_is_counted() {
-        let header: &[&str] = &["Wagen"];
-        let numbers: Vec<String> = (0..SHOWN + 5).map(|n| n.to_string()).collect();
-        let mut grid: Vec<&[&str]> = vec![header];
-        let cells: Vec<[&str; 1]> = numbers.iter().map(|n| [n.as_str()]).collect();
-        grid.extend(cells.iter().map(|cell| &cell[..]));
-        let before = Grid::from_text("Blatt", &[header]);
-        let after = Grid::from_text("Blatt", &grid);
-        let diff = rows(&before, &after, &[1], Some(1), &[]);
-        assert_eq!(diff.rows.len(), SHOWN);
-        assert_eq!(diff.total as usize, SHOWN + 5);
     }
 }

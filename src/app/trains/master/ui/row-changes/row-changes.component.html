@@ -1,4 +1,4 @@
-@if (total() === 0) {
+@if (rows().length === 0) {
   <ion-note data-testid="row-changes-none">Keine Zeile ändert sich.</ion-note>
 } @else {
   <div class="row-changes">
@@ -17,7 +17,7 @@
         </tr>
       </thead>
       <tbody>
-        @for (row of rows(); track row.row) {
+        @for (row of visible(); track row.row) {
           @let isOpen = open().has(row.row);
           <tr
             class="row-changes__row"
@@ -75,7 +75,13 @@
       </tbody>
     </table>
   </div>
-  @if (more() > 0) {
-    <ion-note>… und {{ more() }} weitere Zeile(n).</ion-note>
+  @if (shown() < rows().length) {
+    <ion-note data-testid="row-changes-shown"
+      >{{ shown() }} von {{ rows().length }} Zeilen — weitere beim
+      Scrollen.</ion-note
+    >
+    <ion-infinite-scroll (ionInfinite)="onMore($event)">
+      <ion-infinite-scroll-content />
+    </ion-infinite-scroll>
   }
 }

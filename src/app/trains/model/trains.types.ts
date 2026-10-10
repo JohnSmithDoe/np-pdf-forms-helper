@@ -246,7 +246,6 @@ export interface MasterExportSheetRun {
   line: string;
   notes: string[];
   changed: number;
-  rowsChanged: number;
   columns: ChangeColumn[];
   rows: RowChange[];
   removed: string[];

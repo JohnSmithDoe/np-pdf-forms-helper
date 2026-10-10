@@ -55,7 +55,6 @@ const TELEMATIK: FakeExportSheetRun = {
   open: [],
   line: '„Telematik“: 1 Zeile(n) aus „assets.xlsx“ übernommen (vorher 2).',
   changed: 1,
-  rowsChanged: 2,
   columns: [
     { index: 1, header: 'Asset' },
     { index: 2, header: 'Stadt' },
@@ -285,6 +284,40 @@ test.describe('Master aktualisieren', () => {
       (previewed?.args['request'] as { sheets: { remove: boolean }[] })
         .sheets[0].remove
     ).toBe(true);
+  });
+
+  // Every row arrives; only the rendering is paged, and scrolling to the end
+  // of the table renders the rest from memory.
+  test('zeigt viele Zeilen seitenweise beim Scrollen', async ({ page }) => {
+    const many = Array.from({ length: 150 }, (_, index) => ({
+      row: index + 2,
+      key: String(338506590000 + index),
+      status: 'neu' as const,
+      cells: [
+        { text: String(338506590000 + index), changed: true },
+        { text: 'Fulda', changed: true },
+      ],
+      changes: [],
+    }));
+    await installFakeBackend(page, seed({ ...TELEMATIK, rows: many }));
+    await open(page);
+    await step(page, 'export-sheets')
+      .getByRole('button', { name: 'Weiter' })
+      .click();
+
+    const preview = step(page, 'export-preview');
+    await expect(preview.getByTestId('row-change')).toHaveCount(100);
+    await expect(preview.getByTestId('row-changes-shown')).toContainText(
+      '100 von 150 Zeilen'
+    );
+    await preview.getByTestId('row-change').last().scrollIntoViewIfNeeded();
+    await preview
+      .locator('ion-content')
+      .evaluate((content) =>
+        (content as HTMLIonContentElement).scrollToBottom()
+      );
+    await expect(preview.getByTestId('row-change')).toHaveCount(150);
+    await expect(preview.getByTestId('row-changes-shown')).toHaveCount(0);
   });
 
   test('ohne Master-Datei gibt es nichts zu aktualisieren', async ({

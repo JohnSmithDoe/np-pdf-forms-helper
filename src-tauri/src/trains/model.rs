@@ -415,7 +415,6 @@ pub struct MasterExportSheetRun {
     pub line: String,
     pub notes: Vec<String>,
     pub changed: u32,
-    pub rows_changed: u32,
     pub columns: Vec<ChangeColumn>,
     pub rows: Vec<RowChange>,
     pub removed: Vec<String>,

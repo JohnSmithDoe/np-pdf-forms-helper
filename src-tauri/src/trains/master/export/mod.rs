@@ -262,7 +262,6 @@ fn sheet(
         let removed: Vec<u32> = outcome.removed.iter().map(|(row, _)| *row).collect();
         let diff = diff::rows(&before, &after, &outcome.columns, outcome.key, &removed);
         out.changed = diff.cells;
-        out.rows_changed = diff.total;
         out.columns = diff.columns;
         out.rows = diff.rows;
         out.removed = outcome.removed.into_iter().map(|(_, key)| key).collect();
@@ -570,7 +569,7 @@ mod tests {
             ("Altstadt", "Neuhof")
         );
         assert_eq!(city.key, "338506591522");
-        assert_eq!((sheet.rows_changed, sheet.rows.len()), (1, 1));
+        assert_eq!(sheet.rows.len(), 1);
         assert_eq!(sheet.columns.len(), sheet.rows[0].cells.len());
         assert!(sheet.rows[0].cells[3].changed && !sheet.rows[0].cells[0].changed);
         assert_eq!(std::fs::read(&file).unwrap(), before);

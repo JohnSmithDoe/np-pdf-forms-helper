@@ -19,7 +19,7 @@
           @if (sheet.problem) {
             wird nicht geschrieben
           } @else {
-            {{ sheet.rowsChanged }} Zeile(n) ändern sich
+            {{ sheet.rows.length }} Zeile(n) ändern sich
           }
         </ion-card-subtitle>
       </ion-card-header>
@@ -41,11 +41,7 @@
               >
             </p>
           }
-          <app-row-changes
-            [columns]="sheet.columns"
-            [rows]="sheet.rows"
-            [total]="sheet.rowsChanged"
-          />
+          <app-row-changes [columns]="sheet.columns" [rows]="sheet.rows" />
         }
       </ion-card-content>
     </ion-card>

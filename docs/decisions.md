@@ -1147,6 +1147,8 @@ nie nach Zellen; die Zellliste (Zelle | Schlüssel | Spalte | Vorher | Nachher) 
   Schlüsseln darüber bleibt als Warnung vor dem Schreiben.
 - **Eine nicht geschriebene Spalte zeigt den Wert von VORHER** — das, was Excel heute zeigt. Formelspalten
   werden mit veraltetem Cache neu ausgegeben; der Wert von nachher wäre dort falsch.
-- **Rust baut die Zeilen** (`export/diff.rs`, Backend for Frontend), gekappt auf 200 mit Gesamtzahl;
-  Angular zeigt nur an und klappt auf. Vorschau und Ergebnis nutzen dieselbe Komponente
+- **Rust baut die Zeilen** (`export/diff.rs`, Backend for Frontend) und schickt ALLE, ohne Kappung: die
+  Vorschau ist das, was geschrieben wird, und eine Zeile, die sich nicht öffnen lässt, wäre ungesehen
+  freigegeben. Angular zeigt nur an und klappt auf; gerendert werden 100 Zeilen, weitere beim Scrollen
+  (`ion-infinite-scroll` aus dem Speicher, kein virtuelles Scrollen — gezeigte Zeilen bleiben im DOM). Vorschau und Ergebnis nutzen dieselbe Komponente
   (`trains/master/ui/row-changes`).

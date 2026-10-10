@@ -597,7 +597,6 @@ export interface FakeExportSheetRun {
   notes?: string[];
   changed: number;
   removed?: string[];
-  rowsChanged: number;
   columns: { index: number; header: string }[];
   rows: {
     row: number;
@@ -930,7 +929,6 @@ export function install(seed: FakeSeed): void {
         open: [],
         line: `„${choice.sheet}“: übernommen.`,
         changed: 0,
-        rowsChanged: 0,
         columns: [],
         rows: [],
       };
@@ -962,7 +960,6 @@ export function install(seed: FakeSeed): void {
         remove: choice.remove,
         removed: choice.remove ? copy(seeded.removed ?? []) : [],
         rows: copy(rows),
-        rowsChanged: seeded.rowsChanged - (seeded.rows.length - rows.length),
         key: choice.key,
         aliases: copy(choice.aliases),
         ignored: copy(choice.ignored),
