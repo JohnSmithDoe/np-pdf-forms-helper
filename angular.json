@@ -64,19 +64,6 @@
               "sourceMap": true,
               "namedChunks": true,
               "extractLicenses": false
-            },
-            // Browser-only: the real app on the e2e fake, for CSS and UX work
-            // without a desktop shell (`pnpm run start:mock`). It swaps the
-            // ENTRY POINT, which is what keeps the fake out of every other
-            // build — nothing else names `dev/main.mock.ts`.
-            "mock": {
-              "browser": "dev/main.mock.ts",
-              "tsConfig": "dev/tsconfig.json",
-              "optimization": false,
-              "outputHashing": "none",
-              "sourceMap": true,
-              "namedChunks": true,
-              "extractLicenses": false
             }
           },
           "defaultConfiguration": "production"
@@ -92,9 +79,6 @@
             },
             "development": {
               "buildTarget": "np-office-document-helper:build:development"
-            },
-            "mock": {
-              "buildTarget": "np-office-document-helper:build:mock"
             }
           },
           "defaultConfiguration": "development"

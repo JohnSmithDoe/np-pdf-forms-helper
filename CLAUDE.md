@@ -42,7 +42,6 @@ rewritten whole, so the last save wins silently.
 | Command                                          | Purpose                                                              |
 | ------------------------------------------------ | -------------------------------------------------------------------- |
 | `pnpm start`                                     | Angular dev server only (`ng serve`), no desktop shell               |
-| `pnpm run start:mock`                            | Same server, but booted on the e2e fake with demo data — for CSS/UX  |
 | `pnpm run build`                                 | Angular production build → `dist/renderer`                           |
 | `pnpm run lint`                                  | eslint + stylelint                                                   |
 | `pnpm run verify`                                | **Sheriff** — module boundaries (`sheriff verify src/main.ts`)       |
@@ -140,46 +139,6 @@ exactly that reason — set in `angular.json` (`serve.options.port`), `tauri.con
 pre-push; `e2e` is not in either hook, because it needs a dev server. `cargo test` builds the crate
 with `cfg(test)` on and so type-checks `src-tauri/` on the way through — `rust:check` in the same
 hook would be redundant.
-
-**`pnpm run start:mock` is the same fake, driven by hand.** `pnpm start` alone reaches no backend, so
-every command answers with the "läuft nicht in der Desktop-Umgebung" error and the UI stays in its
-empty state — useless for styling. The mock server is a second **entry point**, `dev/main.mock.ts`,
-selected by the `mock` build configuration in `angular.json`: it installs `install()` from
-`e2e/fake-backend.ts`, seeds `dev/demo-seed.ts` and only then dynamically imports `src/main.ts` — a
-static import would be hoisted and bootstrap before the transport exists.
-
-**The seed covers both domains.** Filler: PDF, XLSX and resource documents, mapped fields shared
-across two documents, two profiles. Trains: Wagen with computed UIC check digits, a partner in two
-roles, a sender-scoped Radsatz alias, a closed Einbau beside the open ones, an Instandhaltung with no
-date and one against a Radsatz — the cases every screen needs one of and no clean file produces.
-Wagen-Zustand: Telematik readings dated relative to now (one silent twelve days), an open and a closed
-Schadensmeldung, an open Werkstattauftrag, a P8 beside a revision. Master: three bindings (a Wagen list and a Radsatz list with a kind, an export-only sheet without
-one, edited by hand so „Standardzuordnung“ visibly undoes it — the defaults are seeded as
-`masterDefaults`, because recognising a sheet by its header row is Rust's), an import run left HALF done so both „unvollständig“ banners show, and two hand-written sheet
-views — the third sheet has none, so the fake's headers-only answer has a sheet to show on.
-
-Five commands are answered in `dev/main.mock.ts` rather than by the fake, always for the same
-reason — the real answer comes from something a browser does not have:
-
-- **`add_documents`** — the native picker. `file` invents its next document; the batch sources are
-  answered by hand, because one line per document is the report shape that earns a dialog.
-- **`stage_import`** — the picker again, plus one thing more: the template mapper DISCARDS its
-  staging when a template is saved or the file dropped, so one seeded staging would serve the first
-  file of a session and nothing after it. Every pick re-arms `demoStaging()`.
-- **`stage_document`** — the same re-arming, with `demoDocument()`: the commit lets go of the
-  staging. It carries hand-written entity groups covering every resolution the walk renders.
-- **`stage_master_sheet`** — the same again, per sheet of a master run, with `demoMasterStaging()`:
-  the Mai walk plus one Einbau conflict, the card no other file produces.
-- **`commit_document`** — the gates live in `trains/commit.rs` and are proved by `cargo test`, so the
-  fake must not grow a second implementation. But a commit that changes nothing visible reads as a
-  broken button, so the dev shell invents one Instandhaltung per taken row and lets the fake answer
-  with the updated lists and counts.
-
-That it is an entry point and not an `isDevMode()` branch is the point: nothing but the `mock`
-configuration compiles that file, so **no fake can reach a production bundle**. Swapping
-`backend.service.ts` in via `fileReplacements` was the alternative and is deliberately not taken —
-it would replace the seam (busy counter, `report$`, `{ messages: [] }` unwrapping) with a second
-implementation to maintain, which is the `FakeBackendService` the e2e boundary exists to avoid.
 
 ## Architecture
 
@@ -308,7 +267,7 @@ by itself — are offered, as `Likely`.
 are Halter of freight wagons, and that file is the key between a Fachbegriff and a code identifier.
 **Every firm named anywhere in this repo is invented**: the target user is `Wagenmut AG`, its
 workshops are `Schienenbein Waggonwerk GmbH`, `Dreh & Gestell Technik` and `Rundlauf
-Radsatztechnik`. No real company name belongs in the code, the docs, the fixtures or the mock seed.
+Radsatztechnik`. No real company name belongs in the code, the docs or the fixtures.
 
 **Read it before naming anything in `trains`.** Two things in it govern the whole module. First,
 **only two fields in an incoming file are trustworthy**: the Wagennummer, because twelve digits carry

@@ -9,7 +9,6 @@
     "ng": "ng",
     "start": "ng serve",
     "ng:serve": "ng serve -c development -o",
-    "start:mock": "ng serve -c mock -o",
     "watch": "ng build --watch -c development",
     "build": "ng build --base-href ./",
     "ng:build": "ng build --base-href ./",
@@ -25,8 +24,8 @@
     "lint:styles": "stylelint \"src/**/*.{scss,css}\"",
     "verify": "sheriff verify src/main.ts",
     "typecheck": "ngc -p tsconfig.check.json",
-    "format": "prettier --write \"src/**/*.{ts,html,scss,json}\" \"e2e/**/*.ts\" \"dev/**/*.ts\" playwright.config.ts playwright.release.config.ts",
-    "format:check": "prettier --check \"src/**/*.{ts,html,scss,json}\" \"e2e/**/*.ts\" \"dev/**/*.ts\" playwright.config.ts playwright.release.config.ts",
+    "format": "prettier --write \"src/**/*.{ts,html,scss,json}\" \"e2e/**/*.ts\" playwright.config.ts playwright.release.config.ts",
+    "format:check": "prettier --check \"src/**/*.{ts,html,scss,json}\" \"e2e/**/*.ts\" playwright.config.ts playwright.release.config.ts",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:release": "pnpm run build && playwright test --config playwright.release.config.ts"
